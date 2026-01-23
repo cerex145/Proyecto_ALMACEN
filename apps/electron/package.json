@@ -1,0 +1,16 @@
+{
+    "name": "@sistema-almacen/electron",
+    "version": "1.0.0",
+    "description": "Aplicación Electron para Sistema de Almacén",
+    "main": "main/main.js",
+    "scripts": {
+        "dev": "electron .",
+        "build": "electron-builder"
+    },
+    "dependencies": {
+        "electron": "^28.0.0"
+    },
+    "devDependencies": {
+        "electron-builder": "^24.9.1"
+    }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "sistema-almacen",
+  "version": "1.0.0",
+  "description": "Sistema de Gestión de Almacén",
+  "private": true,
+  "workspaces": [
+    "apps/electron",
+    "apps/electron/renderer",
+    "apps/api",
+    "packages/shared-types",
+    "packages/shared-schemas",
+    "packages/shared-utils"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:renderer": "npm run dev --workspace=apps/electron/renderer",
+    "dev:electron": "wait-on http://localhost:5173 http://localhost:3000 && npm run dev --workspace=apps/electron",
+    "build": "npm run build:renderer && npm run build:electron",
+    "build:renderer": "npm run build --workspace=apps/electron/renderer",
+    "build:electron": "npm run build --workspace=apps/electron"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  }
+}
