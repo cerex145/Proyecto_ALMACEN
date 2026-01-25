@@ -21,8 +21,8 @@ function App() {
           <ul>
             <li>✅ React funcionando</li>
             <li>✅ Vite configurado</li>
-            <li>⏳ Esperando Electron...</li>
-            <li>⏳ Esperando API Fastify...</li>
+            <li>✅ Electron funcionando</li>
+            <li>✅ Fastify funcionando</li>
           </ul>
         </div>
       </header>

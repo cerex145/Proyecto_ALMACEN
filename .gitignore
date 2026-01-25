@@ -1,6 +1,32 @@
+# Dependencies
 node_modules/
-dist/
-out/
-build/
+**/node_modules/
+
+# Environment
 .env
+.env.local
+**/.env
+
+# Builds
+dist/
+build/
+**/dist/
+**/build/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Electron
+out/
