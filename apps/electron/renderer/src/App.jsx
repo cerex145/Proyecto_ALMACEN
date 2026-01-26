@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react';
+import { HashRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import ProductoList from './pages/Productos/ProductoList';
+import { NotaIngresoForm } from './pages/Ingresos/NotaIngresoForm';
+import { ActaRecepcionForm } from './pages/Recepcion/ActaRecepcionForm';
+import { NotaSalidaForm } from './pages/Salidas/NotaSalidaForm';
+import { Dashboard } from './pages/Dashboard/Dashboard';
 import './App.css';
 
 function App() {
@@ -10,23 +16,19 @@ function App() {
   }, []);
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Sistema de Gestión de Almacén</h1>
-        <p>
-          {isElectron ? '🖥️ Ejecutando en Electron' : '🌐 Ejecutando en navegador'}
-        </p>
-        <div className="info-box">
-          <h2>Estado del Sistema</h2>
-          <ul>
-            <li>✅ React funcionando</li>
-            <li>✅ Vite configurado</li>
-            <li>✅ Electron funcionando</li>
-            <li>✅ Fastify funcionando</li>
-          </ul>
-        </div>
-      </header>
-    </div>
+    <Router>
+      <div className="App">
+        <header className="App-header">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/productos" element={<ProductoList />} />
+            <Route path="/ingresos/nuevo" element={<NotaIngresoForm />} />
+            <Route path="/recepcion/nueva" element={<ActaRecepcionForm />} />
+            <Route path="/salidas/nueva" element={<NotaSalidaForm />} />
+          </Routes>
+        </header>
+      </div>
+    </Router>
   );
 }
 

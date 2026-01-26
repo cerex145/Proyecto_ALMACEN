@@ -11,6 +11,22 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* Clinical / Pharmaceutical Palette */
+  --primary-color: #007bb5; /* Medical Blue */
+  --primary-hover: #005f8d;
+  --secondary-color: #6c757d;
+  --secondary-hover: #5a6268;
+  --success-color: #28a745; /* Approved/Safe */
+  --warning-color: #ffc107;
+  --danger-color: #dc3545; /* Cancelled/Error */
+  --info-color: #17a2b8; /* Registered/Draft */
+  --light-bg: #f8f9fa;
+  --dark-text: #212529;
+  --border-color: #dee2e6;
+  --surface-color: #ffffff;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 a {
