@@ -76,6 +76,7 @@ export const ProductoList = () => {
                                     <TableRow>
                                         <TableHeader>Código</TableHeader>
                                         <TableHeader>Descripción</TableHeader>
+                                        <TableHeader>Laboratorio</TableHeader>
                                         <TableHeader>U. Medida</TableHeader>
                                         <TableHeader>Stock</TableHeader>
                                         <TableHeader>Estado</TableHeader>
@@ -92,6 +93,7 @@ export const ProductoList = () => {
                                                 <TableRow key={product.id}>
                                                     <TableCell>{product.codigo}</TableCell>
                                                     <TableCell>{product.descripcion}</TableCell>
+                                                    <TableCell>{product.laboratorio || '-'}</TableCell>
                                                     <TableCell>{product.unidad_medida}</TableCell>
                                                     <TableCell>{product.stock_actual}</TableCell>
                                                     <TableCell>

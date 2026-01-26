@@ -37,6 +37,14 @@ export const Dashboard = () => {
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <Link to="/productos"><Button variant="secondary">Inventario de Productos</Button></Link>
                     <Link to="/recepcion/nueva"><Button variant="secondary">Recepción de Mercadería</Button></Link>
+                    <Link to="/clientes/registro"><Button variant="secondary">Registro de Clientes</Button></Link>
+                    <Link to="/ingresos/controles"><Button variant="secondary">Controles Nota de Ingreso</Button></Link>
+                    <Link to="/salidas/controles"><Button variant="secondary">Controles Nota de Salida</Button></Link>
+                    <Link to="/ingresos/historial"><Button variant="secondary">Historial Ingresos</Button></Link>
+                    <Link to="/salidas/historial"><Button variant="secondary">Historial Salidas</Button></Link>
+                    <Link to="/recepcion/acta"><Button variant="secondary">Acta de Recepcion</Button></Link>
+                    <Link to="/kardex"><Button variant="secondary">Kardex</Button></Link>
+                    <Link to="/ajustes"><Button variant="secondary">Ajustes</Button></Link>
                 </div>
             </div>
         </div>
