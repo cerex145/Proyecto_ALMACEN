@@ -29,6 +29,11 @@ async function buildApp(fastify, options) {
         }
     });
 
+    // Register routes
+    await fastify.register(require('./routes/clientes.routes'));
+    await fastify.register(require('./routes/productos.routes'));
+    await fastify.register(require('./routes/ajustes.routes'));
+
     fastify.get('/health', async () => {
         return { status: 'ok', timestamp: new Date() };
     });
