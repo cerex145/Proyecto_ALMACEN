@@ -1,49 +1,41 @@
 const { EntitySchema } = require('typeorm');
 
 module.exports = new EntitySchema({
-    name: 'Producto',
-    tableName: 'productos',
+    name: 'NotaIngreso',
+    tableName: 'notas_ingreso',
     columns: {
         id: {
             type: 'int',
             primary: true,
             generated: true
         },
-        codigo: {
+        numero_ingreso: {
             type: 'varchar',
             length: 50,
             unique: true,
             nullable: false
         },
-        descripcion: {
-            type: 'varchar',
-            length: 300,
+        fecha: {
+            type: 'date',
             nullable: false
         },
         proveedor: {
             type: 'varchar',
             length: 200,
+            nullable: false
+        },
+        responsable_id: {
+            type: 'int',
             nullable: true
         },
-        categoria_ingreso: {
+        estado: {
             type: 'enum',
-            enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'],
+            enum: ['REGISTRADA', 'PARCIALMENTE_RECIBIDA', 'RECIBIDA_CONFORME', 'RECIBIDA_OBSERVADA'],
+            default: 'REGISTRADA'
+        },
+        observaciones: {
+            type: 'text',
             nullable: true
-        },
-        procedencia: {
-            type: 'varchar',
-            length: 200,
-            nullable: true
-        },
-        stock_actual: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            default: 0
-        },
-        activo: {
-            type: 'boolean',
-            default: true
         },
         created_at: {
             type: 'timestamp',

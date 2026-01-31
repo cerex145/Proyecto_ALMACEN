@@ -1,177 +1,165 @@
 import React, { useState, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { operationService } from '../../services/operation.service';
-import { Input } from '../../components/ui/Input';
+import { actasService } from '../../services/actas.service';
+import { ingresosService } from '../../services/ingresos.service';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/ui/Table';
 
 export const ActaRecepcionForm = () => {
     const [ingresos, setIngresos] = useState([]);
-    const [selectedIngreso, setSelectedIngreso] = useState(null);
-    const [loadingDetails, setLoadingDetails] = useState(false);
-
-    const { register, control, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm();
-
-    // We use field array to manage the dynamic list of items to receive
-    const { fields, replace } = useFieldArray({
-        control,
-        name: "detalles"
-    });
+    const [ingresoSeleccionado, setIngresoSeleccionado] = useState(null);
+    const [detalles, setDetalles] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [mensaje, setMensaje] = useState('');
 
     useEffect(() => {
-        loadIngresosPendientes();
+        cargarIngresos();
     }, []);
 
-    const loadIngresosPendientes = async () => {
+    const cargarIngresos = async () => {
         try {
-            // In a real app we would filter by ?estado=registrado
-            const data = await operationService.getIngresos();
-            // Mock filter for now if backend doesn't support it yet
-            setIngresos(data.filter(i => i.estado === 'registrado'));
+            const response = await ingresosService.listar({ estado: 'APROBADA' });
+            setIngresos(response.data || []);
         } catch (error) {
-            console.error(error);
+            console.error('Error al cargar ingresos:', error);
         }
     };
 
-    const handleSelectIngreso = async (e) => {
-        const ingresoId = e.target.value;
-        if (!ingresoId) {
-            setSelectedIngreso(null);
-            replace([]);
+    const handleSelectIngreso = async (ingresoId) => {
+        try {
+            const response = await ingresosService.obtener(ingresoId);
+            setIngresoSeleccionado(response.data);
+            // Mapear detalles del ingreso para pre-llenarlos
+            const detallesMapeados = (response.data.detalles || []).map((d, idx) => ({
+                ...d,
+                cantidad_esperada: d.cantidad,
+                cantidad_recibida: d.cantidad,
+                diferencia: 0,
+                id: `detalle-${idx}`
+            }));
+            setDetalles(detallesMapeados);
+        } catch (error) {
+            console.error('Error al cargar ingreso:', error);
+        }
+    };
+
+    const handleCantidadRecibida = (index, valor) => {
+        const nuevosDetalles = [...detalles];
+        nuevosDetalles[index].cantidad_recibida = parseInt(valor);
+        nuevosDetalles[index].diferencia = nuevosDetalles[index].cantidad_recibida - nuevosDetalles[index].cantidad_esperada;
+        setDetalles(nuevosDetalles);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!ingresoSeleccionado || detalles.length === 0) {
+            setMensaje('Por favor completa todos los campos');
             return;
         }
 
         try {
-            setLoadingDetails(true);
-            const ingreso = await operationService.getIngresoById(ingresoId);
-            setSelectedIngreso(ingreso);
-
-            // Populate the form with items from the Ingreso
-            // We assume backend returns 'detalles' in the ingreso object
-            const items = ingreso.detalles || [];
-            replace(items.map(item => ({
-                producto_id: item.producto_id,
-                producto_nombre: item.producto?.descripcion || `Producto ${item.producto_id}`,
-                cantidad_esperada: item.cantidad,
-                cantidad_recibida: item.cantidad, // Default to full reception
-                numero_lote: '',
-                fecha_vencimiento: ''
-            })));
-
-            setValue('ingreso_id', ingresoId);
+            setLoading(true);
+            const data = {
+                nota_ingreso_id: ingresoSeleccionado.id,
+                fecha_recepcion: new Date().toISOString().split('T')[0],
+                detalles: detalles.map(d => ({
+                    producto_id: d.producto_id,
+                    lote_numero: d.lote_numero,
+                    fecha_vencimiento: d.fecha_vencimiento,
+                    cantidad_esperada: d.cantidad_esperada,
+                    cantidad_recibida: d.cantidad_recibida
+                }))
+            };
+            await actasService.crear(data);
+            setMensaje('✅ Acta de recepción creada exitosamente');
+            setIngresoSeleccionado(null);
+            setDetalles([]);
         } catch (error) {
+            setMensaje('❌ Error al crear acta de recepción');
             console.error(error);
-            alert('Error al cargar detalles del ingreso');
         } finally {
-            setLoadingDetails(false);
-        }
-    };
-
-    const onSubmit = async (data) => {
-        try {
-            const payload = { ...data, responsable_recepcion_id: 1 }; // Mock ID
-            await operationService.createActaRecepcion(payload);
-            alert('Acta de Recepción registrada. Stock actualizado.');
-            reset();
-            setSelectedIngreso(null);
-            loadIngresosPendientes();
-        } catch (error) {
-            console.error(error);
-            alert('Error al registrar recepción');
+            setLoading(false);
         }
     };
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ color: 'var(--primary-color)' }}>Recepción de Mercadería (Conformidad)</h2>
+        <div style={{ padding: '20px', maxWidth: '1000px' }}>
+            <h2>Nueva Acta de Recepción</h2>
 
-            <div style={{ marginBottom: '2rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Seleccionar Nota de Ingreso Pendiente</label>
-                <select
-                    onChange={handleSelectIngreso}
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '1rem' }}
-                >
-                    <option value="">-- Seleccione Ingreso --</option>
-                    {ingresos.map(ing => (
-                        <option key={ing.id} value={ing.id}>
-                            {ing.numero_ingreso} - {ing.proveedor?.razon_social || 'Proveedor'} ({new Date(ing.fecha).toLocaleDateString()})
-                        </option>
-                    ))}
-                </select>
-            </div>
-
-            {selectedIngreso && (
-                <form onSubmit={handleSubmit(onSubmit)}>
-                    <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem' }}>
-                        <div style={{ flex: 1 }}>
-                            <Input
-                                label="Número de Acta"
-                                register={register('numero_acta', { required: 'Requerido' })}
-                                error={errors.numero_acta}
-                            />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                            <Input
-                                label="Fecha Recepción"
-                                type="date"
-                                register={register('fecha_recepcion', { required: 'Requerido' })}
-                                error={errors.fecha_recepcion}
-                            />
-                        </div>
-                    </div>
-
-                    <h4 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>Detalle de Recepción (Asignación de Lotes)</h4>
-
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Producto</TableHeader>
-                                <TableHeader>Cant. Solicitada</TableHeader>
-                                <TableHeader>Cant. Recibida</TableHeader>
-                                <TableHeader>Lote (Obligatorio)</TableHeader>
-                                <TableHeader>Vencimiento (Obligatorio)</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {fields.map((field, index) => (
-                                <TableRow key={field.id}>
-                                    <TableCell>{field.producto_nombre}</TableCell>
-                                    <TableCell>{field.cantidad_esperada}</TableCell>
-                                    <TableCell>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            register={register(`detalles.${index}.cantidad_recibida`, { required: true })}
-                                            style={{ marginBottom: 0 }}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            placeholder="Lote #..."
-                                            register={register(`detalles.${index}.numero_lote`, { required: 'Lote requerido' })}
-                                            style={{ marginBottom: 0 }}
-                                            error={errors.detalles?.[index]?.numero_lote}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input
-                                            type="date"
-                                            register={register(`detalles.${index}.fecha_vencimiento`, { required: 'Vencimiento requerido' })}
-                                            style={{ marginBottom: 0 }}
-                                            error={errors.detalles?.[index]?.fecha_vencimiento}
-                                        />
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-
-                    <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                        <Button type="button" variant="secondary" onClick={() => setSelectedIngreso(null)}>Cancelar</Button>
-                        <Button type="submit" isLoading={isSubmitting}>Confirmar Recepción e Ingresar Stock</Button>
-                    </div>
-                </form>
+            {mensaje && (
+                <div style={{
+                    padding: '10px',
+                    marginBottom: '20px',
+                    borderRadius: '4px',
+                    backgroundColor: mensaje.includes('✅') ? '#d4edda' : '#f8d7da',
+                    color: mensaje.includes('✅') ? '#155724' : '#721c24'
+                }}>
+                    {mensaje}
+                </div>
             )}
+
+            <form onSubmit={handleSubmit}>
+                <div style={{ marginBottom: '20px' }}>
+                    <label>Seleccionar Nota de Ingreso</label>
+                    <select
+                        onChange={(e) => handleSelectIngreso(e.target.value)}
+                        style={{ width: '100%', padding: '8px', borderRadius: '4px', marginTop: '5px' }}
+                    >
+                        <option value="">-- Seleccionar --</option>
+                        {ingresos.map(ingreso => (
+                            <option key={ingreso.id} value={ingreso.id}>
+                                {ingreso.numero_ingreso} - {ingreso.proveedor} ({new Date(ingreso.fecha).toLocaleDateString()})
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {ingresoSeleccionado && detalles.length > 0 && (
+                    <div style={{ marginBottom: '20px' }}>
+                        <h3>Comparar Cantidades</h3>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableHeader>Producto ID</TableHeader>
+                                    <TableHeader>Lote</TableHeader>
+                                    <TableHeader>Esperado</TableHeader>
+                                    <TableHeader>Recibido</TableHeader>
+                                    <TableHeader>Diferencia</TableHeader>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {detalles.map((detalle, idx) => (
+                                    <TableRow key={detalle.id}>
+                                        <TableCell>{detalle.producto_id}</TableCell>
+                                        <TableCell>{detalle.lote_numero}</TableCell>
+                                        <TableCell>{detalle.cantidad_esperada}</TableCell>
+                                        <TableCell>
+                                            <Input
+                                                type="number"
+                                                value={detalle.cantidad_recibida}
+                                                onChange={(e) => handleCantidadRecibida(idx, e.target.value)}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </TableCell>
+                                        <TableCell style={{
+                                            color: detalle.diferencia > 0 ? 'green' : detalle.diferencia < 0 ? 'red' : 'black',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            {detalle.diferencia > 0 ? '+' : ''}{detalle.diferencia}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <Button type="submit" disabled={loading || !ingresoSeleccionado}>
+                        {loading ? 'Guardando...' : 'Guardar Acta de Recepción'}
+                    </Button>
+                </div>
+            </form>
         </div>
     );
 };

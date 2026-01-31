@@ -33,6 +33,14 @@ async function buildApp(fastify, options) {
     await fastify.register(require('./routes/clientes.routes'));
     await fastify.register(require('./routes/productos.routes'));
     await fastify.register(require('./routes/ajustes.routes'));
+    await fastify.register(require('./routes/ingresos.routes'));
+    await fastify.register(require('./routes/actas-recepcion.routes'));
+    await fastify.register(require('./routes/salidas.routes'));
+    await fastify.register(require('./routes/kardex.routes'));
+    await fastify.register(require('./routes/lotes.routes'));
+    await fastify.register(require('./routes/alertas.routes'));
+    await fastify.register(require('./routes/reportes.routes'));
+    await fastify.register(require('./routes/usuarios.routes'));
 
     fastify.get('/health', async () => {
         return { status: 'ok', timestamp: new Date() };

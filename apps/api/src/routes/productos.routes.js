@@ -7,7 +7,9 @@ async function productoRoutes(fastify, options) {
     fastify.get('/api/productos', async (request, reply) => {
         const { 
             busqueda = '', 
-            activo, 
+            activo,
+            categoria_ingreso,
+            lote,
             page = 1, 
             limit = 50,
             orderBy = 'descripcion',
@@ -25,6 +27,10 @@ async function productoRoutes(fastify, options) {
             );
         }
 
+        if (categoria_ingreso) {
+            queryBuilder.andWhere('producto.categoria_ingreso = :categoria_ingreso', { categoria_ingreso });
+        }
+
         if (activo !== undefined) {
             queryBuilder.andWhere('producto.activo = :activo', { activo: activo === 'true' });
         }
@@ -36,9 +42,26 @@ async function productoRoutes(fastify, options) {
 
         const [productos, total] = await queryBuilder.getManyAndCount();
 
+        // Si buscan por lote, filtrar lotes disponibles
+        let productosConLotes = productos;
+        if (lote) {
+            const loteRepo = fastify.db.getRepository('Lote');
+            productosConLotes = await Promise.all(
+                productos.map(async (producto) => {
+                    const lotes = await loteRepo.find({ 
+                        where: { 
+                            producto_id: producto.id,
+                            numero_lote: Like(`%${lote}%`)
+                        }
+                    });
+                    return { ...producto, lotes };
+                })
+            );
+        }
+
         return {
             success: true,
-            data: productos,
+            data: productosConLotes,
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
@@ -62,7 +85,14 @@ async function productoRoutes(fastify, options) {
 
     // POST /api/productos - Crear producto
     fastify.post('/api/productos', async (request, reply) => {
-        const { codigo, descripcion, stock_actual } = request.body;
+        const { 
+            codigo, 
+            descripcion, 
+            stock_actual,
+            proveedor,
+            categoria_ingreso,
+            procedencia
+        } = request.body;
 
         // Validaciones
         if (!codigo || !descripcion) {
@@ -81,10 +111,22 @@ async function productoRoutes(fastify, options) {
             });
         }
 
+        // Validar categoría si se proporciona
+        const categoriasValidas = ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'];
+        if (categoria_ingreso && !categoriasValidas.includes(categoria_ingreso)) {
+            return reply.status(400).send({ 
+                success: false, 
+                error: 'Categoría de ingreso inválida' 
+            });
+        }
+
         const nuevoProducto = productoRepo.create({
             codigo,
             descripcion,
             stock_actual: stock_actual || 0,
+            proveedor,
+            categoria_ingreso,
+            procedencia,
             activo: true
         });
 
@@ -100,7 +142,14 @@ async function productoRoutes(fastify, options) {
     // PUT /api/productos/:id - Actualizar producto
     fastify.put('/api/productos/:id', async (request, reply) => {
         const { id } = request.params;
-        const { codigo, descripcion, activo } = request.body;
+        const { 
+            codigo, 
+            descripcion, 
+            activo,
+            proveedor,
+            categoria_ingreso,
+            procedencia
+        } = request.body;
 
         const producto = await productoRepo.findOneBy({ id: Number(id) });
         if (!producto) {
@@ -129,6 +178,9 @@ async function productoRoutes(fastify, options) {
 
         producto.descripcion = descripcion;
         if (activo !== undefined) producto.activo = activo;
+        if (proveedor) producto.proveedor = proveedor;
+        if (categoria_ingreso) producto.categoria_ingreso = categoria_ingreso;
+        if (procedencia) producto.procedencia = procedencia;
 
         await productoRepo.save(producto);
 
