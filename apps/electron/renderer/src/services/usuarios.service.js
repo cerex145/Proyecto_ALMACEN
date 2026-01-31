@@ -16,7 +16,7 @@ export const usuariosService = {
     // Listar usuarios
     listar: async (filtros = {}) => {
         const response = await api.get('/usuarios', { params: filtros });
-        return response.data;
+        return response.data.data || [];
     },
 
     // Obtener usuario
@@ -46,7 +46,7 @@ export const usuariosService = {
     // Listar roles
     listarRoles: async () => {
         const response = await api.get('/roles');
-        return response.data;
+        return response.data.data || [];
     },
 
     // Crear rol
@@ -58,6 +58,6 @@ export const usuariosService = {
     // Listar auditoría
     listarAuditoria: async (filtros = {}) => {
         const response = await api.get('/auditorias', { params: filtros });
-        return response.data;
+        return response.data.data || [];
     }
 };

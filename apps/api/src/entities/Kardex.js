@@ -13,21 +13,39 @@ module.exports = new EntitySchema({
             type: 'int',
             nullable: false
         },
-        lote_numero: {
-            type: 'varchar',
-            length: 100,
+        lote_id: {
+            type: 'int',
             nullable: true
         },
-        tipo_movimiento: {
-            type: 'enum',
-            enum: ['INGRESO', 'SALIDA', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'],
+        fecha: {
+            type: 'date',
             nullable: false
         },
-        cantidad: {
+        tipo_movimiento: {
+            type: 'varchar',
+            length: 20,
+            nullable: false
+        },
+        documento_tipo: {
+            type: 'varchar',
+            length: 20,
+            nullable: true
+        },
+        documento_id: {
+            type: 'int',
+            nullable: true
+        },
+        cantidad_entrada: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            nullable: false
+            default: 0
+        },
+        cantidad_salida: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            default: 0
         },
         saldo: {
             type: 'decimal',
@@ -35,17 +53,7 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: false
         },
-        documento_tipo: {
-            type: 'varchar',
-            length: 50,
-            nullable: true
-        },
-        documento_numero: {
-            type: 'varchar',
-            length: 50,
-            nullable: true
-        },
-        referencia_id: {
+        responsable_id: {
             type: 'int',
             nullable: true
         },

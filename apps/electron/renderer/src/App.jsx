@@ -5,13 +5,13 @@ import { NotaIngresoForm } from './pages/Ingresos/NotaIngresoForm';
 import { ActaRecepcionForm } from './pages/Recepcion/ActaRecepcionForm';
 import { NotaSalidaForm } from './pages/Salidas/NotaSalidaForm';
 import { Dashboard } from './pages/Dashboard/Dashboard';
-import ClienteFormLayout from './components/ClienteFormLayout';
+import { ClienteListForm } from './pages/Clientes/ClienteListForm';
+import { HistorialIngresosFuncional } from './pages/Ingresos/HistorialIngresosFuncional';
+import { HistorialSalidasFuncional } from './pages/Salidas/HistorialSalidasFuncional';
+import { ActasRecepcionFuncional } from './pages/Recepcion/ActasRecepcionFuncional';
+import { KardexFuncional } from './pages/Kardex/KardexFuncional';
 import NotaIngresoLayout from './components/NotaIngresoLayout';
 import NotaSalidaLayout from './components/NotaSalidaLayout';
-import HistorialIngresoLayout from './components/HistorialIngresoLayout';
-import HistorialSalidaLayout from './components/HistorialSalidaLayout';
-import ActaRecepcionLayout from './components/ActaRecepcionLayout';
-import KardexLayout from './components/KardexLayout';
 import AjustesLayout from './components/AjustesLayout';
 import './App.css';
 
@@ -33,13 +33,13 @@ function App() {
             <Route path="/ingresos/nuevo" element={<NotaIngresoForm />} />
             <Route path="/recepcion/nueva" element={<ActaRecepcionForm />} />
             <Route path="/salidas/nueva" element={<NotaSalidaForm />} />
-            <Route path="/clientes/registro" element={<ClienteFormLayout />} />
+            <Route path="/clientes/registro" element={<ClienteListForm />} />
             <Route path="/ingresos/controles" element={<NotaIngresoLayout />} />
             <Route path="/salidas/controles" element={<NotaSalidaLayout />} />
-            <Route path="/ingresos/historial" element={<HistorialIngresoLayout />} />
-            <Route path="/salidas/historial" element={<HistorialSalidaLayout />} />
-            <Route path="/recepcion/acta" element={<ActaRecepcionLayout />} />
-            <Route path="/kardex" element={<KardexLayout />} />
+            <Route path="/ingresos/historial" element={<HistorialIngresosFuncional />} />
+            <Route path="/salidas/historial" element={<HistorialSalidasFuncional />} />
+            <Route path="/recepcion/acta" element={<ActasRecepcionFuncional />} />
+            <Route path="/kardex" element={<KardexFuncional />} />
             <Route path="/ajustes" element={<AjustesLayout />} />
           </Routes>
         </header>

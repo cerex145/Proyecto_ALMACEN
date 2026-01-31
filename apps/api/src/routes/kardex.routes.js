@@ -8,13 +8,13 @@ async function kardexRoutes(fastify, options) {
     fastify.get('/api/kardex', async (request, reply) => {
         const { 
             producto_id,
-            lote_numero,
+            lote_id,
             tipo_movimiento,
             fecha_desde,
             fecha_hasta,
             page = 1, 
             limit = 100,
-            orderBy = 'created_at',
+            orderBy = 'fecha',
             order = 'DESC'
         } = request.query;
 
@@ -26,8 +26,8 @@ async function kardexRoutes(fastify, options) {
             queryBuilder.where('kardex.producto_id = :producto_id', { producto_id: Number(producto_id) });
         }
 
-        if (lote_numero) {
-            queryBuilder.andWhere('kardex.lote_numero LIKE :lote_numero', { lote_numero: `%${lote_numero}%` });
+        if (lote_id) {
+            queryBuilder.andWhere('kardex.lote_id = :lote_id', { lote_id: Number(lote_id) });
         }
 
         if (tipo_movimiento) {
@@ -35,15 +35,14 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (fecha_desde) {
-            queryBuilder.andWhere('kardex.created_at >= :fecha_desde', { fecha_desde });
+            queryBuilder.andWhere('kardex.fecha >= :fecha_desde', { fecha_desde });
         }
 
         if (fecha_hasta) {
-            queryBuilder.andWhere('kardex.created_at <= :fecha_hasta', { fecha_hasta });
+            queryBuilder.andWhere('kardex.fecha <= :fecha_hasta', { fecha_hasta });
         }
 
         queryBuilder
-            .leftJoinAndSelect('kardex.producto', 'producto')
             .orderBy(`kardex.${orderBy}`, order.toUpperCase())
             .skip(skip)
             .take(limit);

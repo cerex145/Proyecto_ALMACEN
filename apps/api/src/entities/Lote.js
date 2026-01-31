@@ -15,36 +15,35 @@ module.exports = new EntitySchema({
         },
         numero_lote: {
             type: 'varchar',
-            length: 100,
+            length: 50,
             nullable: false
+        },
+        fecha_produccion: {
+            type: 'date',
+            nullable: true
         },
         fecha_vencimiento: {
             type: 'date',
             nullable: true
         },
-        cantidad_ingresada: {
+        stock_lote: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            nullable: false
+            default: 0
         },
-        cantidad_disponible: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            nullable: false
-        },
-        nota_ingreso_id: {
-            type: 'int',
+        proveedor: {
+            type: 'varchar',
+            length: 100,
             nullable: true
+        },
+        activo: {
+            type: 'boolean',
+            default: true
         },
         created_at: {
             type: 'timestamp',
             createDate: true
-        },
-        updated_at: {
-            type: 'timestamp',
-            updateDate: true
         }
     },
     relations: {
