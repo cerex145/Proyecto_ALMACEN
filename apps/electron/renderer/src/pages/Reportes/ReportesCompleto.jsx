@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { reportesService } from '../../services/reportes.service';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/ui/Table';
+import { Button } from '../../components/common/Button';
+import { Input } from '../../components/common/Input';
+import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 
 export const ReportesCompleto = () => {
     const [tipoReporte, setTipoReporte] = useState('stock');

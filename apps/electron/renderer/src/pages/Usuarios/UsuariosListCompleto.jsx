@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { usuariosService } from '../../services/usuarios.service';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/ui/Table';
-import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/common/Button';
+import { Input } from '../../components/common/Input';
+import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
+import { Badge } from '../../components/common/Badge';
 
 export const UsuariosListCompleto = () => {
     const [usuarios, setUsuarios] = useState([]);

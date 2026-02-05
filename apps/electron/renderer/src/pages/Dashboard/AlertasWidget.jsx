@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { kardexService } from '../../services/kardex.service';
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/ui/Table';
-import { Badge } from '../../components/ui/Badge';
+import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
+import { Badge } from '../../components/common/Badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/common/Card';
 
 export const AlertasWidget = () => {
     const [alerts, setAlerts] = useState([]);
@@ -33,46 +34,47 @@ export const AlertasWidget = () => {
     };
 
     return (
-        <div style={{
-            padding: '1rem',
-            borderRadius: '8px',
-            backgroundColor: 'var(--surface-color)',
-            border: '1px solid var(--border-color)',
-            boxShadow: 'var(--shadow-sm)',
-            height: '100%'
-        }}>
-            <h3 style={{ marginTop: 0, color: 'var(--danger-color)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                ⚠️ Alertas de Vencimiento
-            </h3>
+        <Card className="h-full border-l-4 border-l-rose-500">
+            <CardHeader className="mb-4">
+                <CardTitle className="text-rose-600 flex items-center gap-2">
+                    <span className="text-2xl">⚠️</span> Alertas de Vencimiento
+                </CardTitle>
+            </CardHeader>
 
-            {loading ? <p>Cargando...</p> : alerts.length === 0 ? (
-                <p style={{ color: 'var(--success-color)' }}>✅ No hay productos próximos a vencer.</p>
-            ) : (
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableHeader>Producto</TableHeader>
-                            <TableHeader>Lote</TableHeader>
-                            <TableHeader>Vence</TableHeader>
-                            <TableHeader>Stock</TableHeader>
-                            <TableHeader>Restante</TableHeader>
-                            <TableHeader>Prioridad</TableHeader>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {alerts.map(a => (
-                            <TableRow key={a.id}>
-                                <TableCell>{a.descripcion}</TableCell>
-                                <TableCell>{a.numero_lote}</TableCell>
-                                <TableCell>{new Date(a.fecha_vencimiento).toLocaleDateString()}</TableCell>
-                                <TableCell>{a.stock_lote}</TableCell>
-                                <TableCell><strong>{a.dias_restantes} días</strong></TableCell>
-                                <TableCell>{getPriorityBadge(a.prioridad)}</TableCell>
+            <CardContent>
+                {loading ? <p className="text-sm text-slate-500">Cargando alertas...</p> : alerts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg">
+                        <span className="text-4xl mb-2">✅</span>
+                        <p className="text-slate-600 font-medium">Todo en orden</p>
+                        <p className="text-xs text-slate-400">No hay productos próximos a vencer.</p>
+                    </div>
+                ) : (
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableHeader>Producto</TableHeader>
+                                <TableHeader>Lote</TableHeader>
+                                <TableHeader>Vence</TableHeader>
+                                <TableHeader>Stock</TableHeader>
+                                <TableHeader>Días</TableHeader>
+                                <TableHeader>Prioridad</TableHeader>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            )}
-        </div>
+                        </TableHead>
+                        <TableBody>
+                            {alerts.map(a => (
+                                <TableRow key={a.id}>
+                                    <TableCell className="font-medium text-slate-700">{a.descripcion}</TableCell>
+                                    <TableCell>{a.numero_lote}</TableCell>
+                                    <TableCell>{new Date(a.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                                    <TableCell>{a.stock_lote}</TableCell>
+                                    <TableCell className="text-rose-600 font-bold">{a.dias_restantes}</TableCell>
+                                    <TableCell>{getPriorityBadge(a.prioridad)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </CardContent>
+        </Card>
     );
 };

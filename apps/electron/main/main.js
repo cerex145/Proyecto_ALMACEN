@@ -7,7 +7,7 @@ let fastifyServer;
 
 // Iniciar servidor Fastify
 function startFastifyServer() {
-    const isDev = process.env.NODE_ENV === 'development';
+    const isDev = !app.isPackaged;
     const apiPath = isDev
         ? path.join(__dirname, '../../../api/src/server.js')
         : path.join(process.resourcesPath, 'api/server.js');
@@ -45,7 +45,7 @@ function createWindow() {
     });
 
     // En desarrollo: cargar desde Vite
-    if (process.env.NODE_ENV === 'development') {
+    if (!app.isPackaged) {
         mainWindow.loadURL('http://localhost:5173');
         mainWindow.webContents.openDevTools();
     } else {
@@ -60,7 +60,10 @@ function createWindow() {
 
 // Cuando Electron está listo
 app.whenReady().then(() => {
-    startFastifyServer();
+    // En desarrollo, el servidor API se inicia externamente (npm run dev:api)
+    if (app.isPackaged) {
+        startFastifyServer();
+    }
 
     // Esperar 2 segundos para que Fastify inicie
     setTimeout(createWindow, 2000);

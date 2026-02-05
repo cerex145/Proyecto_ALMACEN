@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { alertasService } from '../../services/alertas-service';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/ui/Table';
+import { Button } from '../../components/common/Button';
+import { Badge } from '../../components/common/Badge';
+import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 
 export const AlertasListCompleto = () => {
     const [alertas, setAlertas] = useState([]);
