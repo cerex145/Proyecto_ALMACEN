@@ -1,10 +1,90 @@
 const ExcelJS = require('exceljs');
 
+const ProductoSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        codigo: { type: 'string' },
+        descripcion: { type: 'string' },
+        proveedor: { type: 'string', nullable: true },
+        categoria_ingreso: { type: 'string', nullable: true },
+        procedencia: { type: 'string', nullable: true },
+        stock_actual: { type: 'number' },
+        activo: { type: 'boolean' },
+        created_at: { type: 'string', format: 'date-time' },
+        updated_at: { type: 'string', format: 'date-time' }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+        errores: { type: 'array', items: { type: 'string' } }
+    }
+};
+
+const ProductoListResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: { type: 'array', items: ProductoSchema },
+        pagination: PaginationSchema
+    }
+};
+
+const ProductoResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: ProductoSchema
+    }
+};
+
+const ProductoResponseWithMessageSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: ProductoSchema,
+        message: { type: 'string' }
+    }
+};
+
 async function productoRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
 
     // GET /api/productos - Listar con filtros y paginación
-    fastify.get('/api/productos', async (request, reply) => {
+    fastify.get('/api/productos', {
+        schema: {
+            querystring: {
+                type: 'object',
+                properties: {
+                    busqueda: { type: 'string' },
+                    activo: { type: 'string', enum: ['true', 'false'] },
+                    categoria_ingreso: { type: 'string' },
+                    lote: { type: 'string' },
+                    page: { type: 'integer', minimum: 1 },
+                    limit: { type: 'integer', minimum: 1 },
+                    orderBy: { type: 'string' },
+                    order: { type: 'string', enum: ['ASC', 'DESC', 'asc', 'desc'] }
+                }
+            },
+            response: {
+                200: ProductoListResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { 
             busqueda = '', 
             activo,
@@ -72,7 +152,21 @@ async function productoRoutes(fastify, options) {
     });
 
     // GET /api/productos/:id - Obtener un producto
-    fastify.get('/api/productos/:id', async (request, reply) => {
+    fastify.get('/api/productos/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: ProductoResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const producto = await productoRepo.findOneBy({ id: Number(id) });
 
@@ -84,7 +178,26 @@ async function productoRoutes(fastify, options) {
     });
 
     // POST /api/productos - Crear producto
-    fastify.post('/api/productos', async (request, reply) => {
+    fastify.post('/api/productos', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['codigo', 'descripcion'],
+                properties: {
+                    codigo: { type: 'string' },
+                    descripcion: { type: 'string' },
+                    stock_actual: { type: 'number' },
+                    proveedor: { type: 'string' },
+                    categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
+                    procedencia: { type: 'string' }
+                }
+            },
+            response: {
+                201: ProductoResponseWithMessageSchema,
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { 
             codigo, 
             descripcion, 
@@ -140,7 +253,33 @@ async function productoRoutes(fastify, options) {
     });
 
     // PUT /api/productos/:id - Actualizar producto
-    fastify.put('/api/productos/:id', async (request, reply) => {
+    fastify.put('/api/productos/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    codigo: { type: 'string' },
+                    descripcion: { type: 'string' },
+                    activo: { type: 'boolean' },
+                    proveedor: { type: 'string' },
+                    categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
+                    procedencia: { type: 'string' }
+                }
+            },
+            response: {
+                200: ProductoResponseWithMessageSchema,
+                400: ErrorResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const { 
             codigo, 
@@ -188,7 +327,27 @@ async function productoRoutes(fastify, options) {
     });
 
     // DELETE /api/productos/:id - Eliminar (lógico)
-    fastify.delete('/api/productos/:id', async (request, reply) => {
+    fastify.delete('/api/productos/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const producto = await productoRepo.findOneBy({ id: Number(id) });
 
@@ -203,7 +362,28 @@ async function productoRoutes(fastify, options) {
     });
 
     // POST /api/productos/importar - Importar desde Excel
-    fastify.post('/api/productos/importar', async (request, reply) => {
+    fastify.post('/api/productos/importar', {
+        schema: {
+            consumes: ['multipart/form-data'],
+            body: {
+                type: 'object',
+                required: ['file'],
+                properties: {
+                    file: { type: 'string', format: 'binary' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const data = await request.file();
         
         if (!data) {
@@ -262,7 +442,13 @@ async function productoRoutes(fastify, options) {
     });
 
     // GET /api/productos/exportar - Exportar a Excel
-    fastify.get('/api/productos/exportar', async (request, reply) => {
+    fastify.get('/api/productos/exportar', {
+        schema: {
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const { activo } = request.query;
 
         const queryBuilder = productoRepo.createQueryBuilder('producto');

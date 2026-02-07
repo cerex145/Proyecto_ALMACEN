@@ -1,10 +1,88 @@
 const ExcelJS = require('exceljs');
 
+const ClienteSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        codigo: { type: 'string' },
+        razon_social: { type: 'string' },
+        cuit: { type: 'string' },
+        direccion: { type: 'string', nullable: true },
+        telefono: { type: 'string', nullable: true },
+        email: { type: 'string', nullable: true },
+        activo: { type: 'boolean' },
+        created_at: { type: 'string', format: 'date-time' },
+        updated_at: { type: 'string', format: 'date-time' }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' },
+        errores: { type: 'array', items: { type: 'string' } }
+    }
+};
+
+const ClienteListResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: { type: 'array', items: ClienteSchema },
+        pagination: PaginationSchema
+    }
+};
+
+const ClienteResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: ClienteSchema
+    }
+};
+
+const ClienteResponseWithMessageSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: ClienteSchema,
+        message: { type: 'string' }
+    }
+};
+
 async function clienteRoutes(fastify, options) {
     const clienteRepo = fastify.db.getRepository('Cliente');
 
     // GET /api/clientes - Listar con filtros y paginación
-    fastify.get('/api/clientes', async (request, reply) => {
+    fastify.get('/api/clientes', {
+        schema: {
+            querystring: {
+                type: 'object',
+                properties: {
+                    busqueda: { type: 'string' },
+                    activo: { type: 'string', enum: ['true', 'false'] },
+                    page: { type: 'integer', minimum: 1 },
+                    limit: { type: 'integer', minimum: 1 },
+                    orderBy: { type: 'string' },
+                    order: { type: 'string', enum: ['ASC', 'DESC', 'asc', 'desc'] }
+                }
+            },
+            response: {
+                200: ClienteListResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { 
             busqueda = '', 
             activo, 
@@ -49,7 +127,21 @@ async function clienteRoutes(fastify, options) {
     });
 
     // GET /api/clientes/:id - Obtener un cliente
-    fastify.get('/api/clientes/:id', async (request, reply) => {
+    fastify.get('/api/clientes/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: ClienteResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const cliente = await clienteRepo.findOneBy({ id: Number(id) });
 
@@ -61,14 +153,33 @@ async function clienteRoutes(fastify, options) {
     });
 
     // POST /api/clientes - Crear cliente
-    fastify.post('/api/clientes', async (request, reply) => {
+    fastify.post('/api/clientes', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['codigo', 'razon_social', 'cuit'],
+                properties: {
+                    codigo: { type: 'string' },
+                    razon_social: { type: 'string' },
+                    cuit: { type: 'string' },
+                    direccion: { type: 'string' },
+                    telefono: { type: 'string' },
+                    email: { type: 'string' }
+                }
+            },
+            response: {
+                201: ClienteResponseWithMessageSchema,
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { codigo, razon_social, cuit, direccion, telefono, email } = request.body;
 
         // Validaciones
-        if (!codigo || !razon_social) {
+        if (!codigo || !razon_social || !cuit) {
             return reply.status(400).send({ 
                 success: false, 
-                error: 'Código y Razón Social son obligatorios' 
+                error: 'Código, Razón Social y CUIT/RUC son obligatorios' 
             });
         }
 
@@ -84,7 +195,7 @@ async function clienteRoutes(fastify, options) {
         const nuevoCliente = clienteRepo.create({
             codigo,
             razon_social,
-            cuit: cuit || null,
+            cuit,
             direccion: direccion || null,
             telefono: telefono || null,
             email: email || null,
@@ -101,7 +212,34 @@ async function clienteRoutes(fastify, options) {
     });
 
     // PUT /api/clientes/:id - Actualizar cliente
-    fastify.put('/api/clientes/:id', async (request, reply) => {
+    fastify.put('/api/clientes/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    codigo: { type: 'string' },
+                    razon_social: { type: 'string' },
+                    cuit: { type: 'string' },
+                    direccion: { type: 'string' },
+                    telefono: { type: 'string' },
+                    email: { type: 'string' },
+                    activo: { type: 'boolean' }
+                }
+            },
+            response: {
+                200: ClienteResponseWithMessageSchema,
+                400: ErrorResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const { codigo, razon_social, cuit, direccion, telefono, email, activo } = request.body;
 
@@ -131,7 +269,7 @@ async function clienteRoutes(fastify, options) {
         }
 
         cliente.razon_social = razon_social;
-        cliente.cuit = cuit || null;
+        if (cuit !== undefined) cliente.cuit = cuit;
         cliente.direccion = direccion || null;
         cliente.telefono = telefono || null;
         cliente.email = email || null;
@@ -143,7 +281,27 @@ async function clienteRoutes(fastify, options) {
     });
 
     // DELETE /api/clientes/:id - Eliminar (lógico)
-    fastify.delete('/api/clientes/:id', async (request, reply) => {
+    fastify.delete('/api/clientes/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const cliente = await clienteRepo.findOneBy({ id: Number(id) });
 
@@ -158,7 +316,28 @@ async function clienteRoutes(fastify, options) {
     });
 
     // POST /api/clientes/importar - Importar desde Excel
-    fastify.post('/api/clientes/importar', async (request, reply) => {
+    fastify.post('/api/clientes/importar', {
+        schema: {
+            consumes: ['multipart/form-data'],
+            body: {
+                type: 'object',
+                required: ['file'],
+                properties: {
+                    file: { type: 'string', format: 'binary' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const data = await request.file();
         
         if (!data) {
@@ -178,15 +357,15 @@ async function clienteRoutes(fastify, options) {
 
             const [codigo, razon_social, cuit, direccion, telefono, email] = row.values.slice(1);
 
-            if (!codigo || !razon_social) {
-                errores.push(`Fila ${rowNumber}: Código y Razón Social son obligatorios`);
+            if (!codigo || !razon_social || !cuit) {
+                errores.push(`Fila ${rowNumber}: Código, Razón Social y CUIT/RUC son obligatorios`);
                 return;
             }
 
             clientes.push({
                 codigo: String(codigo),
                 razon_social: String(razon_social),
-                cuit: cuit ? String(cuit) : null,
+                cuit: String(cuit),
                 direccion: direccion ? String(direccion) : null,
                 telefono: telefono ? String(telefono) : null,
                 email: email ? String(email) : null,
@@ -218,7 +397,19 @@ async function clienteRoutes(fastify, options) {
     });
 
     // GET /api/clientes/exportar - Exportar a Excel
-    fastify.get('/api/clientes/exportar', async (request, reply) => {
+    fastify.get('/api/clientes/exportar', {
+        schema: {
+            querystring: {
+                type: 'object',
+                properties: {
+                    activo: { type: 'string', enum: ['true', 'false'] }
+                }
+            },
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const { activo } = request.query;
 
         const queryBuilder = clienteRepo.createQueryBuilder('cliente');

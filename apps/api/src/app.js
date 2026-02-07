@@ -1,6 +1,8 @@
 const cors = require('@fastify/cors');
 const jwt = require('@fastify/jwt');
 const multipart = require('@fastify/multipart');
+const swagger = require('@fastify/swagger');
+const swaggerUi = require('@fastify/swagger-ui');
 const dbPlugin = require('./plugins/database.plugin');
 
 async function buildApp(fastify, options) {
@@ -16,6 +18,37 @@ async function buildApp(fastify, options) {
     await fastify.register(multipart, {
         limits: {
             fileSize: 10 * 1024 * 1024
+        }
+    });
+
+    await fastify.register(swagger, {
+        openapi: {
+            openapi: '3.0.3',
+            info: {
+                title: 'API Almacén',
+                description: 'Documentación Swagger de la API REST',
+                version: '1.0.0'
+            },
+            servers: [
+                { url: 'http://localhost:3000' }
+            ],
+            components: {
+                securitySchemes: {
+                    bearerAuth: {
+                        type: 'http',
+                        scheme: 'bearer',
+                        bearerFormat: 'JWT'
+                    }
+                }
+            }
+        }
+    });
+
+    await fastify.register(swaggerUi, {
+        routePrefix: '/docs',
+        uiConfig: {
+            docExpansion: 'list',
+            deepLinking: false
         }
     });
 

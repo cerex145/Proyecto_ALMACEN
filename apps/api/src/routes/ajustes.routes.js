@@ -2,8 +2,88 @@ async function ajustesRoutes(fastify, options) {
     const ajusteRepo = fastify.db.getRepository('AjusteStock');
     const productoRepo = fastify.db.getRepository('Producto');
 
+    const AjusteSchema = {
+        type: 'object',
+        properties: {
+            id: { type: 'integer' },
+            producto_id: { type: 'integer' },
+            tipo: { type: 'string' },
+            cantidad: { type: 'number' },
+            motivo: { type: 'string' },
+            observaciones: { type: 'string', nullable: true },
+            created_at: { type: 'string', format: 'date-time' },
+            producto: {
+                type: 'object',
+                nullable: true
+            }
+        }
+    };
+
+    const PaginationSchema = {
+        type: 'object',
+        properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            totalPages: { type: 'integer' }
+        }
+    };
+
+    const ErrorResponseSchema = {
+        type: 'object',
+        properties: {
+            success: { type: 'boolean' },
+            error: { type: 'string' }
+        }
+    };
+
+    const AjusteListResponseSchema = {
+        type: 'object',
+        properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: AjusteSchema },
+            pagination: PaginationSchema
+        }
+    };
+
+    const AjusteResponseSchema = {
+        type: 'object',
+        properties: {
+            success: { type: 'boolean' },
+            data: AjusteSchema
+        }
+    };
+
+    const AjusteResponseWithMessageSchema = {
+        type: 'object',
+        properties: {
+            success: { type: 'boolean' },
+            data: AjusteSchema,
+            message: { type: 'string' }
+        }
+    };
+
     // GET /api/ajustes - Listar ajustes con filtros y paginación
-    fastify.get('/api/ajustes', async (request, reply) => {
+    fastify.get('/api/ajustes', {
+        schema: {
+            querystring: {
+                type: 'object',
+                properties: {
+                    producto_id: { type: 'integer' },
+                    tipo: { type: 'string', enum: ['AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO'] },
+                    fecha_desde: { type: 'string', format: 'date' },
+                    fecha_hasta: { type: 'string', format: 'date' },
+                    page: { type: 'integer', minimum: 1 },
+                    limit: { type: 'integer', minimum: 1 },
+                    orderBy: { type: 'string' },
+                    order: { type: 'string', enum: ['ASC', 'DESC', 'asc', 'desc'] }
+                }
+            },
+            response: {
+                200: AjusteListResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { 
             producto_id, 
             tipo, 
@@ -56,7 +136,21 @@ async function ajustesRoutes(fastify, options) {
     });
 
     // GET /api/ajustes/:id - Obtener un ajuste
-    fastify.get('/api/ajustes/:id', async (request, reply) => {
+    fastify.get('/api/ajustes/:id', {
+        schema: {
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: AjusteResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         
         const ajuste = await ajusteRepo.createQueryBuilder('ajuste')
@@ -72,7 +166,26 @@ async function ajustesRoutes(fastify, options) {
     });
 
     // POST /api/ajustes - Crear ajuste de stock
-    fastify.post('/api/ajustes', async (request, reply) => {
+    fastify.post('/api/ajustes', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['producto_id', 'tipo', 'cantidad', 'motivo'],
+                properties: {
+                    producto_id: { type: 'integer' },
+                    tipo: { type: 'string', enum: ['AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO'] },
+                    cantidad: { type: 'number', minimum: 0 },
+                    motivo: { type: 'string' },
+                    observaciones: { type: 'string' }
+                }
+            },
+            response: {
+                201: AjusteResponseWithMessageSchema,
+                400: ErrorResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { producto_id, tipo, cantidad, motivo, observaciones } = request.body;
 
         // Validaciones
@@ -147,7 +260,26 @@ async function ajustesRoutes(fastify, options) {
     });
 
     // GET /api/ajustes/reportes/por-producto - Reporte de ajustes por producto
-    fastify.get('/api/ajustes/reportes/por-producto', async (request, reply) => {
+    fastify.get('/api/ajustes/reportes/por-producto', {
+        schema: {
+            querystring: {
+                type: 'object',
+                properties: {
+                    fecha_desde: { type: 'string', format: 'date' },
+                    fecha_hasta: { type: 'string', format: 'date' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: { type: 'object' } }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { fecha_desde, fecha_hasta } = request.query;
 
         const queryBuilder = ajusteRepo.createQueryBuilder('ajuste')
@@ -180,7 +312,26 @@ async function ajustesRoutes(fastify, options) {
     });
 
     // GET /api/ajustes/reportes/por-tipo - Reporte de ajustes por tipo
-    fastify.get('/api/ajustes/reportes/por-tipo', async (request, reply) => {
+    fastify.get('/api/ajustes/reportes/por-tipo', {
+        schema: {
+            querystring: {
+                type: 'object',
+                properties: {
+                    fecha_desde: { type: 'string', format: 'date' },
+                    fecha_hasta: { type: 'string', format: 'date' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: { type: 'object' } }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { fecha_desde, fecha_hasta } = request.query;
 
         const queryBuilder = ajusteRepo.createQueryBuilder('ajuste')

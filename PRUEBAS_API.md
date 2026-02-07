@@ -49,6 +49,9 @@ npm run dev
 
 El servidor estará disponible en: `http://localhost:3000`
 
+Swagger UI: `http://localhost:3000/docs`
+OpenAPI JSON: `http://localhost:3000/docs/json`
+
 ---
 
 ## Pruebas con cURL
@@ -338,7 +341,7 @@ Puedes crear una colección con los siguientes requests:
 ### Validaciones Implementadas
 
 **Clientes:**
-- ✅ Código y Razón Social obligatorios
+- ✅ Código, Razón Social y CUIT/RUC obligatorios
 - ✅ Código único
 - ✅ Formato de email válido (opcional)
 
