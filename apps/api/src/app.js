@@ -42,6 +42,12 @@ async function buildApp(fastify, options) {
     await fastify.register(require('./routes/reportes.routes'));
     await fastify.register(require('./routes/usuarios.routes'));
 
+    fastify.route({
+        method: ['GET', 'HEAD'],
+        url: '/',
+        handler: async () => ({ status: 'ok' })
+    });
+
     fastify.get('/health', async () => {
         return { status: 'ok', timestamp: new Date() };
     });
