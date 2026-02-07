@@ -1,10 +1,50 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { clienteService } from '../../services/clientes.service';
 
 export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
-    const { register, handleSubmit } = useForm({
+    const { register, handleSubmit, watch, setValue } = useForm({
         defaultValues: productToEdit || {}
     });
+
+    const [clients, setClients] = useState([]);
+    const [loadingClients, setLoadingClients] = useState(false);
+
+    // Watch for client selection
+    const selectedClienteCode = watch('codigo_cliente');
+
+    useEffect(() => {
+        loadClients();
+    }, []);
+
+    const loadClients = async () => {
+        try {
+            setLoadingClients(true);
+            const response = await clienteService.getClientes();
+            // Handle response structure (response.data or response)
+            const clientList = response.data || response || [];
+            if (Array.isArray(clientList)) {
+                setClients(clientList);
+            }
+        } catch (error) {
+            console.error('Error loading clients:', error);
+        } finally {
+            setLoadingClients(false);
+        }
+    };
+
+    // Auto-fill client data when 'codigo_cliente' changes
+    useEffect(() => {
+        if (selectedClienteCode) {
+            const cliente = clients.find(c => c.codigo === selectedClienteCode);
+            if (cliente) {
+                setValue('ruc_cliente', cliente.cuit || cliente.numero_ruc || '');
+                setValue('razon_social', cliente.razon_social || '');
+                // Attempt to fill address/contact if fields exist
+                // setValue('direccion', cliente.direccion || '');
+            }
+        }
+    }, [selectedClienteCode, clients, setValue]);
 
     const onSubmit = (data) => {
         console.log("Processing...", data);
@@ -55,6 +95,11 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                         <label className="block text-xs font-bold text-gray-700 mb-1">Código Cliente</label>
                                         <select {...register('codigo_cliente')} className="w-full h-9 rounded border-gray-300 bg-white text-sm focus:border-blue-500 focus:ring-blue-500 border px-2">
                                             <option value="">Seleccionar...</option>
+                                            {clients.map(client => (
+                                                <option key={client.id} value={client.codigo}>
+                                                    {client.codigo} - {client.razon_social}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div>

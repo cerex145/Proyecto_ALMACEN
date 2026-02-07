@@ -84,55 +84,64 @@ async function ajustesRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { 
-            producto_id, 
-            tipo, 
-            fecha_desde,
-            fecha_hasta,
-            page = 1, 
-            limit = 50,
-            orderBy = 'created_at',
-            order = 'DESC'
-        } = request.query;
+        try {
+            const { 
+                producto_id, 
+                tipo, 
+                fecha_desde,
+                fecha_hasta,
+                page = 1, 
+                limit = 50,
+                orderBy = 'created_at',
+                order = 'DESC'
+            } = request.query;
 
-        const skip = (page - 1) * limit;
+            const skip = (page - 1) * limit;
 
-        const queryBuilder = ajusteRepo.createQueryBuilder('ajuste')
-            .leftJoinAndSelect('ajuste.producto', 'producto');
+            const queryBuilder = ajusteRepo.createQueryBuilder('ajuste')
+                .leftJoinAndSelect('ajuste.producto', 'producto');
 
-        if (producto_id) {
-            queryBuilder.andWhere('ajuste.producto_id = :producto_id', { producto_id: Number(producto_id) });
-        }
-
-        if (tipo) {
-            queryBuilder.andWhere('ajuste.tipo = :tipo', { tipo });
-        }
-
-        if (fecha_desde) {
-            queryBuilder.andWhere('ajuste.created_at >= :fecha_desde', { fecha_desde });
-        }
-
-        if (fecha_hasta) {
-            queryBuilder.andWhere('ajuste.created_at <= :fecha_hasta', { fecha_hasta });
-        }
-
-        queryBuilder
-            .orderBy(`ajuste.${orderBy}`, order.toUpperCase())
-            .skip(skip)
-            .take(limit);
-
-        const [ajustes, total] = await queryBuilder.getManyAndCount();
-
-        return {
-            success: true,
-            data: ajustes,
-            pagination: {
-                page: Number(page),
-                limit: Number(limit),
-                total,
-                totalPages: Math.ceil(total / limit)
+            if (producto_id) {
+                queryBuilder.andWhere('ajuste.producto_id = :producto_id', { producto_id: Number(producto_id) });
             }
-        };
+
+            if (tipo) {
+                queryBuilder.andWhere('ajuste.tipo = :tipo', { tipo });
+            }
+
+            if (fecha_desde) {
+                queryBuilder.andWhere('ajuste.created_at >= :fecha_desde', { fecha_desde });
+            }
+
+            if (fecha_hasta) {
+                queryBuilder.andWhere('ajuste.created_at <= :fecha_hasta', { fecha_hasta });
+            }
+
+            queryBuilder
+                .orderBy(`ajuste.${orderBy}`, order.toUpperCase())
+                .skip(skip)
+                .take(limit);
+
+            const [ajustes, total] = await queryBuilder.getManyAndCount();
+
+            return {
+                success: true,
+                data: ajustes,
+                pagination: {
+                    page: Number(page),
+                    limit: Number(limit),
+                    total,
+                    totalPages: Math.ceil(total / limit)
+                }
+            };
+        } catch (error) {
+            console.error('❌ ERROR GET /ajustes:', error);
+            return reply.status(500).send({ 
+                success: false, 
+                error: 'Error interno al obtener ajustes',
+                details: error.message 
+            });
+        }
     });
 
     // GET /api/ajustes/:id - Obtener un ajuste
