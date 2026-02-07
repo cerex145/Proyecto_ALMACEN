@@ -23,8 +23,12 @@ export const NotaIngresoForm = () => {
     });
 
     const [products, setProducts] = useState([]);
-    const [selectedProduct, setSelectedProduct] = useState('');
-    const [quantity, setQuantity] = useState('');
+    const [addItem, setAddItem] = useState({
+        productId: '',
+        quantity: '',
+        lote: '',
+        expiryDate: ''
+    });
 
     useEffect(() => {
         loadProducts();
@@ -40,15 +44,29 @@ export const NotaIngresoForm = () => {
     };
 
     const handleAddProduct = () => {
-        if (!selectedProduct || !quantity) return;
-        const product = products.find(p => p.id === parseInt(selectedProduct));
+        const { productId, quantity, lote, expiryDate } = addItem;
+        
+        if (!productId || !quantity || !lote) {
+            alert("Debe seleccionar producto, cantidad y número de lote");
+            return;
+        }
+
+        const product = products.find(p => p.id === parseInt(productId));
         append({
-            producto_id: parseInt(selectedProduct),
+            producto_id: parseInt(productId),
             producto_nombre: product.descripcion,
-            cantidad: parseFloat(quantity)
+            cantidad: parseFloat(quantity),
+            lote_numero: lote,
+            fecha_vencimiento: expiryDate || null
         });
-        setSelectedProduct('');
-        setQuantity('');
+        
+        // Reset fields
+        setAddItem({
+            productId: '',
+            quantity: '',
+            lote: '',
+            expiryDate: ''
+        });
     };
 
     const onSubmit = async (data) => {
@@ -86,14 +104,15 @@ export const NotaIngresoForm = () => {
                     error={errors.proveedor_id}
                 />
 
-                <div style={{ border: '1px solid var(--border-color)', padding: '1rem', borderRadius: '8px', background: 'var(--light-bg)' }}>
-                    <h4>Agregar Productos</h4>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-                        <div style={{ flex: 2 }}>
+                <div style={{ border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px', background: 'var(--surface-color)', boxShadow: 'var(--shadow-sm)' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '1rem', color: 'var(--text-color)' }}>Agregar Productos al Ingreso</h4>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                        <div>
                             <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Producto</label>
                             <select
-                                value={selectedProduct}
-                                onChange={(e) => setSelectedProduct(e.target.value)}
+                                value={addItem.productId}
+                                onChange={(e) => setAddItem({ ...addItem, productId: e.target.value })}
                                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
                             >
                                 <option value="">Seleccione un producto</option>
@@ -102,16 +121,42 @@ export const NotaIngresoForm = () => {
                                 ))}
                             </select>
                         </div>
-                        <div style={{ flex: 1 }}>
+                        <div>
                             <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Cantidad</label>
                             <input
                                 type="number"
-                                value={quantity}
-                                onChange={(e) => setQuantity(e.target.value)}
+                                value={addItem.quantity}
+                                onChange={(e) => setAddItem({ ...addItem, quantity: e.target.value })}
+                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                                placeholder="0.00"
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Número de Lote</label>
+                            <input
+                                type="text"
+                                value={addItem.lote}
+                                onChange={(e) => setAddItem({ ...addItem, lote: e.target.value })}
+                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                                placeholder="LOTE-001"
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Fecha Vencimiento</label>
+                            <input
+                                type="date"
+                                value={addItem.expiryDate}
+                                onChange={(e) => setAddItem({ ...addItem, expiryDate: e.target.value })}
                                 style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
                             />
                         </div>
-                        <Button type="button" onClick={handleAddProduct}>Agregar</Button>
+                    </div>
+                    
+                    <div style={{ textAlign: 'right' }}>
+                         <Button type="button" onClick={handleAddProduct}>+ Agregar Item</Button>
                     </div>
                 </div>
 
@@ -119,6 +164,8 @@ export const NotaIngresoForm = () => {
                     <TableHead>
                         <TableRow>
                             <TableHeader>Producto</TableHeader>
+                            <TableHeader>Lote</TableHeader>
+                            <TableHeader>Vencimiento</TableHeader>
                             <TableHeader>Cantidad</TableHeader>
                             <TableHeader>Acción</TableHeader>
                         </TableRow>
@@ -127,6 +174,8 @@ export const NotaIngresoForm = () => {
                         {fields.map((field, index) => (
                             <TableRow key={field.id}>
                                 <TableCell>{field.producto_nombre}</TableCell>
+                                <TableCell>{field.lote_numero}</TableCell>
+                                <TableCell>{field.fecha_vencimiento}</TableCell>
                                 <TableCell>{field.cantidad}</TableCell>
                                 <TableCell>
                                     <Button variant="danger" size="small" onClick={() => remove(index)}>Quitar</Button>

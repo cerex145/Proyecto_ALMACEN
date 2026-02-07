@@ -155,8 +155,7 @@ async function ingresosRoutes(fastify, options) {
                     producto_id: detalle.producto_id,
                     numero_lote: detalle.lote_numero,
                     fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad_ingresada: detalle.cantidad,
-                    cantidad_disponible: detalle.cantidad,
+                    stock_lote: detalle.cantidad,
                     nota_ingreso_id: notaGuardada.id
                 });
                 await loteRepo.save(lote);
@@ -171,7 +170,7 @@ async function ingresosRoutes(fastify, options) {
                     producto_id: detalle.producto_id,
                     lote_numero: detalle.lote_numero,
                     tipo_movimiento: 'INGRESO',
-                    cantidad: detalle.cantidad,
+                    cantidad_entrada: detalle.cantidad,
                     saldo: saldoActual,
                     documento_tipo: 'NOTA_INGRESO',
                     documento_numero: numeroIngreso,
@@ -320,8 +319,7 @@ async function ingresosRoutes(fastify, options) {
                     producto_id: producto.id,
                     numero_lote: detalle.lote_numero,
                     fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad_ingresada: detalle.cantidad,
-                    cantidad_disponible: detalle.cantidad,
+                    stock_lote: detalle.cantidad,
                     nota_ingreso_id: notaGuardada.id
                 });
                 await loteRepo.save(lote);
@@ -335,7 +333,7 @@ async function ingresosRoutes(fastify, options) {
                     producto_id: producto.id,
                     lote_numero: detalle.lote_numero,
                     tipo_movimiento: 'INGRESO',
-                    cantidad: detalle.cantidad,
+                    cantidad_entrada: detalle.cantidad,
                     saldo: producto.stock_actual,
                     documento_tipo: 'NOTA_INGRESO',
                     documento_numero: numeroIngreso,

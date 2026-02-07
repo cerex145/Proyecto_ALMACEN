@@ -13,8 +13,9 @@ module.exports = new EntitySchema({
             type: 'int',
             nullable: false
         },
-        lote_id: {
-            type: 'int',
+        lote_numero: {
+            type: 'varchar',
+            length: 100,
             nullable: true
         },
         fecha: {

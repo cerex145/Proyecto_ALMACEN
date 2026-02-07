@@ -1,13 +1,14 @@
 async function testApi() {
     try {
-        console.log('Testing GET /api/ajustes...');
-        const response = await fetch('http://localhost:3000/api/ajustes');
-        const data = await response.json(); // Assuming JSON response
+        console.log('Testing GET /api/clientes...');
+        const response = await fetch('http://localhost:3000/api/clientes');
+        const text = await response.text();
         console.log('Status:', response.status);
-        if (!response.ok) {
-             console.error('Error Data:', JSON.stringify(data, null, 2));
-        } else {
-             console.log('Data:', data);
+        try {
+            const json = JSON.parse(text);
+            console.log('Response JSON:', JSON.stringify(json, null, 2));
+        } catch (e) {
+            console.log('Response Text:', text);
         }
     } catch (error) {
         console.error('Fetch Error:', error);

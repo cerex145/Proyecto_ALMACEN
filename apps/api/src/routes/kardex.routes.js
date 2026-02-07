@@ -14,7 +14,7 @@ async function kardexRoutes(fastify, options) {
             fecha_hasta,
             page = 1, 
             limit = 100,
-            orderBy = 'fecha',
+            orderBy = 'created_at',
             order = 'DESC'
         } = request.query;
 
@@ -26,8 +26,8 @@ async function kardexRoutes(fastify, options) {
             queryBuilder.where('kardex.producto_id = :producto_id', { producto_id: Number(producto_id) });
         }
 
-        if (lote_id) {
-            queryBuilder.andWhere('kardex.lote_id = :lote_id', { lote_id: Number(lote_id) });
+        if (request.query.lote_numero) {
+            queryBuilder.andWhere('kardex.lote_numero = :lote_numero', { lote_numero: request.query.lote_numero });
         }
 
         if (tipo_movimiento) {
@@ -47,7 +47,12 @@ async function kardexRoutes(fastify, options) {
             .skip(skip)
             .take(limit);
 
-        const [movimientos, total] = await queryBuilder.getManyAndCount();
+        const [movimientosData, total] = await queryBuilder.getManyAndCount();
+
+        const movimientos = movimientosData.map(m => ({
+            ...m,
+            cantidad: Number(m.cantidad_entrada) || Number(m.cantidad_salida) || 0
+        }));
 
         return {
             success: true,
@@ -80,7 +85,10 @@ async function kardexRoutes(fastify, options) {
             success: true,
             data: {
                 producto,
-                movimientos
+                movimientos: movimientos.map(m => ({
+                    ...m,
+                    cantidad: Number(m.cantidad_entrada) || Number(m.cantidad_salida) || 0
+                }))
             }
         };
     });
@@ -122,7 +130,7 @@ async function kardexRoutes(fastify, options) {
                 descripcion: mov.producto?.descripcion || 'N/A',
                 lote_numero: mov.lote_numero || 'N/A',
                 tipo_movimiento: mov.tipo_movimiento,
-                cantidad: Number(mov.cantidad),
+                cantidad: Number(mov.cantidad_entrada) || Number(mov.cantidad_salida) || 0,
                 saldo: Number(mov.saldo),
                 documento: mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : 'N/A',
                 observaciones: mov.observaciones || ''

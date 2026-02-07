@@ -1,3 +1,5 @@
+const ExcelJS = require('exceljs');
+
 async function lotesRoutes(fastify, options) {
     const loteRepo = fastify.db.getRepository('Lote');
     const productoRepo = fastify.db.getRepository('Producto');
@@ -26,7 +28,7 @@ async function lotesRoutes(fastify, options) {
         }
 
         if (disponibles_solo === 'true') {
-            queryBuilder.andWhere('lote.cantidad_disponible > 0');
+            queryBuilder.andWhere('lote.stock_lote > 0');
         }
 
         if (fecha_vencimiento_desde) {
@@ -82,15 +84,15 @@ async function lotesRoutes(fastify, options) {
             producto_id,
             numero_lote,
             fecha_vencimiento,
-            cantidad_ingresada,
+            stock,
             nota_ingreso_id
         } = request.body;
 
         // Validaciones
-        if (!producto_id || !numero_lote || !cantidad_ingresada) {
+        if (!producto_id || !numero_lote || !stock) {
             return reply.status(400).send({
                 success: false,
-                error: 'Producto ID, número de lote y cantidad son obligatorios'
+                error: 'Producto ID, número de lote y cantidad (stock) son obligatorios'
             });
         }
 
@@ -105,8 +107,7 @@ async function lotesRoutes(fastify, options) {
                 producto_id: Number(producto_id),
                 numero_lote,
                 fecha_vencimiento,
-                cantidad_ingresada: Number(cantidad_ingresada),
-                cantidad_disponible: Number(cantidad_ingresada),
+                stock_lote: Number(stock),
                 nota_ingreso_id: nota_ingreso_id ? Number(nota_ingreso_id) : null
             });
 
@@ -129,7 +130,7 @@ async function lotesRoutes(fastify, options) {
     // PUT /api/lotes/:id - Actualizar lote
     fastify.put('/api/lotes/:id', async (request, reply) => {
         const { id } = request.params;
-        const { fecha_vencimiento, cantidad_disponible } = request.body;
+        const { fecha_vencimiento, stock_lote } = request.body;
 
         const lote = await loteRepo.findOneBy({ id: Number(id) });
         if (!lote) {
@@ -137,7 +138,7 @@ async function lotesRoutes(fastify, options) {
         }
 
         if (fecha_vencimiento) lote.fecha_vencimiento = fecha_vencimiento;
-        if (cantidad_disponible !== undefined) lote.cantidad_disponible = Number(cantidad_disponible);
+        if (stock_lote !== undefined) lote.stock_lote = Number(stock_lote);
 
         await loteRepo.save(lote);
 
@@ -157,7 +158,8 @@ async function lotesRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Lote no encontrado' });
         }
 
-        lote.cantidad_disponible = 0;
+        lote.activo = false;
+        lote.stock_lote = 0;
         await loteRepo.save(lote);
 
         return {

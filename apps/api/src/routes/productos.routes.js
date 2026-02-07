@@ -189,7 +189,9 @@ async function productoRoutes(fastify, options) {
                     stock_actual: { type: 'number' },
                     proveedor: { type: 'string' },
                     categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
-                    procedencia: { type: 'string' }
+                    procedencia: { type: 'string' },
+                    lote: { type: 'string', nullable: true },
+                    fecha_vcto: { type: 'string', format: 'date', nullable: true }
                 }
             },
             response: {
@@ -204,7 +206,9 @@ async function productoRoutes(fastify, options) {
             stock_actual,
             proveedor,
             categoria_ingreso,
-            procedencia
+            procedencia,
+            lote,
+            fecha_vcto
         } = request.body;
 
         // Validaciones
@@ -233,17 +237,53 @@ async function productoRoutes(fastify, options) {
             });
         }
 
-        const nuevoProducto = productoRepo.create({
-            codigo,
-            descripcion,
-            stock_actual: stock_actual || 0,
-            proveedor,
-            categoria_ingreso,
-            procedencia,
-            activo: true
-        });
+        let nuevoProducto = null;
 
-        await productoRepo.save(nuevoProducto);
+        await fastify.db.transaction(async (manager) => {
+            const productoRepoTx = manager.getRepository('Producto');
+            const loteRepoTx = manager.getRepository('Lote');
+            const kardexRepoTx = manager.getRepository('Kardex');
+
+            nuevoProducto = productoRepoTx.create({
+                codigo,
+                descripcion,
+                stock_actual: stock_actual || 0,
+                proveedor,
+                categoria_ingreso,
+                procedencia,
+                activo: true
+            });
+
+            await productoRepoTx.save(nuevoProducto);
+
+            // Si hay stock inicial, crear Lote y Kardex
+            if (stock_actual && Number(stock_actual) > 0) {
+                const numeroLote = lote || `LOTE-INI-${nuevoProducto.id}`;
+                
+                // Crear Lote
+                const nuevoLote = loteRepoTx.create({
+                    producto_id: nuevoProducto.id,
+                    numero_lote: numeroLote,
+                    fecha_vencimiento: fecha_vcto ? new Date(fecha_vcto) : null,
+                    stock_lote: Number(stock_actual),
+                    activo: true
+                });
+                await loteRepoTx.save(nuevoLote);
+
+                // Crear Kardex (Inventario Inicial)
+                const kardex = kardexRepoTx.create({
+                    producto_id: nuevoProducto.id,
+                    lote_numero: numeroLote,
+                    tipo_movimiento: 'INVENTARIO_INITIAL',
+                    cantidad_entrada: Number(stock_actual),
+                    saldo: Number(stock_actual), // Saldo inicial
+                    documento_tipo: 'REGISTRO_PRODUCTO',
+                    documento_numero: 'INI',
+                    observaciones: 'Inventario Inicial al crear producto'
+                });
+                await kardexRepoTx.save(kardex);
+            }
+        });
 
         return reply.status(201).send({ 
             success: true, 

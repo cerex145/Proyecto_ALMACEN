@@ -1,23 +1,45 @@
 import api from './api';
 
-export const kardexService = {
-    // Listar movimientos de kardex
+export const alertasService = {
+    // Listar alertas de vencimiento
     listar: async (filtros = {}) => {
-        const response = await api.get('/kardex', { params: filtros });
+        const response = await api.get('/alertas/vencimiento', { params: filtros });
         return response.data;
     },
 
-    // Historial de un producto
-    historialProducto: async (productoId) => {
-        const response = await api.get(`/kardex/producto/${productoId}`);
+    // Obtener resumen de alertas
+    resumen: async () => {
+        const response = await api.get('/alertas/resumen');
         return response.data;
     },
 
-    // Exportar a Excel
-    exportar: async () => {
-        const response = await api.get('/kardex/exportar', {
-            responseType: 'blob'
-        });
+    // Marcar alerta como leída
+    marcarLeida: async (id) => {
+        const response = await api.put(`/alertas/${id}/marcar-leida`);
+        return response.data;
+    },
+
+    // Marcar todas como leídas
+    marcarTodasLeidas: async () => {
+        const response = await api.post('/alertas/marcar-todos-leidos');
+        return response.data;
+    },
+
+    // Eliminar alerta
+    eliminar: async (id) => {
+        const response = await api.delete(`/alertas/${id}`);
+        return response.data;
+    },
+
+    // Lotes próximos a vencer
+    proximosAVencer: async () => {
+        const response = await api.get('/lotes/proximos-a-vencer');
+        return response.data;
+    },
+
+    // Lotes vencidos
+    vencidos: async () => {
+        const response = await api.get('/lotes/vencidos');
         return response.data;
     }
 };

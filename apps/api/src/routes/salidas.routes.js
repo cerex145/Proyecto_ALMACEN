@@ -177,7 +177,7 @@ async function salidasRoutes(fastify, options) {
                     producto_id: detalle.producto_id,
                     lote_numero: detalle.lote_id ? `LOTE-${detalle.lote_id}` : null,
                     tipo_movimiento: 'SALIDA',
-                    cantidad: detalle.cantidad,
+                    cantidad_salida: detalle.cantidad,
                     saldo: producto.stock_actual,
                     documento_tipo: 'NOTA_SALIDA',
                     documento_numero: numeroSalida,
@@ -189,8 +189,8 @@ async function salidasRoutes(fastify, options) {
                 if (detalle.lote_id) {
                     const lote = await loteRepo.findOneBy({ id: Number(detalle.lote_id) });
                     if (lote) {
-                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(detalle.cantidad);
-                        if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
+                        lote.stock_lote = Number(lote.stock_lote) - Number(detalle.cantidad);
+                        if (lote.stock_lote < 0) lote.stock_lote = 0;
                         await loteRepo.save(lote);
                     }
                 }
@@ -338,7 +338,7 @@ async function salidasRoutes(fastify, options) {
                     const movimiento = kardexRepo.create({
                         producto_id: producto.id,
                         tipo_movimiento: 'SALIDA',
-                        cantidad: Number(cantidad),
+                        cantidad_salida: Number(cantidad),
                         saldo: producto.stock_actual,
                         documento_tipo: 'NOTA_SALIDA',
                         documento_numero: numeroSalida,

@@ -24,7 +24,7 @@ export const productService = {
 
     // Lotes
     getLotesByProduct: async (productId) => {
-        const response = await api.get(`/productos/${productId}/lotes`);
+        const response = await api.get(`/lotes/producto/${productId}`);
         return response.data.data || [];
     }
 };

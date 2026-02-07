@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { kardexService } from '../../services/kardex.service';
+import { alertasService } from '../../services/alertas.service';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/common/Card';
@@ -15,8 +15,8 @@ export const AlertasWidget = () => {
     const loadAlerts = async () => {
         try {
             setLoading(true);
-            const data = await kardexService.getAlerts();
-            setAlerts(data);
+            const response = await alertasService.listar();
+            setAlerts(response.data || []);
         } catch (error) {
             console.error('Error loading alerts:', error);
         } finally {
@@ -63,12 +63,12 @@ export const AlertasWidget = () => {
                         <TableBody>
                             {alerts.map(a => (
                                 <TableRow key={a.id}>
-                                    <TableCell className="font-medium text-slate-700">{a.descripcion}</TableCell>
-                                    <TableCell>{a.numero_lote}</TableCell>
+                                    <TableCell className="font-medium text-slate-700">{a.producto?.descripcion || 'Producto desconocido'}</TableCell>
+                                    <TableCell>{a.lote_numero}</TableCell>
                                     <TableCell>{new Date(a.fecha_vencimiento).toLocaleDateString()}</TableCell>
-                                    <TableCell>{a.stock_lote}</TableCell>
-                                    <TableCell className="text-rose-600 font-bold">{a.dias_restantes}</TableCell>
-                                    <TableCell>{getPriorityBadge(a.prioridad)}</TableCell>
+                                    <TableCell>{a.producto?.stock_actual || '-'}</TableCell>
+                                    <TableCell className="text-rose-600 font-bold">{a.dias_faltantes}</TableCell>
+                                    <TableCell>{getPriorityBadge(a.estado)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

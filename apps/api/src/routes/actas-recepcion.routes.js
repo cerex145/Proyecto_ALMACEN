@@ -256,6 +256,20 @@ async function actasRecepcionRoutes(fastify, options) {
                 }
                 
                 await productoRepo.save(producto);
+
+                // Actualizar lote si existe
+                const loteRepo = fastify.db.getRepository('Lote');
+                const lote = await loteRepo.findOne({
+                    where: {
+                        producto_id: detalle.producto_id,
+                        numero_lote: detalle.lote_numero
+                    }
+                });
+
+                if (lote) {
+                    lote.stock_lote = Number(lote.stock_lote) + diferencia;
+                    await loteRepo.save(lote);
+                }
             }
         }
 

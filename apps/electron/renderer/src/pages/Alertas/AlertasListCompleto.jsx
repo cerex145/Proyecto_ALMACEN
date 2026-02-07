@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { alertasService } from '../../services/alertas-service';
+import { alertasService } from '../../services/alertas.service';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
@@ -162,9 +162,9 @@ export const AlertasListCompleto = () => {
                                 <TableRow key={alerta.id} style={{
                                     backgroundColor: alerta.leida ? '#f5f5f5' : '#fffbea'
                                 }}>
-                                    <TableCell>{alerta.lote?.numero_lote || 'N/A'}</TableCell>
-                                    <TableCell>{alerta.lote?.producto_id || 'N/A'}</TableCell>
-                                    <TableCell>{new Date(alerta.lote?.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                                    <TableCell>{alerta.lote_numero || 'N/A'}</TableCell>
+                                    <TableCell>{alerta.producto_id || 'N/A'}</TableCell>
+                                    <TableCell>{new Date(alerta.fecha_vencimiento).toLocaleDateString()}</TableCell>
                                     <TableCell style={{ fontWeight: 'bold' }}>
                                         {alerta.dias_faltantes}
                                     </TableCell>

@@ -239,7 +239,7 @@ async function alertasRoutes(fastify, options) {
             .where('lote.fecha_vencimiento IS NOT NULL')
             .andWhere('lote.fecha_vencimiento <= :fecha_alerta', { fecha_alerta })
             .andWhere('lote.fecha_vencimiento >= :hoy', { hoy })
-            .andWhere('lote.cantidad_disponible > 0')
+            .andWhere('lote.stock_lote > 0')
             .orderBy('lote.fecha_vencimiento', 'ASC')
             .getMany();
 
@@ -259,7 +259,7 @@ async function alertasRoutes(fastify, options) {
             .leftJoinAndSelect('lote.producto', 'producto')
             .where('lote.fecha_vencimiento IS NOT NULL')
             .andWhere('lote.fecha_vencimiento < :hoy', { hoy })
-            .andWhere('lote.cantidad_disponible > 0')
+            .andWhere('lote.stock_lote > 0')
             .orderBy('lote.fecha_vencimiento', 'DESC')
             .getMany();
 

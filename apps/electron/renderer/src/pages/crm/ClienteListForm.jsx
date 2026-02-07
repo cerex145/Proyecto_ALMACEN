@@ -8,7 +8,8 @@ import { Badge } from '../../components/common/Badge';
 export const ClienteListForm = () => {
     const [clientes, setClientes] = useState([]);
     const [formData, setFormData] = useState({
-        numero_ruc: '',
+        codigo: '',
+        cuit: '',
         razon_social: '',
         persona_contacto: '',
         email: '',
@@ -26,7 +27,7 @@ export const ClienteListForm = () => {
     const cargarClientes = async () => {
         try {
             setLoading(true);
-            // Simular carga desde API
+            // Uso de servicio recomendado aqui, pero manteniendo codigo existente por ahora
             const response = await fetch('http://localhost:3000/api/clientes');
             const result = await response.json();
             setClientes(result.data || []);
@@ -62,7 +63,8 @@ export const ClienteListForm = () => {
 
             if (response.ok) {
                 setFormData({
-                    numero_ruc: '',
+                    codigo: '',
+                    cuit: '',
                     razon_social: '',
                     persona_contacto: '',
                     email: '',
@@ -83,12 +85,13 @@ export const ClienteListForm = () => {
 
     const handleEdit = (cliente) => {
         setFormData({
-            numero_ruc: cliente.numero_ruc,
-            razon_social: cliente.razon_social,
-            persona_contacto: cliente.persona_contacto,
-            email: cliente.email,
-            telefono: cliente.telefono,
-            direccion: cliente.direccion
+            codigo: cliente.codigo || '',
+            cuit: cliente.cuit || '',
+            razon_social: cliente.razon_social || '',
+            persona_contacto: cliente.persona_contacto || '',
+            email: cliente.email || '',
+            telefono: cliente.telefono || '',
+            direccion: cliente.direccion || ''
         });
         setEditId(cliente.id);
     };
@@ -112,9 +115,16 @@ export const ClienteListForm = () => {
                 <h3 style={{ marginTop: 0 }}>{editId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
                     <Input
-                        name="numero_ruc"
-                        placeholder="RUC"
-                        value={formData.numero_ruc}
+                        name="codigo"
+                        placeholder="Código Cliente"
+                        value={formData.codigo || ''}
+                        onChange={handleChange}
+                        required
+                    />
+                    <Input
+                        name="cuit"
+                        placeholder="RUC / CUIT"
+                        value={formData.cuit}
                         onChange={handleChange}
                         required
                     />
@@ -157,7 +167,7 @@ export const ClienteListForm = () => {
                         {editId && (
                             <Button type="button" variant="secondary" onClick={() => {
                                 setEditId(null);
-                                setFormData({ numero_ruc: '', razon_social: '', persona_contacto: '', email: '', telefono: '', direccion: '' });
+                                setFormData({ codigo: '', cuit: '', razon_social: '', persona_contacto: '', email: '', telefono: '', direccion: '' });
                             }}>
                                 Cancelar
                             </Button>
@@ -177,7 +187,8 @@ export const ClienteListForm = () => {
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableHeader>RUC</TableHeader>
+                                <TableHeader>Código</TableHeader>
+                                <TableHeader>RUC/CUIT</TableHeader>
                                 <TableHeader>Razón Social</TableHeader>
                                 <TableHeader>Contacto</TableHeader>
                                 <TableHeader>Email</TableHeader>
@@ -188,7 +199,8 @@ export const ClienteListForm = () => {
                         <TableBody>
                             {clientes.map(cliente => (
                                 <TableRow key={cliente.id}>
-                                    <TableCell>{cliente.numero_ruc}</TableCell>
+                                    <TableCell>{cliente.codigo}</TableCell>
+                                    <TableCell>{cliente.cuit}</TableCell>
                                     <TableCell>{cliente.razon_social}</TableCell>
                                     <TableCell>{cliente.persona_contacto}</TableCell>
                                     <TableCell>{cliente.email}</TableCell>

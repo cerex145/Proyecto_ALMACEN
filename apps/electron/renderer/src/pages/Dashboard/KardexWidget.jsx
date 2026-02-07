@@ -15,8 +15,8 @@ export const KardexWidget = () => {
     const loadMovements = async () => {
         try {
             setLoading(true);
-            const data = await kardexService.getRecentMovements(5);
-            setMovements(data);
+            const response = await kardexService.listar({ limit: 5 });
+            setMovements(response.data || []);
         } catch (error) {
             console.error(error);
         } finally {
@@ -25,10 +25,11 @@ export const KardexWidget = () => {
     };
 
     const getTypeLabel = (type) => {
-        switch (type) {
-            case 'ingreso': return <Badge variant="registrado">Ingreso</Badge> // keeping original logic but looks like typo in my head? No 'Ingreso'
-            case 'salida': return <Badge variant="anulado">Salida</Badge>
-            case 'ajuste': return <Badge variant="observado">Ajuste</Badge>
+        const typeUpper = type?.toUpperCase() || '';
+        switch (typeUpper) {
+            case 'INGRESO': return <Badge variant="registrado">Ingreso</Badge>;
+            case 'SALIDA': return <Badge variant="anulado">Salida</Badge>;
+            case 'AJUSTE': return <Badge variant="observado">Ajuste</Badge>;
             default: return <Badge variant="secondary">{type}</Badge>;
         }
     };
@@ -63,8 +64,8 @@ export const KardexWidget = () => {
                                     <TableCell className="text-slate-500">{new Date(m.fecha).toLocaleDateString()}</TableCell>
                                     <TableCell className="font-medium text-slate-700">{m.producto?.codigo || 'PROD'}</TableCell>
                                     <TableCell>{getTypeLabel(m.tipo_movimiento)}</TableCell>
-                                    <TableCell className={m.tipo_movimiento === 'ingreso' ? 'text-green-600 font-bold' : 'text-rose-600 font-bold'}>
-                                        {m.tipo_movimiento === 'ingreso' ? `+${m.cantidad_entrada}` : `-${m.cantidad_salida}`}
+                                    <TableCell className={m.tipo_movimiento?.toUpperCase() === 'INGRESO' ? 'text-green-600 font-bold' : 'text-rose-600 font-bold'}>
+                                        {m.tipo_movimiento?.toUpperCase() === 'INGRESO' ? '+' : '-'}{m.cantidad}
                                     </TableCell>
                                     <TableCell>{m.saldo}</TableCell>
                                 </TableRow>

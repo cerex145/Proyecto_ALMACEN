@@ -18,10 +18,7 @@ module.exports = new EntitySchema({
             length: 50,
             nullable: false
         },
-        fecha_produccion: {
-            type: 'date',
-            nullable: true
-        },
+
         fecha_vencimiento: {
             type: 'date',
             nullable: true
