@@ -119,6 +119,45 @@ async function ingresosRoutes(fastify, options) {
         try {
             const numeroIngreso = await generarNumeroIngreso();
 
+            // Validar detalles
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
+
+            for (const detalle of detalles) {
+                if (!detalle.producto_id || !detalle.cantidad || Number(detalle.cantidad) <= 0) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'Cada detalle debe incluir producto_id y cantidad > 0'
+                    });
+                }
+                if (!detalle.lote_numero) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'Cada detalle debe incluir lote_numero'
+                    });
+                }
+                if (!detalle.fecha_vencimiento) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'Cada detalle debe incluir fecha_vencimiento'
+                    });
+                }
+
+                const fechaVenc = new Date(detalle.fecha_vencimiento);
+                if (Number.isNaN(fechaVenc.getTime())) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'fecha_vencimiento no es válida'
+                    });
+                }
+                if (fechaVenc <= hoy) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'fecha_vencimiento debe ser mayor a la fecha actual'
+                    });
+                }
+            }
+
             // Crear nota
             const nota = notaIngresoRepo.create({
                 numero_ingreso: numeroIngreso,

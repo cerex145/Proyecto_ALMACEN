@@ -25,6 +25,7 @@ async function salidasRoutes(fastify, options) {
     fastify.get('/api/salidas', async (request, reply) => {
         const {
             busqueda = '',
+            numero_salida,
             cliente_id,
             estado,
             fecha_desde,
@@ -39,8 +40,9 @@ async function salidasRoutes(fastify, options) {
 
         const queryBuilder = notaSalidaRepo.createQueryBuilder('nota');
 
-        if (busqueda) {
-            queryBuilder.where('nota.numero_salida LIKE :busqueda', { busqueda: `%${busqueda}%` });
+        const terminoBusqueda = busqueda || numero_salida || '';
+        if (terminoBusqueda) {
+            queryBuilder.where('nota.numero_salida LIKE :busqueda', { busqueda: `%${terminoBusqueda}%` });
         }
 
         if (cliente_id) {
@@ -60,9 +62,15 @@ async function salidasRoutes(fastify, options) {
         }
 
         queryBuilder
-            .orderBy(`nota.${orderBy}`, order.toUpperCase())
+            .leftJoinAndMapOne('nota.cliente', 'clientes', 'cliente', 'cliente.id = nota.cliente_id')
             .skip(skip)
             .take(limit);
+
+        const allowedOrderFields = new Set(['created_at', 'fecha', 'estado', 'numero_salida', 'id']);
+        const safeOrderBy = allowedOrderFields.has(orderBy) ? orderBy : 'created_at';
+        const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+        queryBuilder.orderBy(`nota.${safeOrderBy}`, safeOrder);
 
         const [notas, total] = await queryBuilder.getManyAndCount();
 
@@ -129,15 +137,46 @@ async function salidasRoutes(fastify, options) {
                 return reply.status(404).send({ success: false, error: 'Cliente no encontrado' });
             }
 
-            // Validar stock disponible antes de procesar
+            // Validar detalles
             for (const detalle of detalles) {
-                const producto = await productoRepo.findOneBy({ id: Number(detalle.producto_id) });
-                if (!producto) {
-                    throw new Error(`Producto ${detalle.producto_id} no encontrado`);
+                if (!detalle.producto_id || !detalle.cantidad || Number(detalle.cantidad) <= 0) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'Cada detalle debe incluir producto_id y cantidad > 0'
+                    });
                 }
+            }
 
-                if (Number(producto.stock_actual) < Number(detalle.cantidad)) {
+            // Validar stock por producto
+            const totalPorProducto = new Map();
+            for (const detalle of detalles) {
+                const pid = Number(detalle.producto_id);
+                totalPorProducto.set(pid, (totalPorProducto.get(pid) || 0) + Number(detalle.cantidad));
+            }
+
+            for (const [pid, totalCantidad] of totalPorProducto.entries()) {
+                const producto = await productoRepo.findOneBy({ id: pid });
+                if (!producto) {
+                    throw new Error(`Producto ${pid} no encontrado`);
+                }
+                if (Number(producto.stock_actual) < Number(totalCantidad)) {
                     throw new Error(`Stock insuficiente para ${producto.descripcion}. Disponible: ${producto.stock_actual}`);
+                }
+            }
+
+            // Validar lotes cuando se envían
+            for (const detalle of detalles) {
+                if (detalle.lote_id) {
+                    const lote = await loteRepo.findOneBy({ id: Number(detalle.lote_id) });
+                    if (!lote) {
+                        throw new Error(`Lote ${detalle.lote_id} no encontrado`);
+                    }
+                    if (Number(lote.producto_id) !== Number(detalle.producto_id)) {
+                        throw new Error(`El lote ${detalle.lote_id} no corresponde al producto ${detalle.producto_id}`);
+                    }
+                    if (Number(lote.cantidad_disponible) < Number(detalle.cantidad)) {
+                        throw new Error(`Stock insuficiente en lote ${lote.numero_lote}. Disponible: ${lote.cantidad_disponible}`);
+                    }
                 }
             }
 
@@ -154,17 +193,29 @@ async function salidasRoutes(fastify, options) {
             });
 
             // Iniciar transacción
+            let notaGuardada = null;
             await fastify.db.transaction(async (transactionalEntityManager) => {
-                const notaGuardada = await transactionalEntityManager.save('NotaSalida', nota);
+                notaGuardada = await transactionalEntityManager.save('NotaSalida', nota);
 
                 for (const detalle of detalles) {
                     const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
+
+                    let lote = null;
+                    if (detalle.lote_id) {
+                        lote = await transactionalEntityManager.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
+                        if (!lote) {
+                            throw new Error(`Lote ${detalle.lote_id} no encontrado`);
+                        }
+                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(detalle.cantidad);
+                        if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
+                        await transactionalEntityManager.save('Lote', lote);
+                    }
 
                     // Crear detalle
                     const detalleNota = notaSalidaDetalleRepo.create({
                         nota_salida_id: notaGuardada.id,
                         producto_id: detalle.producto_id,
-                        lote_id: detalle.lote_id,
+                        lote_id: detalle.lote_id || null,
                         cantidad: detalle.cantidad,
                         precio_unitario: detalle.precio_unitario
                     });
@@ -177,7 +228,7 @@ async function salidasRoutes(fastify, options) {
                     // Registrar en kardex
                     const movimiento = kardexRepo.create({
                         producto_id: detalle.producto_id,
-                        lote_numero: detalle.lote_id ? `LOTE-${detalle.lote_id}` : null,
+                        lote_numero: lote ? lote.numero_lote : null,
                         tipo_movimiento: 'SALIDA',
                         cantidad: detalle.cantidad,
                         saldo: producto.stock_actual,
@@ -186,22 +237,12 @@ async function salidasRoutes(fastify, options) {
                         referencia_id: notaGuardada.id
                     });
                     await transactionalEntityManager.save('Kardex', movimiento);
-
-                    // Actualizar lote disponible si aplica
-                    if (detalle.lote_id) {
-                        const lote = await transactionalEntityManager.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
-                        if (lote) {
-                            lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(detalle.cantidad);
-                            if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
-                            await transactionalEntityManager.save('Lote', lote);
-                        }
-                    }
                 }
             });
 
             return reply.status(201).send({
                 success: true,
-                data: nota,
+                data: notaGuardada,
                 message: 'Nota de salida creada exitosamente'
             });
 

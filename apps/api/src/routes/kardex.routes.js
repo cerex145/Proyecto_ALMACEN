@@ -14,7 +14,7 @@ async function kardexRoutes(fastify, options) {
             fecha_hasta,
             page = 1, 
             limit = 100,
-            orderBy = 'fecha',
+            orderBy = 'created_at',
             order = 'DESC'
         } = request.query;
 
@@ -27,7 +27,7 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (lote_id) {
-            queryBuilder.andWhere('kardex.lote_id = :lote_id', { lote_id: Number(lote_id) });
+            queryBuilder.andWhere('kardex.lote_numero = :lote_numero', { lote_numero: String(lote_id) });
         }
 
         if (tipo_movimiento) {
@@ -35,15 +35,20 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (fecha_desde) {
-            queryBuilder.andWhere('kardex.fecha >= :fecha_desde', { fecha_desde });
+            queryBuilder.andWhere('kardex.created_at >= :fecha_desde', { fecha_desde });
         }
 
         if (fecha_hasta) {
-            queryBuilder.andWhere('kardex.fecha <= :fecha_hasta', { fecha_hasta });
+            queryBuilder.andWhere('kardex.created_at <= :fecha_hasta', { fecha_hasta });
         }
 
+        const allowedOrderFields = new Set(['created_at', 'tipo_movimiento', 'cantidad', 'saldo', 'documento_tipo', 'documento_numero']);
+        const normalizedOrderBy = orderBy === 'fecha' ? 'created_at' : orderBy;
+        const safeOrderBy = allowedOrderFields.has(normalizedOrderBy) ? normalizedOrderBy : 'created_at';
+        const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
         queryBuilder
-            .orderBy(`kardex.${orderBy}`, order.toUpperCase())
+            .orderBy(`kardex.${safeOrderBy}`, safeOrder)
             .skip(skip)
             .take(limit);
 

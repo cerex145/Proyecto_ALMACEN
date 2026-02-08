@@ -47,5 +47,19 @@ module.exports = new EntitySchema({
             type: 'timestamp',
             updateDate: true
         }
+    },
+    relations: {
+        producto: {
+            type: 'many-to-one',
+            target: 'Producto',
+            joinColumn: { name: 'producto_id' },
+            nullable: false
+        },
+        lote: {
+            type: 'many-to-one',
+            target: 'Lote',
+            joinColumn: { name: 'lote_id' },
+            nullable: false
+        }
     }
 });

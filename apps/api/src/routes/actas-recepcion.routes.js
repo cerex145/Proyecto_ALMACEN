@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs');
+const { generatePDF } = require('../services/pdf.service');
 
 async function actasRecepcionRoutes(fastify, options) {
     const actaRecepcionRepo = fastify.db.getRepository('ActaRecepcion');
@@ -439,6 +440,81 @@ async function actasRecepcionRoutes(fastify, options) {
 
         reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         reply.header('Content-Disposition', 'attachment; filename=plantilla-acta.xlsx');
+        return reply.send(buffer);
+    });
+
+    // GET /api/actas-recepcion/:id/pdf - Exportar PDF
+    fastify.get('/api/actas-recepcion/:id/pdf', async (request, reply) => {
+        const { id } = request.params;
+
+        const acta = await actaRecepcionRepo.findOne({
+            where: { id: Number(id) }
+        });
+
+        if (!acta) {
+            return reply.status(404).send({ error: 'Acta no encontrada' });
+        }
+
+        const detalles = await actaRecepcionDetalleRepo.find({
+            where: { acta_recepcion_id: acta.id },
+            relations: ['producto']
+        });
+
+        const notaIngreso = await notaIngresoRepo.findOneBy({ id: acta.nota_ingreso_id });
+
+        const docDefinition = {
+            content: [
+                { text: `ACTA DE RECEPCIÓN: ${acta.numero_acta}`, style: 'header' },
+                {
+                    columns: [
+                        { text: `Fecha: ${new Date(acta.fecha_recepcion).toLocaleDateString()}`, bold: true },
+                        { text: `Nota Ingreso: ${notaIngreso ? notaIngreso.numero_ingreso : 'N/A'}`, alignment: 'right' }
+                    ]
+                },
+                { text: `Estado: ${acta.estado}  |  Aprobado: ${acta.aprobado ? 'Sí' : 'No'}` },
+                acta.observaciones ? { text: `Observaciones: ${acta.observaciones}` } : { text: '' },
+                { text: '\n' },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['*', 'auto', 'auto', 'auto', 'auto'],
+                        body: [
+                            [
+                                { text: 'Producto', style: 'tableHeader' },
+                                { text: 'Lote', style: 'tableHeader' },
+                                { text: 'Esperado', style: 'tableHeader', alignment: 'right' },
+                                { text: 'Recibido', style: 'tableHeader', alignment: 'right' },
+                                { text: 'Diferencia', style: 'tableHeader', alignment: 'right' }
+                            ],
+                            ...detalles.map(d => {
+                                const diferencia = Number(d.cantidad_recibida) - Number(d.cantidad_esperada);
+                                return [
+                                    d.producto ? d.producto.descripcion : 'N/A',
+                                    d.lote_numero || '-',
+                                    { text: d.cantidad_esperada, alignment: 'right' },
+                                    { text: d.cantidad_recibida, alignment: 'right' },
+                                    { text: diferencia, alignment: 'right' }
+                                ];
+                            })
+                        ]
+                    }
+                },
+                { text: '\n\n' },
+                {
+                    columns: [
+                        { text: '_______________________\nResponsable', alignment: 'center' },
+                        { text: '_______________________\nReceptor', alignment: 'center' }
+                    ]
+                }
+            ],
+            styles: {
+                header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+                tableHeader: { bold: true, fontSize: 12, color: 'black' }
+            }
+        };
+
+        const buffer = await generatePDF(docDefinition);
+        reply.header('Content-Type', 'application/pdf');
         return reply.send(buffer);
     });
 }

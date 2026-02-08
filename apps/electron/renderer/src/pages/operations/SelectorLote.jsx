@@ -31,9 +31,9 @@ export const SelectorLote = ({ productId, quantityRequired, onSelectionChange })
         setLoading(true);
         try {
             const data = await productService.getLotesByProduct(productId);
-            // Filter only active lots with stock > 0
+            // Filter only lots with stock > 0
             const activeLotes = data
-                .filter(l => l.stock_lote > 0 && l.activo)
+                .filter(l => Number(l.cantidad_disponible) > 0)
                 .sort((a, b) => new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento)); // FEFO Sort
             setLotes(activeLotes);
         } catch (error) {
@@ -53,7 +53,7 @@ export const SelectorLote = ({ productId, quantityRequired, onSelectionChange })
         for (const lote of availableLotes) {
             if (remaining <= 0) break;
 
-            const take = Math.min(remaining, parseFloat(lote.stock_lote));
+            const take = Math.min(remaining, parseFloat(lote.cantidad_disponible));
             suggested[lote.id] = take;
             remaining -= take;
         }
@@ -98,12 +98,12 @@ export const SelectorLote = ({ productId, quantityRequired, onSelectionChange })
                                 <TableCell>
                                     {new Date(lote.fecha_vencimiento).toLocaleDateString()}
                                 </TableCell>
-                                <TableCell>{lote.stock_lote}</TableCell>
+                                <TableCell>{lote.cantidad_disponible}</TableCell>
                                 <TableCell>
                                     <Input
                                         type="number"
                                         min="0"
-                                        max={lote.stock_lote}
+                                        max={lote.cantidad_disponible}
                                         value={selections[lote.id] || ''}
                                         onChange={(e) => handleQuantityChange(lote.id, e.target.value)}
                                         style={{ width: '80px', marginBottom: 0, borderColor: isSelected ? 'var(--success-color)' : '' }}

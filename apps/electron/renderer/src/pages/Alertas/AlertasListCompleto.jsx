@@ -148,7 +148,7 @@ export const AlertasListCompleto = () => {
                     <TableHead>
                         <TableRow>
                             <TableHeader>Lote</TableHeader>
-                            <TableHeader>Producto ID</TableHeader>
+                            <TableHeader>Producto</TableHeader>
                             <TableHeader>Vencimiento</TableHeader>
                             <TableHeader>Días Faltantes</TableHeader>
                             <TableHeader>Estado</TableHeader>
@@ -162,9 +162,11 @@ export const AlertasListCompleto = () => {
                                 <TableRow key={alerta.id} style={{
                                     backgroundColor: alerta.leida ? '#f5f5f5' : '#fffbea'
                                 }}>
-                                    <TableCell>{alerta.lote?.numero_lote || 'N/A'}</TableCell>
-                                    <TableCell>{alerta.lote?.producto_id || 'N/A'}</TableCell>
-                                    <TableCell>{new Date(alerta.lote?.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                                    <TableCell>{alerta.lote?.numero_lote || alerta.lote_numero || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        {alerta.producto?.descripcion || alerta.producto?.codigo || alerta.producto_id || 'N/A'}
+                                    </TableCell>
+                                    <TableCell>{new Date(alerta.fecha_vencimiento || alerta.lote?.fecha_vencimiento).toLocaleDateString()}</TableCell>
                                     <TableCell style={{ fontWeight: 'bold' }}>
                                         {alerta.dias_faltantes}
                                     </TableCell>

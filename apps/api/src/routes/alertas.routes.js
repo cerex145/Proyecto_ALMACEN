@@ -86,6 +86,7 @@ async function alertasRoutes(fastify, options) {
         }
 
         queryBuilder
+            .leftJoinAndSelect('alerta.lote', 'lote')
             .leftJoinAndSelect('alerta.producto', 'producto')
             .orderBy('alerta.dias_faltantes', 'ASC')
             .skip(skip)
@@ -129,6 +130,7 @@ async function alertasRoutes(fastify, options) {
                 estado: 'PROXIMO_A_VENCER', 
                 leida: false 
             })
+            .leftJoinAndSelect('alerta.lote', 'lote')
             .leftJoinAndSelect('alerta.producto', 'producto')
             .orderBy('alerta.dias_faltantes', 'ASC')
             .limit(5)
@@ -141,6 +143,7 @@ async function alertasRoutes(fastify, options) {
                 estado: 'VENCIDO', 
                 leida: false 
             })
+            .leftJoinAndSelect('alerta.lote', 'lote')
             .leftJoinAndSelect('alerta.producto', 'producto')
             .orderBy('alerta.dias_faltantes', 'DESC')
             .limit(5)

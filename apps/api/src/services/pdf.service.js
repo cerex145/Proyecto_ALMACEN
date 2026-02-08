@@ -1,30 +1,45 @@
-const PdfPrinter = require('pdfmake/js/Printer').default || require('pdfmake/js/Printer');
+const pdfmake = require('pdfmake');
 const path = require('path');
 const fs = require('fs');
 
-const fontPath = path.join(__dirname, '../assets/fonts/');
-
-const fonts = {
-    Roboto: {
-        normal: path.join(fontPath, 'Roboto-Regular.ttf'),
-        bold: path.join(fontPath, 'Roboto-Medium.ttf'),
-        italics: path.join(fontPath, 'Roboto-Italic.ttf'),
-        bolditalics: path.join(fontPath, 'Roboto-MediumItalic.ttf')
+const resolveRoboto = (fileName) => {
+    try {
+        return require.resolve(`pdfmake/fonts/Roboto/${fileName}`);
+    } catch (error) {
+        return null;
     }
 };
 
-const printer = new PdfPrinter(fonts);
+const localFontPath = path.join(__dirname, '../assets/fonts/');
+
+const robotoFonts = {
+    normal: resolveRoboto('Roboto-Regular.ttf') || path.join(localFontPath, 'Roboto-Regular.ttf'),
+    bold: resolveRoboto('Roboto-Medium.ttf') || path.join(localFontPath, 'Roboto-Medium.ttf'),
+    italics: resolveRoboto('Roboto-Italic.ttf') || path.join(localFontPath, 'Roboto-Italic.ttf'),
+    bolditalics: resolveRoboto('Roboto-MediumItalic.ttf') || path.join(localFontPath, 'Roboto-MediumItalic.ttf')
+};
+
+const robotoDisponible = Object.values(robotoFonts).every((fontFile) => fs.existsSync(fontFile));
+
+if (!robotoDisponible) {
+    throw new Error('No se encontraron fuentes Roboto válidas para PDF');
+}
+
+const fonts = { Roboto: robotoFonts };
+const defaultFontName = 'Roboto';
+
+pdfmake.setFonts(fonts);
 
 const generatePDF = async (docDefinition) => {
     try {
-        const pdfDoc = await printer.createPdfKitDocument(docDefinition);
-        return new Promise((resolve, reject) => {
-            let chunks = [];
-            pdfDoc.on('data', (chunk) => chunks.push(chunk));
-            pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-            pdfDoc.on('error', (err) => reject(err));
-            pdfDoc.end();
-        });
+        if (!docDefinition.defaultStyle) {
+            docDefinition.defaultStyle = { font: defaultFontName };
+        } else if (!docDefinition.defaultStyle.font) {
+            docDefinition.defaultStyle.font = defaultFontName;
+        }
+
+        const pdfDoc = pdfmake.createPdf(docDefinition);
+        return pdfDoc.getBuffer();
     } catch (err) {
         throw err;
     }

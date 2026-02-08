@@ -9,7 +9,7 @@ import { Card } from '../../components/common/Card';
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
-            proveedor_id: '',
+            proveedor: '',
             fecha: new Date().toISOString().split('T')[0],
             numero_ingreso: '',
             responsable_id: 1,
@@ -79,6 +79,19 @@ export const NotaIngresoForm = () => {
             return;
         }
 
+        if (Number(quantity) <= 0) {
+            alert('La cantidad debe ser mayor a 0');
+            return;
+        }
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const fechaVenc = new Date(vencimiento);
+        if (Number.isNaN(fechaVenc.getTime()) || fechaVenc <= hoy) {
+            alert('La fecha de vencimiento debe ser mayor a la fecha actual');
+            return;
+        }
+
         const product = products.find(p => p.id === parseInt(selectedProduct));
 
         append({
@@ -105,13 +118,21 @@ export const NotaIngresoForm = () => {
 
     const onSubmit = async (data) => {
         try {
-            await operationService.createIngreso(data);
+            const payload = {
+                fecha: data.fecha,
+                proveedor: data.proveedor,
+                responsable_id: data.responsable_id,
+                detalles: data.detalles,
+                observaciones: data.numero_ingreso ? `Documento: ${data.numero_ingreso}` : undefined
+            };
+            await operationService.createIngreso(payload);
             alert('✅ Nota de Ingreso registrada con éxito');
             reset();
             setQuantity(0);
         } catch (error) {
             console.error(error);
-            alert('❌ Error al registrar ingreso. Verifique los datos.');
+            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
+            alert(`❌ Error al registrar ingreso. ${mensaje}`);
         }
     };
 
@@ -130,14 +151,13 @@ export const NotaIngresoForm = () => {
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Información del Documento</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="label-premium">Número de Nota/Factura</label>
+                            <label className="label-premium">Número de Nota/Factura (opcional)</label>
                             <input
-                                {...register('numero_ingreso', { required: 'Requerido' })}
+                                {...register('numero_ingreso')}
                                 type="text"
                                 className="input-premium"
                                 placeholder="Ej: F001-000213"
                             />
-                            {errors.numero_ingreso && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
                             <label className="label-premium">Fecha de Emisión</label>
@@ -150,7 +170,7 @@ export const NotaIngresoForm = () => {
                         <div className="md:col-span-2">
                             <label className="label-premium">Proveedor</label>
                             <select
-                                {...register('proveedor_id', { required: 'Requerido' })}
+                                {...register('proveedor', { required: 'Requerido' })}
                                 className="input-premium"
                             >
                                 <option value="">Seleccione proveedor...</option>
@@ -160,6 +180,7 @@ export const NotaIngresoForm = () => {
                                     </option>
                                 ))}
                             </select>
+                            {errors.proveedor && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                     </div>
                 </Card>

@@ -14,7 +14,6 @@ export const NotaSalidaForm = () => {
         defaultValues: {
             cliente_id: '',
             fecha: new Date().toISOString().split('T')[0],
-            numero_salida: '',
             responsable_id: 1, // Mock ID
             detalles: []
         }
@@ -71,6 +70,12 @@ export const NotaSalidaForm = () => {
             return;
         }
 
+        const totalSelected = Object.values(selections).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+        if (Math.abs(totalSelected - parseFloat(quantity)) > 0.01) {
+            alert("La suma de lotes seleccionados debe ser igual a la cantidad total");
+            return;
+        }
+
         const product = products.find(p => p.id === parseInt(productId));
 
         // Create a flat list of details (one row per LOT used)
@@ -118,12 +123,11 @@ export const NotaSalidaForm = () => {
                         <div>
                             <label className="label-premium">Número de Salida</label>
                             <input
-                                {...register('numero_salida', { required: 'Requerido' })}
                                 type="text"
-                                className="input-premium"
-                                placeholder="Ej: SAL-0001"
+                                className="input-premium bg-slate-50"
+                                placeholder="Se genera automáticamente"
+                                readOnly
                             />
-                            {errors.numero_salida && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
                             <label className="label-premium">Fecha</label>
