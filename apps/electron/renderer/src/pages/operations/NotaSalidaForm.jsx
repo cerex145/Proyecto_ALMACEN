@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
-import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { SelectorLote } from './SelectorLote';
+import { Card } from '../../components/common/Card';
+
+import { clientesService } from '../../services/clientes.service';
 
 export const NotaSalidaForm = () => {
     const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
@@ -24,6 +26,8 @@ export const NotaSalidaForm = () => {
     });
 
     const [products, setProducts] = useState([]);
+    const [clients, setClients] = useState([]);
+
     // Temporary state for adding a product line
     const [addItem, setAddItem] = useState({
         productId: '',
@@ -32,15 +36,27 @@ export const NotaSalidaForm = () => {
     });
 
     useEffect(() => {
-        loadProducts();
+        loadData();
     }, []);
 
-    const loadProducts = async () => {
+    const loadData = async () => {
+        // Load Products
         try {
-            const data = await productService.getProducts();
-            setProducts(data);
+            const productsResponse = await productService.getProducts();
+            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
         } catch (error) {
-            console.error(error);
+            console.error('Error loading products:', error);
+            alert('Error al cargar lista de Productos.');
+        }
+
+        // Load Clients
+        try {
+            const clientsResponse = await clientesService.listar();
+            const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
+            setClients(clientsArray);
+        } catch (error) {
+            console.error('Error loading clients:', error);
+            alert('Error al cargar lista de Clientes.');
         }
     };
 
@@ -87,40 +103,64 @@ export const NotaSalidaForm = () => {
     };
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ color: 'var(--primary-color)' }}>Registro de Salida (Venta/Traslado)</h2>
-
-            <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <Input
-                        label="Número de Salida"
-                        register={register('numero_salida', { required: 'Requerido' })}
-                        error={errors.numero_salida}
-                    />
-                    <Input
-                        label="Fecha"
-                        type="date"
-                        register={register('fecha', { required: 'Requerido' })}
-                        error={errors.fecha}
-                    />
+        <div className="max-w-5xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Registro de Salida</h2>
+                    <p className="text-slate-500">Venta, Traslado o Baja de Mercadería</p>
                 </div>
+            </div>
 
-                <Input
-                    label="Cliente / Destino (ID)"
-                    register={register('cliente_id', { required: 'Requerido' })}
-                    error={errors.cliente_id}
-                />
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos Generales</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="label-premium">Número de Salida</label>
+                            <input
+                                {...register('numero_salida', { required: 'Requerido' })}
+                                type="text"
+                                className="input-premium"
+                                placeholder="Ej: SAL-0001"
+                            />
+                            {errors.numero_salida && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div>
+                            <label className="label-premium">Fecha</label>
+                            <input
+                                {...register('fecha', { required: 'Requerido' })}
+                                type="date"
+                                className="input-premium"
+                            />
+                        </div>
+                        <div>
+                            <label className="label-premium">Cliente / Destino</label>
+                            <select
+                                {...register('cliente_id', { required: 'Requerido' })}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione cliente...</option>
+                                {clients.map(client => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.razon_social} (RUC: {client.cuit})
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.cliente_id && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                    </div>
+                </Card>
 
                 {/* Add Product Section */}
-                <div style={{ border: '1px solid var(--border-color)', padding: '1.5rem', borderRadius: '8px', background: 'var(--surface-color)', boxShadow: 'var(--shadow-sm)' }}>
-                    <h4 style={{ marginTop: 0 }}>Agregar Producto</h4>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                        <div style={{ flex: 2 }}>
-                            <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Producto</label>
+                <Card className="p-6 bg-orange-50/50 border-orange-100">
+                    <h4 className="text-lg font-semibold text-orange-800 mb-4">Selección de Producto y Lotes (FEFO)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Producto</label>
                             <select
                                 value={addItem.productId}
                                 onChange={(e) => setAddItem({ ...addItem, productId: e.target.value, selections: {} })}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                                className="input-premium"
                             >
                                 <option value="">Seleccione...</option>
                                 {products.map(p => (
@@ -128,59 +168,77 @@ export const NotaSalidaForm = () => {
                                 ))}
                             </select>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Cantidad Total</label>
+                        <div>
+                            <label className="label-premium">Cantidad Total</label>
                             <input
                                 type="number"
                                 value={addItem.quantity}
                                 onChange={(e) => setAddItem({ ...addItem, quantity: e.target.value })}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                                className="input-premium"
+                                placeholder="0"
                             />
                         </div>
                     </div>
 
                     {/* Selector Component - Shows only when product & qty are present */}
                     {addItem.productId && addItem.quantity > 0 && (
-                        <SelectorLote
-                            productId={addItem.productId}
-                            quantityRequired={parseFloat(addItem.quantity)}
-                            onSelectionChange={handleLoteSelection}
-                        />
+                        <div className="bg-white p-4 rounded-lg border border-orange-200 shadow-sm mb-4">
+                            <SelectorLote
+                                productId={addItem.productId}
+                                quantityRequired={parseFloat(addItem.quantity)}
+                                onSelectionChange={handleLoteSelection}
+                            />
+                        </div>
                     )}
 
-                    <div style={{ marginTop: '1rem', textAlign: 'right' }}>
-                        <Button type="button" onClick={handleAddLine} disabled={!addItem.productId}>
-                            Agregar a la Lista
+                    <div className="flex justify-end">
+                        <Button type="button" onClick={handleAddLine} disabled={!addItem.productId} variant="primary">
+                            + Agregar a la Lista
                         </Button>
                     </div>
-                </div>
+                </Card>
 
                 {/* List of items to save */}
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableHeader>Producto</TableHeader>
-                            <TableHeader>Lote ID</TableHeader>
-                            <TableHeader>Cantidad</TableHeader>
-                            <TableHeader>Acción</TableHeader>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {fields.map((field, index) => (
-                            <TableRow key={field.id}>
-                                <TableCell>{field.producto_nombre}</TableCell>
-                                <TableCell>{field.lote_id}</TableCell>
-                                <TableCell>{field.cantidad}</TableCell>
-                                <TableCell>
-                                    <Button variant="danger" size="small" onClick={() => remove(index)}>Quitar</Button>
-                                </TableCell>
+                <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableHeader>Producto</TableHeader>
+                                <TableHeader>Lote ID</TableHeader>
+                                <TableHeader>Cantidad</TableHeader>
+                                <TableHeader>Acción</TableHeader>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHead>
+                        <TableBody>
+                            {fields.map((field, index) => (
+                                <TableRow key={field.id}>
+                                    <TableCell>{field.producto_nombre}</TableCell>
+                                    <TableCell><span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded">{field.lote_id}</span></TableCell>
+                                    <TableCell><strong>{field.cantidad}</strong></TableCell>
+                                    <TableCell>
+                                        <button
+                                            type="button"
+                                            onClick={() => remove(index)}
+                                            className="text-red-500 hover:text-red-700 font-medium text-xs"
+                                        >
+                                            Quitar
+                                        </button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {fields.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-8 text-slate-400">
+                                        No hay productos seleccionados para salida.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                    <Button type="submit" isLoading={isSubmitting} disabled={fields.length === 0}>
+                <div className="flex justify-end pt-4 border-t border-slate-200">
+                    <Button type="submit" isLoading={isSubmitting} disabled={fields.length === 0} size="lg" className="btn-gradient-primary">
                         Procesar Salida
                     </Button>
                 </div>

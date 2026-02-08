@@ -3,6 +3,7 @@ import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '.
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
+import { Card } from '../../components/common/Card';
 
 export const HistorialSalidasFuncional = () => {
     const [salidas, setSalidas] = useState([]);
@@ -27,9 +28,13 @@ export const HistorialSalidasFuncional = () => {
         }
     };
 
+    const handleDownloadPDF = (id) => {
+        window.open(`http://localhost:3000/api/salidas/${id}/pdf`, '_blank');
+    };
+
     const getEstadoBadge = (estado) => {
-        switch(estado) {
-            case 'REGISTRADO': return <Badge variant="registrado">Registrado</Badge>;
+        switch (estado) {
+            case 'REGISTRADA': return <Badge variant="registrado">Registrada</Badge>;
             case 'ENTREGADO': return <Badge variant="observado">Entregado</Badge>;
             case 'ANULADO': return <Badge variant="anulado">Anulado</Badge>;
             default: return <Badge variant="secondary">{estado}</Badge>;
@@ -37,28 +42,32 @@ export const HistorialSalidasFuncional = () => {
     };
 
     return (
-        <div style={{ padding: '2rem' }}>
-            <h1 style={{ marginBottom: '1rem', color: 'var(--primary-color)' }}>📦 Historial de Salidas</h1>
-
-            <div style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                        Buscar por Número de Salida
-                    </label>
-                    <Input
-                        placeholder="Ej: SAL-2026-001"
-                        value={filtro}
-                        onChange={(e) => setFiltro(e.target.value)}
-                    />
+        <div className="max-w-7xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">📦 Historial de Salidas</h1>
+                    <p className="text-slate-500">Consulta y descarga de movimientos de salida</p>
                 </div>
-                <Button onClick={() => setFiltro('')}>Limpiar</Button>
             </div>
 
-            <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <Card className="p-6">
+                <div className="flex gap-4 items-end mb-6">
+                    <div className="flex-1">
+                        <label className="label-premium">Buscar por Número de Salida</label>
+                        <Input
+                            placeholder="Ej: SAL-2026-001"
+                            value={filtro}
+                            onChange={(e) => setFiltro(e.target.value)}
+                            className="input-premium"
+                        />
+                    </div>
+                    <Button onClick={() => setFiltro('')} variant="secondary">Limpiar</Button>
+                </div>
+
                 {loading ? (
-                    <p>Cargando salidas...</p>
+                    <div className="text-center py-12 text-slate-500">Cargando salidas...</div>
                 ) : salidas.length === 0 ? (
-                    <p style={{ color: 'var(--secondary-color)' }}>No hay registros de salida</p>
+                    <div className="text-center py-12 text-slate-400">No hay registros de salida</div>
                 ) : (
                     <Table>
                         <TableHead>
@@ -69,25 +78,36 @@ export const HistorialSalidasFuncional = () => {
                                 <TableHeader>Responsable</TableHeader>
                                 <TableHeader>Estado</TableHeader>
                                 <TableHeader>Items</TableHeader>
+                                <TableHeader>Acciones</TableHeader>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {salidas.map(salida => (
                                 <TableRow key={salida.id}>
-                                    <TableCell><strong>{salida.numero_salida}</strong></TableCell>
-                                    <TableCell>{new Date(salida.fecha_salida).toLocaleDateString()}</TableCell>
+                                    <TableCell><span className="font-semibold text-slate-700">{salida.numero_salida}</span></TableCell>
+                                    <TableCell>{new Date(salida.fecha_salida || salida.fecha).toLocaleDateString()}</TableCell>
                                     <TableCell>{salida.cliente?.razon_social || 'N/A'}</TableCell>
                                     <TableCell>{salida.responsable?.usuario || 'N/A'}</TableCell>
                                     <TableCell>{getEstadoBadge(salida.estado)}</TableCell>
                                     <TableCell>
-                                        <small>{salida.detalle_salida?.length || 0} items</small>
+                                        <span className="text-xs text-slate-500">{salida.detalle_salida?.length || 0} items</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="text-xs"
+                                            onClick={() => handleDownloadPDF(salida.id)}
+                                        >
+                                            📄 PDF
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
                 )}
-            </div>
+            </Card>
         </div>
     );
 };

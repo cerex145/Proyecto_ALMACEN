@@ -15,19 +15,19 @@ async function ingresosRoutes(fastify, options) {
             .orderBy('nota.id', 'DESC')
             .limit(1)
             .getOne();
-        
+
         const numero = ultimaNote ? parseInt(ultimaNote.numero_ingreso) + 1 : 1;
         return String(numero).padStart(8, '0');
     };
 
     // GET /api/ingresos - Listar notas de ingreso
     fastify.get('/api/ingresos', async (request, reply) => {
-        const { 
-            busqueda = '', 
+        const {
+            busqueda = '',
             estado,
             fecha_desde,
             fecha_hasta,
-            page = 1, 
+            page = 1,
             limit = 50,
             orderBy = 'created_at',
             order = 'DESC'
@@ -78,41 +78,41 @@ async function ingresosRoutes(fastify, options) {
     // GET /api/ingresos/:id - Obtener nota con detalles
     fastify.get('/api/ingresos/:id', async (request, reply) => {
         const { id } = request.params;
-        
+
         const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
         if (!nota) {
             return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
         }
 
-        const detalles = await notaIngresoDetalleRepo.find({ 
+        const detalles = await notaIngresoDetalleRepo.find({
             where: { nota_ingreso_id: Number(id) },
             relations: ['producto']
         });
 
-        return { 
-            success: true, 
-            data: { 
-                ...nota, 
-                detalles 
-            } 
+        return {
+            success: true,
+            data: {
+                ...nota,
+                detalles
+            }
         };
     });
 
     // POST /api/ingresos - Crear nota de ingreso
     fastify.post('/api/ingresos', async (request, reply) => {
-        const { 
-            fecha, 
-            proveedor, 
+        const {
+            fecha,
+            proveedor,
             responsable_id,
             detalles,
-            observaciones 
+            observaciones
         } = request.body;
 
         // Validaciones
         if (!fecha || !proveedor || !detalles || detalles.length === 0) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Fecha, proveedor y detalles son obligatorios' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Fecha, proveedor y detalles son obligatorios'
             });
         }
 
@@ -129,60 +129,74 @@ async function ingresosRoutes(fastify, options) {
                 estado: 'REGISTRADA'
             });
 
-            const notaGuardada = await notaIngresoRepo.save(nota);
+            // Iniciar transacción
+            await fastify.db.transaction(async (transactionalEntityManager) => {
+                const notaGuardada = await transactionalEntityManager.save('NotaIngreso', nota);
 
-            // Crear detalles y lotes
-            for (const detalle of detalles) {
-                // Verificar producto
-                const producto = await productoRepo.findOneBy({ id: Number(detalle.producto_id) });
-                if (!producto) {
-                    throw new Error(`Producto ${detalle.producto_id} no encontrado`);
+                // Crear detalles y lotes
+                for (const detalle of detalles) {
+                    // Verificar producto (re-fetch inside transaction if needed, but for now using repo is okay if concurrent modification is low risk, 
+                    // or use transactionalEntityManager.findOne to be safe)
+                    // We need to fetch product again to ensure we have latest stock if we want to be strict, or just trust the check above?
+                    // The loop above didn't fetching product! It fetched inside loop.
+
+                    const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
+                    if (!producto) {
+                        throw new Error(`Producto ${detalle.producto_id} no encontrado`);
+                    }
+
+                    // Crear detalle
+                    const detalleNota = notaIngresoDetalleRepo.create({
+                        nota_ingreso_id: notaGuardada.id,
+                        producto_id: detalle.producto_id,
+                        lote_numero: detalle.lote_numero,
+                        fecha_vencimiento: detalle.fecha_vencimiento,
+                        cantidad: detalle.cantidad,
+                        precio_unitario: detalle.precio_unitario
+                    });
+                    await transactionalEntityManager.save('NotaIngresoDetalle', detalleNota);
+
+                    // Crear lote
+                    const lote = loteRepo.create({
+                        producto_id: detalle.producto_id,
+                        numero_lote: detalle.lote_numero,
+                        fecha_vencimiento: detalle.fecha_vencimiento,
+                        cantidad_ingresada: detalle.cantidad,
+                        cantidad_disponible: detalle.cantidad,
+                        nota_ingreso_id: notaGuardada.id
+                    });
+                    await transactionalEntityManager.save('Lote', lote);
+
+                    // Actualizar stock del producto
+                    producto.stock_actual = Number(producto.stock_actual) + Number(detalle.cantidad);
+                    await transactionalEntityManager.save('Producto', producto);
+
+                    // Registrar en kardex
+                    const movimiento = kardexRepo.create({
+                        producto_id: detalle.producto_id,
+                        lote_numero: detalle.lote_numero,
+                        tipo_movimiento: 'INGRESO',
+                        cantidad: detalle.cantidad,
+                        saldo: producto.stock_actual,
+                        documento_tipo: 'NOTA_INGRESO',
+                        documento_numero: numeroIngreso,
+                        referencia_id: notaGuardada.id
+                    });
+                    await transactionalEntityManager.save('Kardex', movimiento);
                 }
 
-                // Crear detalle
-                const detalleNota = notaIngresoDetalleRepo.create({
-                    nota_ingreso_id: notaGuardada.id,
-                    producto_id: detalle.producto_id,
-                    lote_numero: detalle.lote_numero,
-                    fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad: detalle.cantidad,
-                    precio_unitario: detalle.precio_unitario
-                });
-                await notaIngresoDetalleRepo.save(detalleNota);
-
-                // Crear lote
-                const lote = loteRepo.create({
-                    producto_id: detalle.producto_id,
-                    numero_lote: detalle.lote_numero,
-                    fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad_ingresada: detalle.cantidad,
-                    cantidad_disponible: detalle.cantidad,
-                    nota_ingreso_id: notaGuardada.id
-                });
-                await loteRepo.save(lote);
-
-                // Actualizar stock del producto
-                producto.stock_actual = Number(producto.stock_actual) + Number(detalle.cantidad);
-                await productoRepo.save(producto);
-
-                // Registrar en kardex
-                const saldoActual = producto.stock_actual;
-                const movimiento = kardexRepo.create({
-                    producto_id: detalle.producto_id,
-                    lote_numero: detalle.lote_numero,
-                    tipo_movimiento: 'INGRESO',
-                    cantidad: detalle.cantidad,
-                    saldo: saldoActual,
-                    documento_tipo: 'NOTA_INGRESO',
-                    documento_numero: numeroIngreso,
-                    referencia_id: notaGuardada.id
-                });
-                await kardexRepo.save(movimiento);
-            }
+                // Assign to outer variable to return?
+                // Verify if we can access notaGuardada outside? 
+                // We should return reply here or let it finish.
+                // We can't access notaGuardada easily if defined inside. 
+                // Let's modify the code structure to define notaGuardada outside or return it.
+                // Or just rely on 'nota' being updated? save() updates the object.
+                // Yes, `nota` will have `id`.
+            });
 
             return reply.status(201).send({
                 success: true,
-                data: notaGuardada,
+                data: nota,
                 message: 'Nota de ingreso creada exitosamente'
             });
 
@@ -240,7 +254,7 @@ async function ingresosRoutes(fastify, options) {
     // POST /api/ingresos/importar - Importar desde Excel
     fastify.post('/api/ingresos/importar', async (request, reply) => {
         const data = await request.file();
-        
+
         if (!data) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
@@ -249,7 +263,7 @@ async function ingresosRoutes(fastify, options) {
             const buffer = await data.toBuffer();
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(buffer);
-            
+
             const worksheet = workbook.worksheets[0];
             const ingresos = [];
             const errores = [];

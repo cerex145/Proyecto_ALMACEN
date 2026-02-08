@@ -1,0 +1,90 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "Hoja4"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+'NOTA SALIDA
+
+Private Sub Worksheet_Activate()
+    Call Modulo_Nota_Salida.ActualizarListasNotaSalida
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If Target.CountLarge > 1 Then Exit Sub
+    Call OcultarComboBoxesSalida
+
+    Dim cmb As OLEObject
+    Dim listaRango As Range
+
+    Select Case Target.Address
+        Case "$F$6": Set cmb = Me.OLEObjects("cmb12"): Set listaRango = Sheets("Registro Productos").Range("I22:I10000") ' RUC
+        Case "$G$6": Set cmb = Me.OLEObjects("cmb13"): Set listaRango = Sheets("Registro Productos").Range("J22:J10000") ' Código Cliente
+        Case "$H$6": Set cmb = Me.OLEObjects("cmb14"): Set listaRango = Sheets("Registro Productos").Range("G22:G10000") ' Lote
+        Case "$G$9": Set cmb = Me.OLEObjects("cmb15"): Set listaRango = Sheets("Registro Productos").Range("F22:F10000") ' Producto
+        Case "$F$13": Set cmb = Me.OLEObjects("cmb18"): Set listaRango = Sheets("Registro Productos").Range("O22:O10000") ' T. Documento
+        Case "$G$13": Set cmb = Me.OLEObjects("cmb19"): Set listaRango = Sheets("Registro Productos").Range("P22:P10000") ' N° Documento
+        Case "$H$13": Set cmb = Me.OLEObjects("cmb21"): Set listaRango = Sheets("Registro Productos").Range("M22:M10000") ' Fecha Ingreso
+        Case Else: Exit Sub
+    End Select
+
+    With cmb
+        .Visible = True
+        .Top = Target.Top
+        .Left = Target.Left
+        .Width = Target.Width + 15
+        .Height = Target.Height
+        .LinkedCell = Target.Address
+        .ListFillRange = ""
+        .Object.Clear
+        Call Modulo_Nota_Salida.CargarListaUnica(cmb, listaRango)
+        .Object.DropDown
+    End With
+End Sub
+
+
+Private Sub cmb12_Change()
+    Call Modulo_Nota_Salida.FiltrarCodigoPorRUC(Me.OLEObjects("cmb12").Object.Value)
+End Sub
+
+Private Sub cmb13_Change()
+    Call Modulo_Nota_Salida.FiltrarLotePorCodigo(Me.OLEObjects("cmb12").Object.Value, Me.OLEObjects("cmb13").Object.Value)
+End Sub
+
+Private Sub cmb14_Change()
+    Call Modulo_Nota_Salida.FiltrarProductoPorLote(Me.OLEObjects("cmb12").Object.Value, Me.OLEObjects("cmb13").Object.Value, Me.OLEObjects("cmb14").Object.Value)
+End Sub
+
+Private Sub cmb15_Change()
+    Call Modulo_Nota_Salida.CompletarInfoProducto(Me.OLEObjects("cmb15").Object.Value)
+End Sub
+Private Sub cmb18_Change()
+    Call Modulo_Nota_Salida.FiltrarNumeroPorDocumentoSalida(Me.OLEObjects("cmb18").Object.Value)
+End Sub
+Private Sub cmb19_Change()
+    Call Modulo_Nota_Salida.FiltrarLotePorCodigo(Me.OLEObjects("cmb18").Object.Value, Me.OLEObjects("cmb19").Object.Value)
+    Call Modulo_Nota_Salida.FiltrarFechaPorDocumento(Me.OLEObjects("cmb18").Object.Value, Me.OLEObjects("cmb19").Object.Value)
+End Sub
+Private Sub cmb21_Change()
+    Dim v As Variant
+    v = Me.OLEObjects("cmb21").Object.Value
+    
+    MsgBox "Valor recibido: [" & v & "]" & vbCrLf & _
+           "Tipo de dato: " & TypeName(v) & vbCrLf & _
+           "IsNumeric: " & IsNumeric(v) & vbCrLf & _
+           "IsDate: " & IsDate(v)
+End Sub
+
+
+Private Sub OcultarComboBoxesSalida()
+    On Error Resume Next
+    Me.OLEObjects("cmb12").Visible = True
+    Me.OLEObjects("cmb13").Visible = True
+    Me.OLEObjects("cmb14").Visible = True
+    Me.OLEObjects("cmb15").Visible = True
+    Me.OLEObjects("cmb21").Visible = True
+    On Error GoTo 0
+End Sub

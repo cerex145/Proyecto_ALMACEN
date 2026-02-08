@@ -5,70 +5,82 @@ import { AlertasWidget } from './AlertasWidget';
 import { KardexWidget } from './KardexWidget';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/common/Card';
 
-const QuickLink = ({ to, label, color = 'bg-slate-100 hover:bg-slate-200 text-slate-700' }) => (
-    <Link to={to} className={`
-        flex items-center justify-center p-4 rounded-xl font-medium transition-all duration-200 text-center
-        ${color}
-    `}>
-        {label}
-    </Link>
-);
-
 export const Dashboard = () => {
     return (
-        <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-8 pb-10">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Panel de Control</h1>
-                    <p className="text-slate-500 mt-1">
-                        Resumen general y estado del almacén
+                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight font-display mb-2">Panel de Control</h1>
+                    <p className="text-slate-500 text-sm">
+                        Resumen general y métricas clave del almacén
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-4">
                     <Link to="/ingresos/nuevo">
-                        <Button variant="primary" size="lg" className="shadow-lg shadow-blue-500/30">
-                            + Nuevo Ingreso
+                        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 px-6 py-2.5 rounded-xl transition-all hover:scale-105 active:scale-95">
+                            <span className="mr-2 text-lg">+</span> Nuevo Ingreso
                         </Button>
                     </Link>
-                    <Link to="/salidas/nueva">
-                        <Button variant="danger" size="lg" className="shadow-lg shadow-rose-500/30">
-                            - Nueva Salida
+                    <Link to="/salidas/nuevo">
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 px-6 py-2.5 rounded-xl transition-all hover:scale-105 active:scale-95">
+                            <span className="mr-2 text-lg">↗</span> Nueva Salida
                         </Button>
                     </Link>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Alertas - Critical Priority */}
-                <div className="min-h-[300px]">
+                <div className="glass-panel rounded-2xl p-1 shadow-sm">
                     <AlertasWidget />
                 </div>
 
                 {/* Recent Movements */}
-                <div className="min-h-[300px]">
+                <div className="glass-panel rounded-2xl p-1 shadow-sm">
                     <KardexWidget />
                 </div>
             </div>
 
-            <Card className="bg-slate-50/50 border-dashed">
-                <CardHeader className="mb-4">
-                    <CardTitle className="text-slate-600">⚡ Accesos Rápidos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                        <QuickLink to="/productos" label="Inventario" color="bg-blue-50 hover:bg-blue-100 text-blue-700" />
-                        <QuickLink to="/recepcion/nueva" label="Recepción" color="bg-emerald-50 hover:bg-emerald-100 text-emerald-700" />
-                        <QuickLink to="/clientes/registro" label="Clientes" />
-                        <QuickLink to="/ingresos/controles" label="Control Ingresos" />
-                        <QuickLink to="/salidas/controles" label="Control Salidas" />
-                        <QuickLink to="/ingresos/historial" label="Historial Ingresos" />
-                        <QuickLink to="/salidas/historial" label="Historial Salidas" />
-                        <QuickLink to="/recepcion/acta" label="Actas Recepción" />
-                        <QuickLink to="/kardex" label="Kardex Completo" />
-                        <QuickLink to="/ajustes" label="Ajustes" />
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Quick Actions */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-bold text-slate-800 px-1">Accesos Directos</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <QuickTile to="/productos" icon="📦" label="Inventario" color="blue" />
+                    <QuickTile to="/clientes/registro" icon="👥" label="Clientes" color="indigo" />
+                    <QuickTile to="/ingresos/controles" icon="📥" label="Ingresos" color="emerald" />
+                    <QuickTile to="/recepcion/acta" icon="📝" label="Recepción" color="teal" />
+                    <QuickTile to="/salidas/controles" icon="📤" label="Salidas" color="sky" />
+                    <QuickTile to="/kardex" icon="📊" label="Kardex" color="violet" />
+                    <QuickTile to="/reportes" icon="📈" label="Reportes" color="slate" />
+                    <QuickTile to="/ajustes" icon="⚙️" label="Ajustes" color="gray" />
+                </div>
+            </div>
         </div>
+    );
+};
+
+const QuickTile = ({ to, icon, label, color }) => {
+    const colors = {
+        blue: 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-100',
+        indigo: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100',
+        emerald: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-100',
+        teal: 'bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-100',
+        sky: 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-100',
+        violet: 'bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-100',
+        slate: 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-100',
+        gray: 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-100',
+    };
+
+    return (
+        <Link to={to} className={`
+            flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300
+            hover:-translate-y-1 hover:shadow-lg
+            ${colors[color] || colors.slate}
+        `}>
+            <span className="text-3xl mb-3 filter drop-shadow-sm">{icon}</span>
+            <span className="font-semibold text-sm tracking-wide">{label}</span>
+        </Link>
     );
 };

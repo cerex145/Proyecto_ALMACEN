@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
+import { Card } from '../../components/common/Card';
 
 export const ActasRecepcionFuncional = () => {
     const [actas, setActas] = useState([]);
@@ -25,8 +26,12 @@ export const ActasRecepcionFuncional = () => {
         }
     };
 
+    const handleDownloadPDF = (id) => {
+        window.open(`http://localhost:3000/api/actas-recepcion/${id}/pdf`, '_blank');
+    };
+
     const getEstadoBadge = (estado) => {
-        switch(estado) {
+        switch (estado) {
             case 'REGISTRADA': return <Badge variant="registrado">Registrada</Badge>;
             case 'CONFIRMADA': return <Badge variant="observado">Confirmada</Badge>;
             case 'RECHAZADA': return <Badge variant="anulado">Rechazada</Badge>;
@@ -36,71 +41,106 @@ export const ActasRecepcionFuncional = () => {
 
     if (selectedActa) {
         return (
-            <div style={{ padding: '2rem' }}>
+            <div className="max-w-7xl mx-auto space-y-6">
                 <Button onClick={() => setSelectedActa(null)} variant="secondary">← Volver</Button>
-                
-                <div style={{ marginTop: '2rem', background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <h2>Acta Nº {selectedActa.numero_acta}</h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2rem', marginBottom: '2rem' }}>
+
+                <Card className="p-8">
+                    <div className="flex justify-between items-start mb-8 border-b pb-6">
                         <div>
-                            <p><strong>Ingreso:</strong> {selectedActa.ingreso?.numero_ingreso}</p>
-                            <p><strong>Fecha Recepción:</strong> {new Date(selectedActa.fecha_recepcion).toLocaleDateString()}</p>
-                            <p><strong>Responsable:</strong> {selectedActa.responsable_recepcion?.usuario}</p>
+                            <h2 className="text-2xl font-bold text-slate-800">Acta Nº {selectedActa.numero_acta}</h2>
+                            <p className="text-slate-500 mt-1">Detalle de recepción de mercadería</p>
                         </div>
-                        <div>
-                            <p><strong>Estado:</strong> {getEstadoBadge(selectedActa.estado)}</p>
-                            <p><strong>Total Items:</strong> {selectedActa.detalle_acta?.length || 0}</p>
+                        <Button onClick={() => handleDownloadPDF(selectedActa.id)} className="btn-gradient-primary">
+                            ⬇ Descargar PDF
+                        </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8 mb-8 bg-slate-50 p-6 rounded-xl">
+                        <div className="space-y-3">
+                            <p className="flex justify-between border-b border-slate-200 pb-2">
+                                <span className="font-semibold text-slate-600">Referencia Ingreso:</span>
+                                <span className="font-mono text-blue-600">{selectedActa.ingreso?.numero_ingreso}</span>
+                            </p>
+                            <p className="flex justify-between border-b border-slate-200 pb-2">
+                                <span className="font-semibold text-slate-600">Fecha Recepción:</span>
+                                <span>{new Date(selectedActa.fecha_recepcion).toLocaleDateString()}</span>
+                            </p>
+                            <p className="flex justify-between border-b border-slate-200 pb-2">
+                                <span className="font-semibold text-slate-600">Responsable:</span>
+                                <span>{selectedActa.responsable_recepcion?.usuario}</span>
+                            </p>
+                        </div>
+                        <div className="space-y-3">
+                            <p className="flex justify-between border-b border-slate-200 pb-2">
+                                <span className="font-semibold text-slate-600">Estado:</span>
+                                {getEstadoBadge(selectedActa.estado)}
+                            </p>
+                            <p className="flex justify-between border-b border-slate-200 pb-2">
+                                <span className="font-semibold text-slate-600">Total Items:</span>
+                                <span className="font-bold text-slate-800">{selectedActa.detalle_acta?.length || 0}</span>
+                            </p>
                         </div>
                     </div>
 
-                    <h3>Detalle de Recepción</h3>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Producto</TableHeader>
-                                <TableHeader>Lote</TableHeader>
-                                <TableHeader>Vencimiento</TableHeader>
-                                <TableHeader>Esperado</TableHeader>
-                                <TableHeader>Recibido</TableHeader>
-                                <TableHeader>Diferencia</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {selectedActa.detalle_acta?.map((item, idx) => (
-                                <TableRow key={idx}>
-                                    <TableCell>{item.producto?.descripcion}</TableCell>
-                                    <TableCell>{item.numero_lote}</TableCell>
-                                    <TableCell>{new Date(item.fecha_vencimiento).toLocaleDateString()}</TableCell>
-                                    <TableCell>{item.cantidad_esperada}</TableCell>
-                                    <TableCell><strong>{item.cantidad_recibida}</strong></TableCell>
-                                    <TableCell style={{ color: item.diferencia === 0 ? 'green' : 'red' }}>
-                                        {item.diferencia > 0 ? '+' : ''}{item.diferencia}
-                                    </TableCell>
+                    <h3 className="font-bold text-lg text-slate-700 mb-4">Detalle de Productos</h3>
+                    <div className="rounded-lg border border-slate-200 overflow-hidden">
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableHeader>Producto</TableHeader>
+                                    <TableHeader>Lote</TableHeader>
+                                    <TableHeader>Vencimiento</TableHeader>
+                                    <TableHeader>Esperado</TableHeader>
+                                    <TableHeader>Recibido</TableHeader>
+                                    <TableHeader>Diferencia</TableHeader>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHead>
+                            <TableBody>
+                                {selectedActa.detalle_acta?.map((item, idx) => (
+                                    <TableRow key={idx} className="hover:bg-slate-50">
+                                        <TableCell>{item.producto?.descripcion}</TableCell>
+                                        <TableCell>{item.numero_lote}</TableCell>
+                                        <TableCell>{new Date(item.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                                        <TableCell>{item.cantidad_esperada}</TableCell>
+                                        <TableCell><strong className="text-blue-700">{item.cantidad_recibida}</strong></TableCell>
+                                        <TableCell>
+                                            <span
+                                                className={`font-mono font-bold ${item.diferencia === 0 ? 'text-green-500' : 'text-red-500'}`}
+                                            >
+                                                {item.diferencia > 0 ? '+' : ''}{item.diferencia}
+                                            </span>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
 
                     {selectedActa.observaciones && (
-                        <div style={{ marginTop: '2rem', padding: '1rem', background: '#f0f0f0', borderRadius: '4px' }}>
-                            <strong>Observaciones:</strong>
+                        <div className="mt-6 p-4 bg-yellow-50 border border-yellow-100 rounded-lg text-yellow-800 text-sm">
+                            <strong className="block mb-1 text-yellow-900">Observaciones:</strong>
                             <p>{selectedActa.observaciones}</p>
                         </div>
                     )}
-                </div>
+                </Card>
             </div>
         );
     }
 
     return (
-        <div style={{ padding: '2rem' }}>
-            <h1 style={{ marginBottom: '2rem', color: 'var(--primary-color)' }}>📄 Actas de Recepción</h1>
+        <div className="max-w-7xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">📄 Actas de Recepción</h1>
+                    <p className="text-slate-500">Histórico de recepciones y conformidades</p>
+                </div>
+            </div>
 
-            <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <Card className="p-6">
                 {loading ? (
-                    <p>Cargando actas...</p>
+                    <div className="text-center py-12 text-slate-500">Cargando actas...</div>
                 ) : actas.length === 0 ? (
-                    <p style={{ color: 'var(--secondary-color)' }}>No hay actas de recepción registradas</p>
+                    <div className="text-center py-12 text-slate-400">No hay actas de recepción registradas</div>
                 ) : (
                     <Table>
                         <TableHead>
@@ -117,23 +157,35 @@ export const ActasRecepcionFuncional = () => {
                         <TableBody>
                             {actas.map(acta => (
                                 <TableRow key={acta.id}>
-                                    <TableCell><strong>{acta.numero_acta}</strong></TableCell>
+                                    <TableCell><span className="font-semibold">{acta.numero_acta}</span></TableCell>
                                     <TableCell>{acta.ingreso?.numero_ingreso}</TableCell>
                                     <TableCell>{new Date(acta.fecha_recepcion).toLocaleDateString()}</TableCell>
                                     <TableCell>{acta.responsable_recepcion?.usuario}</TableCell>
                                     <TableCell>{getEstadoBadge(acta.estado)}</TableCell>
                                     <TableCell>{acta.detalle_acta?.length || 0}</TableCell>
                                     <TableCell>
-                                        <Button size="sm" onClick={() => setSelectedActa(acta)}>
-                                            Ver Detalles
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" onClick={() => setSelectedActa(acta)}>
+                                                Ver Detalles
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDownloadPDF(acta.id);
+                                                }}
+                                            >
+                                                📄
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
                 )}
-            </div>
+            </Card>
         </div>
     );
 };

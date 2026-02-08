@@ -1,0 +1,86 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "Hoja3"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+'NOTA INGRESO
+Private Sub Worksheet_Activate()
+    Call Modulo_Nota_Ingreso.ActualizarListasNotaIngreso
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If Target.CountLarge > 1 Then Exit Sub
+    Call OcultarComboBoxesIngreso
+
+    Dim cmb As OLEObject
+    Dim listaRango As Range
+
+    Select Case Target.Address
+        Case "$F$6": Set cmb = Me.OLEObjects("cmb8"): Set listaRango = Sheets("Registro Productos").Range("I22:I10000") ' RUC
+        Case "$G$6": Set cmb = Me.OLEObjects("cmb9"): Set listaRango = Sheets("Registro Productos").Range("J22:J10000") ' Código Cliente
+        Case "$H$6": Set cmb = Me.OLEObjects("cmb10"): Set listaRango = Sheets("Registro Productos").Range("G22:G10000") ' Lote
+        Case "$G$9": Set cmb = Me.OLEObjects("cmb11"): Set listaRango = Sheets("Registro Productos").Range("F22:F10000") ' Producto
+        Case "$F$13": Set cmb = Me.OLEObjects("cmb16"): Set listaRango = Sheets("Registro Productos").Range("O22:O10000") ' T. Documento
+        Case "$G$13": Set cmb = Me.OLEObjects("cmb17"): Set listaRango = Sheets("Registro Productos").Range("P22:P10000") ' N° Documento
+        Case "$H$13": Set cmb = Me.OLEObjects("cmb20"): Set listaRango = Sheets("Registro Productos").Range("M22:M10000") ' Fecha Ingreso
+        Case Else: Exit Sub
+    End Select
+
+    With cmb
+        .Visible = True
+        .Top = Target.Top
+        .Left = Target.Left
+        .Width = Target.Width + 15
+        .Height = Target.Height
+        .LinkedCell = Target.Address
+        .ListFillRange = ""
+        .Object.Clear
+        Call Modulo_Nota_Ingreso.CargarListaUnica(cmb, listaRango)
+       .Object.DropDown
+    End With
+End Sub
+
+Private Sub cmb8_Change()
+    Call Modulo_Nota_Ingreso.FiltrarCodigoPorRUC(Me.OLEObjects("cmb8").Object.Value)
+End Sub
+
+Private Sub cmb9_Change()
+    Call Modulo_Nota_Ingreso.FiltrarLotePorCodigo(Me.OLEObjects("cmb8").Object.Value, Me.OLEObjects("cmb9").Object.Value)
+End Sub
+
+Private Sub cmb10_Change()
+    Call Modulo_Nota_Ingreso.FiltrarProductoPorLote(Me.OLEObjects("cmb8").Object.Value, Me.OLEObjects("cmb9").Object.Value, Me.OLEObjects("cmb10").Object.Value)
+End Sub
+
+Private Sub cmb11_Change()
+    Call Modulo_Nota_Ingreso.CompletarInfoProducto(Me.OLEObjects("cmb11").Object.Value)
+End Sub
+Private Sub cmb16_Change()
+    Call Modulo_Nota_Ingreso.FiltrarNumeroPorDocumento(Me.OLEObjects("cmb16").Object.Value)
+End Sub
+Private Sub cmb17_Change()
+    Call Modulo_Nota_Ingreso.FiltrarLotePorCodigo(Me.OLEObjects("cmb16").Object.Value, Me.OLEObjects("cmb17").Object.Value)
+    Call Modulo_Nota_Ingreso.FiltrarFechaPorDocumento(Me.OLEObjects("cmb16").Object.Value, Me.OLEObjects("cmb17").Object.Value)
+End Sub
+
+Private Sub cmb20_Change()
+    Me.Range("H13").Value = Me.OLEObjects("cmb20").Object.Value
+End Sub
+
+
+Private Sub OcultarComboBoxesIngreso()
+    On Error Resume Next
+    Me.OLEObjects("cmb8").Visible = True
+    Me.OLEObjects("cmb9").Visible = True
+    Me.OLEObjects("cmb10").Visible = True
+    Me.OLEObjects("cmb11").Visible = True
+    Me.OLEObjects("cmb16").Visible = True
+    Me.OLEObjects("cmb17").Visible = True
+    Me.OLEObjects("cmb20").Visible = True
+    On Error GoTo 0
+End Sub
+

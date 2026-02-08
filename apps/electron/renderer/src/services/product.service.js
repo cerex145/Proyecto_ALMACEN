@@ -22,9 +22,30 @@ export const productService = {
         return response.data.data || response.data;
     },
 
+    deleteProduct: async (id) => {
+        const response = await api.delete(`/productos/${id}`);
+        return response.data;
+    },
+
+    importProducts: async (file) => {
+        const formData = new FormData();
+        formData.append('archivo', file);
+        const response = await api.post('/productos/importar', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+
+    exportProducts: async () => {
+        const response = await api.get('/productos/exportar', {
+            responseType: 'blob'
+        });
+        return response.data;
+    },
+
     // Lotes
     getLotesByProduct: async (productId) => {
-        const response = await api.get(`/productos/${productId}/lotes`);
+        const response = await api.get(`/lotes/producto/${productId}`);
         return response.data.data || [];
     }
 };

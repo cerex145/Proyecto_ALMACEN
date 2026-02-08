@@ -81,7 +81,7 @@ async function reportesRoutes(fastify, options) {
                     where: { nota_ingreso_id: nota.id }
                 });
 
-                const total = detalles.reduce((sum, d) => 
+                const total = detalles.reduce((sum, d) =>
                     sum + (Number(d.cantidad) * (Number(d.precio_unitario) || 0)), 0
                 );
 
@@ -142,7 +142,7 @@ async function reportesRoutes(fastify, options) {
                     where: { nota_salida_id: nota.id }
                 });
 
-                const total = detalles.reduce((sum, d) => 
+                const total = detalles.reduce((sum, d) =>
                     sum + (Number(d.cantidad) * (Number(d.precio_unitario) || 0)), 0
                 );
 
@@ -282,6 +282,78 @@ async function reportesRoutes(fastify, options) {
         reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         reply.header('Content-Disposition', `attachment; filename=reporte-${new Date().toISOString().split('T')[0]}.xlsx`);
         return reply.send(buffer);
+    });
+    // GET /api/reportes/exportar/pdf - Exportar reporte PDF
+    const { generatePDF } = require('../services/pdf.service');
+
+    fastify.get('/api/reportes/exportar/pdf', async (request, reply) => {
+        const { tipo = 'completo' } = request.query;
+
+        // Fetch Data
+        const productos = await productoRepo.find({ where: { activo: true }, order: { descripcion: 'ASC' } });
+        const ingresos = await notaIngresoRepo.find({ order: { fecha: 'DESC' }, take: 50 });
+        const salidas = await notaSalidaRepo.find({ relations: ['cliente'], order: { fecha: 'DESC' }, take: 50 });
+
+        const docDefinition = {
+            content: [
+                { text: 'Reporte General del Almacén', style: 'header' },
+                { text: `Fecha: ${new Date().toLocaleDateString('es-AR')}`, style: 'subheader' },
+
+                // Stock Actual
+                { text: 'Stock Actual', style: 'sectionHeader', margin: [0, 20, 0, 10] },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['auto', '*', 'auto', 'auto'],
+                        body: [
+                            ['Código', 'Descripción', 'Categoría', 'Stock'],
+                            ...productos.map(p => [p.codigo, p.descripcion, p.categoria_ingreso || '-', p.stock_actual])
+                        ]
+                    }
+                },
+
+                // Ingresos Recientes
+                { text: 'Últimos Ingresos', style: 'sectionHeader', margin: [0, 20, 0, 10] },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['auto', 'auto', '*', 'auto'],
+                        body: [
+                            ['Número', 'Fecha', 'Proveedor', 'Estado'],
+                            ...ingresos.map(i => [i.numero_ingreso, new Date(i.fecha).toLocaleDateString('es-AR'), i.proveedor, i.estado])
+                        ]
+                    }
+                },
+
+                // Salidas Recientes
+                { text: 'Últimas Salidas', style: 'sectionHeader', margin: [0, 20, 0, 10] },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['auto', 'auto', '*', 'auto'],
+                        body: [
+                            ['Número', 'Fecha', 'Cliente', 'Estado'],
+                            ...salidas.map(s => [s.numero_salida, new Date(s.fecha).toLocaleDateString('es-AR'), s.cliente?.razon_social || '-', s.estado])
+                        ]
+                    }
+                }
+            ],
+            styles: {
+                header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+                subheader: { fontSize: 14, bold: true, margin: [0, 0, 0, 10] },
+                sectionHeader: { fontSize: 14, bold: true, decoration: 'underline' }
+            }
+        };
+
+        try {
+            const buffer = await generatePDF(docDefinition);
+            reply.header('Content-Type', 'application/pdf');
+            reply.header('Content-Disposition', `attachment; filename=reporte-${new Date().toISOString().split('T')[0]}.pdf`);
+            return reply.send(buffer);
+        } catch (error) {
+            fastify.log.error(error);
+            return reply.status(500).send({ success: false, error: 'Error generando PDF' });
+        }
     });
 }
 

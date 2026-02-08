@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs');
+const { generatePDF } = require('../services/pdf.service');
 
 async function salidasRoutes(fastify, options) {
     const notaSalidaRepo = fastify.db.getRepository('NotaSalida');
@@ -15,20 +16,20 @@ async function salidasRoutes(fastify, options) {
             .orderBy('nota.id', 'DESC')
             .limit(1)
             .getOne();
-        
+
         const numero = ultimaSalida ? parseInt(ultimaSalida.numero_salida) + 1 : 1;
         return String(numero).padStart(8, '0');
     };
 
     // GET /api/salidas - Listar notas de salida
     fastify.get('/api/salidas', async (request, reply) => {
-        const { 
+        const {
             busqueda = '',
             cliente_id,
             estado,
             fecha_desde,
             fecha_hasta,
-            page = 1, 
+            page = 1,
             limit = 50,
             orderBy = 'created_at',
             order = 'DESC'
@@ -80,44 +81,44 @@ async function salidasRoutes(fastify, options) {
     // GET /api/salidas/:id - Obtener nota con detalles
     fastify.get('/api/salidas/:id', async (request, reply) => {
         const { id } = request.params;
-        
+
         const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
         if (!nota) {
             return reply.status(404).send({ success: false, error: 'Nota de salida no encontrada' });
         }
 
-        const detalles = await notaSalidaDetalleRepo.find({ 
+        const detalles = await notaSalidaDetalleRepo.find({
             where: { nota_salida_id: Number(id) },
             relations: ['producto']
         });
 
         const cliente = await clienteRepo.findOneBy({ id: nota.cliente_id });
 
-        return { 
-            success: true, 
-            data: { 
-                ...nota, 
+        return {
+            success: true,
+            data: {
+                ...nota,
                 detalles,
                 cliente
-            } 
+            }
         };
     });
 
     // POST /api/salidas - Crear nota de salida
     fastify.post('/api/salidas', async (request, reply) => {
-        const { 
+        const {
             cliente_id,
-            fecha, 
+            fecha,
             responsable_id,
             detalles,
-            observaciones 
+            observaciones
         } = request.body;
 
         // Validaciones
         if (!cliente_id || !fecha || !detalles || detalles.length === 0) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Cliente, fecha y detalles son obligatorios' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Cliente, fecha y detalles son obligatorios'
             });
         }
 
@@ -152,53 +153,55 @@ async function salidasRoutes(fastify, options) {
                 estado: 'REGISTRADA'
             });
 
-            const notaGuardada = await notaSalidaRepo.save(nota);
+            // Iniciar transacción
+            await fastify.db.transaction(async (transactionalEntityManager) => {
+                const notaGuardada = await transactionalEntityManager.save('NotaSalida', nota);
 
-            // Crear detalles y descontar stock
-            for (const detalle of detalles) {
-                const producto = await productoRepo.findOneBy({ id: Number(detalle.producto_id) });
+                for (const detalle of detalles) {
+                    const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
 
-                // Crear detalle
-                const detalleNota = notaSalidaDetalleRepo.create({
-                    nota_salida_id: notaGuardada.id,
-                    producto_id: detalle.producto_id,
-                    lote_id: detalle.lote_id,
-                    cantidad: detalle.cantidad,
-                    precio_unitario: detalle.precio_unitario
-                });
-                await notaSalidaDetalleRepo.save(detalleNota);
+                    // Crear detalle
+                    const detalleNota = notaSalidaDetalleRepo.create({
+                        nota_salida_id: notaGuardada.id,
+                        producto_id: detalle.producto_id,
+                        lote_id: detalle.lote_id,
+                        cantidad: detalle.cantidad,
+                        precio_unitario: detalle.precio_unitario
+                    });
+                    await transactionalEntityManager.save('NotaSalidaDetalle', detalleNota);
 
-                // Actualizar stock del producto
-                producto.stock_actual = Number(producto.stock_actual) - Number(detalle.cantidad);
-                await productoRepo.save(producto);
+                    // Actualizar stock del producto
+                    producto.stock_actual = Number(producto.stock_actual) - Number(detalle.cantidad);
+                    await transactionalEntityManager.save('Producto', producto);
 
-                // Registrar en kardex
-                const movimiento = kardexRepo.create({
-                    producto_id: detalle.producto_id,
-                    lote_numero: detalle.lote_id ? `LOTE-${detalle.lote_id}` : null,
-                    tipo_movimiento: 'SALIDA',
-                    cantidad: detalle.cantidad,
-                    saldo: producto.stock_actual,
-                    documento_tipo: 'NOTA_SALIDA',
-                    documento_numero: numeroSalida,
-                    referencia_id: notaGuardada.id
-                });
-                await kardexRepo.save(movimiento);
+                    // Registrar en kardex
+                    const movimiento = kardexRepo.create({
+                        producto_id: detalle.producto_id,
+                        lote_numero: detalle.lote_id ? `LOTE-${detalle.lote_id}` : null,
+                        tipo_movimiento: 'SALIDA',
+                        cantidad: detalle.cantidad,
+                        saldo: producto.stock_actual,
+                        documento_tipo: 'NOTA_SALIDA',
+                        documento_numero: numeroSalida,
+                        referencia_id: notaGuardada.id
+                    });
+                    await transactionalEntityManager.save('Kardex', movimiento);
 
-                // Actualizar lote disponible si aplica
-                if (detalle.lote_id) {
-                    const lote = await loteRepo.findOneBy({ id: Number(detalle.lote_id) });
-                    if (lote) {
-                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(detalle.cantidad);
-                        if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
-                        await loteRepo.save(lote);
+                    // Actualizar lote disponible si aplica
+                    if (detalle.lote_id) {
+                        const lote = await transactionalEntityManager.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
+                        if (lote) {
+                            lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(detalle.cantidad);
+                            if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
+                            await transactionalEntityManager.save('Lote', lote);
+                        }
                     }
                 }
-            }
+            });
 
             return reply.status(201).send({
                 success: true,
-                data: notaGuardada,
+                data: nota,
                 message: 'Nota de salida creada exitosamente'
             });
 
@@ -254,7 +257,7 @@ async function salidasRoutes(fastify, options) {
     // POST /api/salidas/importar - Importar desde Excel
     fastify.post('/api/salidas/importar', async (request, reply) => {
         const data = await request.file();
-        
+
         if (!data) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
@@ -263,7 +266,7 @@ async function salidasRoutes(fastify, options) {
             const buffer = await data.toBuffer();
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(buffer);
-            
+
             const worksheet = workbook.worksheets[0];
             const errores = [];
             let generadas = 0;
@@ -309,7 +312,7 @@ async function salidasRoutes(fastify, options) {
                     }
 
                     const numeroSalida = await generarNumeroSalida();
-                    
+
                     const nota = notaSalidaRepo.create({
                         numero_salida: numeroSalida,
                         cliente_id: cliente.id,
@@ -431,6 +434,71 @@ async function salidasRoutes(fastify, options) {
 
         reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         reply.header('Content-Disposition', 'attachment; filename=plantilla-salida.xlsx');
+        return reply.send(buffer);
+    });
+
+    // GET /api/salidas/:id/pdf - Exportar PDF
+    fastify.get('/api/salidas/:id/pdf', async (request, reply) => {
+        const { id } = request.params;
+        const nota = await notaSalidaRepo.findOne({
+            where: { id: Number(id) }
+        });
+
+        if (!nota) return reply.status(404).send({ error: 'Nota no encontrada' });
+
+        const detalles = await notaSalidaDetalleRepo.find({
+            where: { nota_salida_id: nota.id },
+            relations: ['producto', 'lote']
+        });
+
+        const cliente = await clienteRepo.findOneBy({ id: nota.cliente_id });
+
+        const docDefinition = {
+            content: [
+                { text: `NOTA DE SALIDA: ${nota.numero_salida}`, style: 'header' },
+                {
+                    columns: [
+                        { text: `Fecha: ${new Date(nota.fecha).toLocaleDateString()}`, bold: true },
+                        { text: `Cliente: ${cliente ? cliente.razon_social : 'N/A'}`, alignment: 'right' }
+                    ]
+                },
+                { text: '\n' },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['*', 'auto', 'auto', 'auto'],
+                        body: [
+                            [
+                                { text: 'Producto', style: 'tableHeader' },
+                                { text: 'Lote', style: 'tableHeader' },
+                                { text: 'Vencimiento', style: 'tableHeader' },
+                                { text: 'Cantidad', style: 'tableHeader', alignment: 'right' }
+                            ],
+                            ...detalles.map(d => [
+                                d.producto ? d.producto.descripcion : 'N/A',
+                                d.lote ? d.lote.numero_lote : '-',
+                                d.lote ? new Date(d.lote.fecha_vencimiento).toLocaleDateString() : '-',
+                                { text: d.cantidad, alignment: 'right' }
+                            ])
+                        ]
+                    }
+                },
+                { text: '\n\n' },
+                {
+                    columns: [
+                        { text: '_______________________\nAutorizado Por', alignment: 'center' },
+                        { text: '_______________________\nRecibí Conforme', alignment: 'center' }
+                    ]
+                }
+            ],
+            styles: {
+                header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
+                tableHeader: { bold: true, fontSize: 13, color: 'black' }
+            }
+        };
+
+        const buffer = await generatePDF(docDefinition);
+        reply.header('Content-Type', 'application/pdf');
         return reply.send(buffer);
     });
 }

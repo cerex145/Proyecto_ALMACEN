@@ -7,7 +7,7 @@ const dbPlugin = require('./plugins/database.plugin');
 
 async function buildApp(fastify, options) {
     await fastify.register(cors, {
-        origin: ['http://localhost:5173', 'http://localhost:3000'],
+        origin: true, // Allow all origins for development/Electron
         credentials: true
     });
 

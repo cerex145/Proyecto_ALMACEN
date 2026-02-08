@@ -1,0 +1,56 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "Hoja7"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Private Sub Worksheet_Activate()
+    Call Modulo_Acta_Recepcion.ActualizarListasActaRecepcion
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If Target.CountLarge > 1 Then Exit Sub
+    Call OcultarComboBoxesActa
+
+    Dim cmb As OLEObject
+    Dim listaRango As Range
+
+    Select Case Target.Address
+        Case "$F$13": Set cmb = Me.OLEObjects("cmb20"): Set listaRango = Sheets("Registro Productos").Range("O22:O10000") ' T. Documento
+        Case "$G$13": Set cmb = Me.OLEObjects("cmb21"): Set listaRango = Sheets("Registro Productos").Range("P22:P10000") ' N° Documento
+        Case Else: Exit Sub
+    End Select
+
+    With cmb
+        .Visible = True
+        .Top = Target.Top
+        .Left = Target.Left
+        .Width = Target.Width + 15
+        .Height = Target.Height
+        .LinkedCell = Target.Address
+        .ListFillRange = ""
+        .Object.Clear
+        Call Modulo_Acta_Recepcion.CargarListaUnica(cmb, listaRango)
+        .Object.DropDown
+    End With
+End Sub
+
+
+Private Sub cmb20_Change()
+    Call Modulo_Acta_Recepcion.FiltrarNumeroPorDocumentoActa(Me.OLEObjects("cmb20").Object.Value)
+End Sub
+
+
+Private Sub OcultarComboBoxesActa()
+    On Error Resume Next
+    Me.OLEObjects("cmb20").Visible = True
+    Me.OLEObjects("cmb21").Visible = True
+    On Error GoTo 0
+End Sub
+
+
+
+

@@ -21,8 +21,7 @@ module.exports = new EntitySchema({
         },
         permisos: {
             type: 'json',
-            nullable: false,
-            default: () => '{}'
+            nullable: true
         },
         activo: {
             type: 'boolean',

@@ -2,17 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
-import { Input } from '../../components/common/Input';
+import { clientesService } from '../../services/clientes.service';
 import { Button } from '../../components/common/Button';
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
+import { Card } from '../../components/common/Card';
 
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
-            proveedor_id: '', // Using text for simplicity if no provider list
+            proveedor_id: '',
             fecha: new Date().toISOString().split('T')[0],
             numero_ingreso: '',
-            responsable_id: 1, // Mock ID until Auth is implemented
+            responsable_id: 1,
             detalles: []
         }
     });
@@ -23,129 +23,280 @@ export const NotaIngresoForm = () => {
     });
 
     const [products, setProducts] = useState([]);
+    const [clients, setClients] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState('');
-    const [quantity, setQuantity] = useState('');
+
+    // Calculator State
+    const [cajas, setCajas] = useState('');
+    const [unidadesCaja, setUnidadesCaja] = useState('');
+    const [fraccion, setFraccion] = useState('');
+    const [quantity, setQuantity] = useState(0);
+
+    const [lote, setLote] = useState('');
+    const [vencimiento, setVencimiento] = useState('');
+    const [precio, setPrecio] = useState('');
 
     useEffect(() => {
-        loadProducts();
+        loadData();
     }, []);
 
-    const loadProducts = async () => {
+    const loadData = async () => {
+        // Load Products
         try {
-            const data = await productService.getProducts();
-            setProducts(data);
+            const productsResponse = await productService.getProducts();
+            console.log('Productos cargados:', productsResponse);
+            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
         } catch (error) {
-            console.error('Error loading products', error);
+            console.error('Error cargando productos:', error);
+            alert('Error al cargar la lista de Productos. Verifique la conexión con el servidor.');
+        }
+
+        // Load Clients
+        try {
+            const clientsResponse = await clientesService.listar();
+            console.log('Clientes cargados:', clientsResponse);
+            // Handle both array (direct) or object { success, data } formats
+            const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
+            setClients(clientsArray);
+        } catch (error) {
+            console.error('Error cargando clientes:', error);
+            alert('Error al cargar la lista de Proveedores. Verifique la conexión con el servidor.');
         }
     };
 
+    // Auto-calculate quantity
+    useEffect(() => {
+        const c = parseInt(cajas) || 0;
+        const u = parseInt(unidadesCaja) || 0;
+        const f = parseInt(fraccion) || 0;
+        const total = (c * u) + f;
+        setQuantity(total);
+    }, [cajas, unidadesCaja, fraccion]);
+
     const handleAddProduct = () => {
-        if (!selectedProduct || !quantity) return;
+        if (!selectedProduct || !quantity || !lote || !vencimiento) {
+            alert("Por favor complete todos los datos del producto (Lote y Vencimiento son obligatorios)");
+            return;
+        }
+
         const product = products.find(p => p.id === parseInt(selectedProduct));
+
         append({
             producto_id: parseInt(selectedProduct),
             producto_nombre: product.descripcion,
-            cantidad: parseFloat(quantity)
+            cantidad: parseFloat(quantity),
+            lote_numero: lote,
+            fecha_vencimiento: vencimiento,
+            precio_unitario: parseFloat(precio || 0),
+            // Optional: Store calc details if needed later
+            detalle_calculo: `Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
         });
+
+        // Reset fields
         setSelectedProduct('');
-        setQuantity('');
+        setCajas('');
+        setUnidadesCaja('');
+        setFraccion('');
+        setQuantity(0);
+        setLote('');
+        setVencimiento('');
+        setPrecio('');
     };
 
     const onSubmit = async (data) => {
         try {
             await operationService.createIngreso(data);
-            alert('Nota de Ingreso registrada con éxito');
+            alert('✅ Nota de Ingreso registrada con éxito');
             reset();
+            setQuantity(0);
         } catch (error) {
             console.error(error);
-            alert('Error al registrar ingreso');
+            alert('❌ Error al registrar ingreso. Verifique los datos.');
         }
     };
 
     return (
-        <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-            <h2 style={{ color: 'var(--primary-color)' }}>Registro de Nota de Ingreso</h2>
-            <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <Input
-                        label="Número de Ingreso"
-                        register={register('numero_ingreso', { required: 'Requerido' })}
-                        error={errors.numero_ingreso}
-                    />
-                    <Input
-                        label="Fecha"
-                        type="date"
-                        register={register('fecha', { required: 'Requerido' })}
-                        error={errors.fecha}
-                    />
+        <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Registro de Ingreso</h2>
+                    <p className="text-slate-500">Recepción de mercadería y alta de lotes</p>
                 </div>
+            </div>
 
-                <Input
-                    label="Proveedor (ID o Nombre)"
-                    register={register('proveedor_id', { required: 'Requerido' })}
-                    error={errors.proveedor_id}
-                />
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+                {/* Datos Generales */}
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Información del Documento</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="label-premium">Número de Nota/Factura</label>
+                            <input
+                                {...register('numero_ingreso', { required: 'Requerido' })}
+                                type="text"
+                                className="input-premium"
+                                placeholder="Ej: F001-000213"
+                            />
+                            {errors.numero_ingreso && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div>
+                            <label className="label-premium">Fecha de Emisión</label>
+                            <input
+                                {...register('fecha', { required: 'Requerido' })}
+                                type="date"
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Proveedor</label>
+                            <select
+                                {...register('proveedor_id', { required: 'Requerido' })}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione proveedor...</option>
+                                {clients.map(client => (
+                                    <option key={client.id} value={client.razon_social}>
+                                        {client.razon_social} (RUC: {client.cuit})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </Card>
 
-                <div style={{ border: '1px solid var(--border-color)', padding: '1rem', borderRadius: '8px', background: 'var(--light-bg)' }}>
-                    <h4>Agregar Productos</h4>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-                        <div style={{ flex: 2 }}>
-                            <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Producto</label>
+                {/* Agregar Productos */}
+                <Card className="p-6 bg-blue-50/50 border-blue-100">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-4">Detalle de Productos (Lotes)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div className="md:col-span-4">
+                            <label className="label-premium">Producto</label>
                             <select
                                 value={selectedProduct}
                                 onChange={(e) => setSelectedProduct(e.target.value)}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                                className="input-premium"
                             >
-                                <option value="">Seleccione un producto</option>
+                                <option value="">Seleccione producto...</option>
                                 {products.map(p => (
                                     <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
                                 ))}
                             </select>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <label style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem', fontWeight: 500 }}>Cantidad</label>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Lote</label>
                             <input
-                                type="number"
-                                value={quantity}
-                                onChange={(e) => setQuantity(e.target.value)}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}
+                                value={lote}
+                                onChange={(e) => setLote(e.target.value)}
+                                type="text"
+                                className="input-premium"
+                                placeholder="Lote..."
                             />
                         </div>
-                        <Button type="button" onClick={handleAddProduct}>Agregar</Button>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Vencimiento</label>
+                            <input
+                                value={vencimiento}
+                                onChange={(e) => setVencimiento(e.target.value)}
+                                type="date"
+                                className="input-premium"
+                            />
+                        </div>
+
+                        {/* Calculator Section */}
+                        <div className="md:col-span-4 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
+                                <input
+                                    type="number"
+                                    value={cajas}
+                                    onChange={(e) => setCajas(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
+                                <input
+                                    type="number"
+                                    value={unidadesCaja}
+                                    onChange={(e) => setUnidadesCaja(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Saldoa</label>
+                                <input
+                                    type="number"
+                                    value={fraccion}
+                                    onChange={(e) => setFraccion(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="col-span-3 flex justify-between items-center pt-1 border-t border-slate-100 mt-1">
+                                <span className="text-xs text-slate-400 font-medium">Total Unidades:</span>
+                                <span className="font-bold text-blue-600 text-lg">{quantity}</span>
+                            </div>
+                        </div>
+
+                        <div className="md:col-span-12 flex justify-end">
+                            <Button type="button" onClick={handleAddProduct} variant="primary" className="w-full md:w-auto">
+                                + Agregar Item
+                            </Button>
+                        </div>
                     </div>
+                </Card>
+
+                {/* Tabla de Items */}
+                <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-4">Producto</th>
+                                <th className="px-6 py-4">Lote</th>
+                                <th className="px-6 py-4">Vencimiento</th>
+                                <th className="px-6 py-4 text-right">Cantidad</th>
+                                <th className="px-6 py-4 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {fields.map((field, index) => (
+                                <tr key={field.id} className="hover:bg-slate-50/50">
+                                    <td className="px-6 py-3 font-medium text-slate-700">{field.producto_nombre}</td>
+                                    <td className="px-6 py-3">{field.lote_numero}</td>
+                                    <td className="px-6 py-3">{field.fecha_vencimiento}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-blue-600">{field.cantidad}</td>
+                                    <td className="px-6 py-3 text-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => remove(index)}
+                                            className="text-red-500 hover:text-red-700 font-medium text-xs bg-red-50 px-2 py-1 rounded-lg"
+                                        >
+                                            Quitar
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {fields.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic">
+                                        No hay productos agregados a la nota.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
 
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableHeader>Producto</TableHeader>
-                            <TableHeader>Cantidad</TableHeader>
-                            <TableHeader>Acción</TableHeader>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {fields.map((field, index) => (
-                            <TableRow key={field.id}>
-                                <TableCell>{field.producto_nombre}</TableCell>
-                                <TableCell>{field.cantidad}</TableCell>
-                                <TableCell>
-                                    <Button variant="danger" size="small" onClick={() => remove(index)}>Quitar</Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                        {fields.length === 0 && (
-                            <TableRow>
-                                <TableCell colspan={3} style={{ textAlign: 'center', color: 'var(--secondary-color)' }}>
-                                    No hay productos agregados
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                    <Button type="submit" isLoading={isSubmitting} disabled={fields.length === 0}>
-                        Guardar Nota de Ingreso
+                <div className="flex justify-end pt-4 border-t border-slate-200">
+                    <Button
+                        type="submit"
+                        isLoading={isSubmitting}
+                        disabled={fields.length === 0}
+                        size="lg"
+                        className="btn-gradient-primary shadow-lg shadow-blue-500/30"
+                    >
+                        Guardar Ingreso
                     </Button>
                 </div>
             </form>

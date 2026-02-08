@@ -3,6 +3,7 @@ import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '.
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
+import { Card } from '../../components/common/Card';
 
 export const HistorialIngresosFuncional = () => {
     const [ingresos, setIngresos] = useState([]);
@@ -27,8 +28,12 @@ export const HistorialIngresosFuncional = () => {
         }
     };
 
+    const handleDownloadPDF = (id) => {
+        window.open(`http://localhost:3000/api/ingresos/${id}/pdf`, '_blank');
+    };
+
     const getEstadoBadge = (estado) => {
-        switch(estado) {
+        switch (estado) {
             case 'REGISTRADO': return <Badge variant="registrado">Registrado</Badge>;
             case 'RECIBIDO': return <Badge variant="observado">Recibido</Badge>;
             case 'ANULADO': return <Badge variant="anulado">Anulado</Badge>;
@@ -37,28 +42,32 @@ export const HistorialIngresosFuncional = () => {
     };
 
     return (
-        <div style={{ padding: '2rem' }}>
-            <h1 style={{ marginBottom: '1rem', color: 'var(--primary-color)' }}>📋 Historial de Ingresos</h1>
-
-            <div style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                        Buscar por Número de Ingreso
-                    </label>
-                    <Input
-                        placeholder="Ej: ING-2026-001"
-                        value={filtro}
-                        onChange={(e) => setFiltro(e.target.value)}
-                    />
+        <div className="max-w-7xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">📋 Historial de Ingresos</h1>
+                    <p className="text-slate-500">Consulta y descarga de notas de ingreso</p>
                 </div>
-                <Button onClick={() => setFiltro('')}>Limpiar</Button>
             </div>
 
-            <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <Card className="p-6">
+                <div className="flex gap-4 items-end mb-6">
+                    <div className="flex-1">
+                        <label className="label-premium">Buscar por Número de Ingreso</label>
+                        <Input
+                            placeholder="Ej: ING-2026-001"
+                            value={filtro}
+                            onChange={(e) => setFiltro(e.target.value)}
+                            className="input-premium"
+                        />
+                    </div>
+                    <Button onClick={() => setFiltro('')} variant="secondary">Limpiar</Button>
+                </div>
+
                 {loading ? (
-                    <p>Cargando ingresos...</p>
+                    <div className="text-center py-12 text-slate-500">Cargando ingresos...</div>
                 ) : ingresos.length === 0 ? (
-                    <p style={{ color: 'var(--secondary-color)' }}>No hay registros de ingreso</p>
+                    <div className="text-center py-12 text-slate-400">No hay registros de ingreso</div>
                 ) : (
                     <Table>
                         <TableHead>
@@ -69,25 +78,36 @@ export const HistorialIngresosFuncional = () => {
                                 <TableHeader>Responsable</TableHeader>
                                 <TableHeader>Estado</TableHeader>
                                 <TableHeader>Detalles</TableHeader>
+                                <TableHeader>Acciones</TableHeader>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {ingresos.map(ingreso => (
                                 <TableRow key={ingreso.id}>
-                                    <TableCell><strong>{ingreso.numero_ingreso}</strong></TableCell>
+                                    <TableCell><span className="font-semibold text-slate-700">{ingreso.numero_ingreso}</span></TableCell>
                                     <TableCell>{new Date(ingreso.fecha_ingreso).toLocaleDateString()}</TableCell>
                                     <TableCell>{ingreso.proveedor?.nombre || 'N/A'}</TableCell>
                                     <TableCell>{ingreso.responsable?.usuario || 'N/A'}</TableCell>
                                     <TableCell>{getEstadoBadge(ingreso.estado)}</TableCell>
                                     <TableCell>
-                                        <small>{ingreso.detalle_ingreso?.length || 0} items</small>
+                                        <span className="text-xs text-slate-500">{ingreso.detalle_ingreso?.length || 0} items</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="text-xs"
+                                            onClick={() => handleDownloadPDF(ingreso.id)}
+                                        >
+                                            📄 PDF
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
                     </Table>
                 )}
-            </div>
+            </Card>
         </div>
     );
 };

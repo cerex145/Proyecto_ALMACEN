@@ -84,12 +84,12 @@ async function ajustesRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { 
-            producto_id, 
-            tipo, 
+        const {
+            producto_id,
+            tipo,
             fecha_desde,
             fecha_hasta,
-            page = 1, 
+            page = 1,
             limit = 50,
             orderBy = 'created_at',
             order = 'DESC'
@@ -152,7 +152,7 @@ async function ajustesRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        
+
         const ajuste = await ajusteRepo.createQueryBuilder('ajuste')
             .leftJoinAndSelect('ajuste.producto', 'producto')
             .where('ajuste.id = :id', { id: Number(id) })
@@ -190,24 +190,24 @@ async function ajustesRoutes(fastify, options) {
 
         // Validaciones
         if (!producto_id || !tipo || !cantidad || !motivo) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Producto, Tipo, Cantidad y Motivo son obligatorios' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Producto, Tipo, Cantidad y Motivo son obligatorios'
             });
         }
 
         if (!['AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO'].includes(tipo)) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Tipo debe ser AJUSTE_POSITIVO o AJUSTE_NEGATIVO' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Tipo debe ser AJUSTE_POSITIVO o AJUSTE_NEGATIVO'
             });
         }
 
         const cantidadNum = Number(cantidad);
         if (cantidadNum <= 0) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'La cantidad debe ser mayor a 0' 
+            return reply.status(400).send({
+                success: false,
+                error: 'La cantidad debe ser mayor a 0'
             });
         }
 
@@ -219,9 +219,9 @@ async function ajustesRoutes(fastify, options) {
 
         // Verificar stock suficiente para ajustes negativos
         if (tipo === 'AJUSTE_NEGATIVO' && producto.stock_actual < cantidadNum) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Stock insuficiente para realizar el ajuste negativo' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Stock insuficiente para realizar el ajuste negativo'
             });
         }
 
@@ -242,20 +242,22 @@ async function ajustesRoutes(fastify, options) {
         }
 
         // Guardar en transacción
+        let savedId;
         await fastify.db.transaction(async (transactionalEntityManager) => {
-            await transactionalEntityManager.save(nuevoAjuste);
-            await transactionalEntityManager.save(producto);
+            const savedAjuste = await transactionalEntityManager.save('AjusteStock', nuevoAjuste);
+            savedId = savedAjuste.id;
+            await transactionalEntityManager.save('Producto', producto);
         });
 
         const ajusteGuardado = await ajusteRepo.createQueryBuilder('ajuste')
             .leftJoinAndSelect('ajuste.producto', 'producto')
-            .where('ajuste.id = :id', { id: nuevoAjuste.id })
+            .where('ajuste.id = :id', { id: savedId })
             .getOne();
 
-        return reply.status(201).send({ 
-            success: true, 
+        return reply.status(201).send({
+            success: true,
             data: ajusteGuardado,
-            message: 'Ajuste de stock registrado exitosamente' 
+            message: 'Ajuste de stock registrado exitosamente'
         });
     });
 

@@ -21,10 +21,10 @@ module.exports = new EntitySchema({
             nullable: false
         },
         cuit: {
-            name: 'ruc',
+            name: 'cuit',
             type: 'varchar',
-            length: 11,
-            nullable: false
+            length: 13,
+            nullable: true
         },
         direccion: {
             type: 'varchar',

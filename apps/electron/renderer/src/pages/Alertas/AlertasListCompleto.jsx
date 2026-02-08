@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { alertasService } from '../../services/alertas-service';
+import { alertasService } from '../../services/alertas.service';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';

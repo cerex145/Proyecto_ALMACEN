@@ -1,0 +1,105 @@
+VERSION 1.0 CLASS
+BEGIN
+  MultiUse = -1  'True
+END
+Attribute VB_Name = "Hoja1"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+' === HOJA: Registro Clientes (Hoja1) ===
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    If Target Is Nothing Then Exit Sub
+    If Not TypeName(Target) = "Range" Then Exit Sub
+    If Target.CountLarge > 1 Then Exit Sub
+
+    OcultarTodosComboBox
+
+    Dim cmb As OLEObject
+    Dim listaRango As Range
+    Dim hojaUbicacion As Worksheet
+    Set hojaUbicacion = ThisWorkbook.Sheets("Ajustes")
+
+    Select Case Target.Address
+        Case "$H$8"
+            Set cmb = Me.OLEObjects("cmb4")
+            Set listaRango = hojaUbicacion.Range("nProvincia")
+        Case "$H$9"
+            Set cmb = Me.OLEObjects("cmb5")
+            Set listaRango = hojaUbicacion.Range("nDepartamento")
+        Case "$H$13"
+            Set cmb = Me.OLEObjects("cmb6")
+            Set listaRango = hojaUbicacion.Range("nCategoría")
+        Case "$H$14"
+            Set cmb = Me.OLEObjects("cmb7")
+            Set listaRango = hojaUbicacion.Range("nEstado")
+        Case Else
+            Exit Sub
+    End Select
+
+    With cmb
+        .Visible = True
+        .Top = Target.Top
+        .Left = Target.Left
+        .Width = Target.Width + 15
+        .Height = Target.Height
+        .LinkedCell = Target.Address
+        .ListFillRange = ""
+        .Object.Clear
+        .Object.List = Application.Transpose(listaRango.Value)
+        .Object.MatchEntry = fmMatchEntryNone
+        .Object.DropDown
+    End With
+End Sub
+
+Private Sub Worksheet_Activate()
+    OcultarTodosComboBox
+    Call Modulo_Regis_Cliente.ActualizarListasComboBoxes_Clientes
+End Sub
+
+Private Sub OcultarTodosComboBox()
+    On Error Resume Next
+    Me.OLEObjects("cmb4").Visible = True
+    Me.OLEObjects("cmb5").Visible = True
+    Me.OLEObjects("cmb6").Visible = True
+    Me.OLEObjects("cmb7").Visible = True
+    On Error GoTo 0
+End Sub
+
+Private Sub cmb4_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If KeyCode = 9 Then ActiveCell.Offset(0, 1).Activate
+    If KeyCode = 13 Then ActiveCell.Offset(1, 0).Activate
+End Sub
+
+Private Sub cmb5_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If KeyCode = 9 Then ActiveCell.Offset(0, 1).Activate
+    If KeyCode = 13 Then ActiveCell.Offset(1, 0).Activate
+End Sub
+
+Private Sub cmb6_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If KeyCode = 9 Then ActiveCell.Offset(0, 1).Activate
+    If KeyCode = 13 Then ActiveCell.Offset(1, 0).Activate
+End Sub
+
+Private Sub cmb7_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    If KeyCode = 9 Then ActiveCell.Offset(0, 1).Activate
+    If KeyCode = 13 Then ActiveCell.Offset(1, 0).Activate
+End Sub
+
+Private Sub cmb4_Change()
+    cmb4.List = FiltrarLista(ThisWorkbook.Sheets("Ajustes").Range("nProvincia"), cmb4.Text)
+End Sub
+
+Private Sub cmb5_Change()
+    cmb5.List = FiltrarLista(ThisWorkbook.Sheets("Ajustes").Range("nDepartamento"), cmb5.Text)
+End Sub
+
+Private Sub cmb6_Change()
+    cmb6.List = FiltrarLista(ThisWorkbook.Sheets("Ajustes").Range("nCategoría"), cmb6.Text)
+End Sub
+
+Private Sub cmb7_Change()
+    cmb7.List = FiltrarLista(ThisWorkbook.Sheets("Ajustes").Range("nEstado"), cmb7.Text)
+End Sub
+

@@ -15,19 +15,19 @@ async function actasRecepcionRoutes(fastify, options) {
             .orderBy('acta.id', 'DESC')
             .limit(1)
             .getOne();
-        
+
         const numero = ultimaActa ? parseInt(ultimaActa.numero_acta) + 1 : 1;
         return String(numero).padStart(8, '0');
     };
 
     // GET /api/actas-recepcion - Listar actas
     fastify.get('/api/actas-recepcion', async (request, reply) => {
-        const { 
+        const {
             estado,
             aprobado,
             fecha_desde,
             fecha_hasta,
-            page = 1, 
+            page = 1,
             limit = 50,
             orderBy = 'created_at',
             order = 'DESC'
@@ -75,32 +75,32 @@ async function actasRecepcionRoutes(fastify, options) {
     // GET /api/actas-recepcion/:id - Obtener acta con detalles
     fastify.get('/api/actas-recepcion/:id', async (request, reply) => {
         const { id } = request.params;
-        
+
         const acta = await actaRecepcionRepo.findOneBy({ id: Number(id) });
         if (!acta) {
             return reply.status(404).send({ success: false, error: 'Acta de recepción no encontrada' });
         }
 
-        const detalles = await actaRecepcionDetalleRepo.find({ 
+        const detalles = await actaRecepcionDetalleRepo.find({
             where: { acta_recepcion_id: Number(id) }
         });
 
         // Obtener nota de ingreso asociada
         const notaIngreso = await notaIngresoRepo.findOneBy({ id: acta.nota_ingreso_id });
 
-        return { 
-            success: true, 
-            data: { 
-                ...acta, 
+        return {
+            success: true,
+            data: {
+                ...acta,
                 detalles,
                 notaIngreso
-            } 
+            }
         };
     });
 
     // POST /api/actas-recepcion - Crear acta
     fastify.post('/api/actas-recepcion', async (request, reply) => {
-        const { 
+        const {
             nota_ingreso_id,
             fecha_recepcion,
             responsable_id,
@@ -111,9 +111,9 @@ async function actasRecepcionRoutes(fastify, options) {
 
         // Validaciones
         if (!nota_ingreso_id || !fecha_recepcion || !detalles || detalles.length === 0) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Nota ingreso, fecha recepción y detalles son obligatorios' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Nota ingreso, fecha recepción y detalles son obligatorios'
             });
         }
 
@@ -151,7 +151,7 @@ async function actasRecepcionRoutes(fastify, options) {
                     conforme: detalle.cantidad_recibida === detalle.cantidad_esperada,
                     observaciones: detalle.observaciones
                 });
-                
+
                 if (detalle.cantidad_recibida !== detalle.cantidad_esperada) {
                     todosConformes = false;
                 }
@@ -221,10 +221,10 @@ async function actasRecepcionRoutes(fastify, options) {
         // Procesar ajustes si hay diferencias
         for (const detalle of detalles) {
             const diferencia = Number(detalle.cantidad_recibida) - Number(detalle.cantidad_esperada);
-            
+
             if (diferencia !== 0) {
                 const producto = await productoRepo.findOneBy({ id: detalle.producto_id });
-                
+
                 if (diferencia > 0) {
                     // Ingreso de más productos
                     producto.stock_actual = Number(producto.stock_actual) + diferencia;
@@ -254,7 +254,7 @@ async function actasRecepcionRoutes(fastify, options) {
                         observaciones: `Ajuste por diferencia en recepción`
                     }));
                 }
-                
+
                 await productoRepo.save(producto);
             }
         }
@@ -272,7 +272,7 @@ async function actasRecepcionRoutes(fastify, options) {
     // POST /api/actas-recepcion/importar - Importar desde Excel
     fastify.post('/api/actas-recepcion/importar', async (request, reply) => {
         const data = await request.file();
-        
+
         if (!data) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
@@ -281,7 +281,7 @@ async function actasRecepcionRoutes(fastify, options) {
             const buffer = await data.toBuffer();
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(buffer);
-            
+
             const worksheet = workbook.worksheets[0];
             const errores = [];
             let generadas = 0;
@@ -308,17 +308,17 @@ async function actasRecepcionRoutes(fastify, options) {
 
                 try {
                     // Buscar nota de ingreso
-                    const notaIngreso = await notaIngresoRepo.findOneBy({ 
-                        numero_ingreso: String(numero_nota_ingreso) 
+                    const notaIngreso = await notaIngresoRepo.findOneBy({
+                        numero_ingreso: String(numero_nota_ingreso)
                     });
-                    
+
                     if (!notaIngreso) {
                         errores.push(`Fila ${rowNumber}: Nota de ingreso no encontrada`);
                         return;
                     }
 
                     const numeroActa = await generarNumeroActa();
-                    
+
                     const acta = actaRecepcionRepo.create({
                         numero_acta: numeroActa,
                         nota_ingreso_id: notaIngreso.id,
@@ -348,7 +348,7 @@ async function actasRecepcionRoutes(fastify, options) {
                     });
 
                     await actaRecepcionDetalleRepo.save(detalle);
-                    
+
                     generadas++;
 
                 } catch (error) {
@@ -368,6 +368,44 @@ async function actasRecepcionRoutes(fastify, options) {
                 error: error.message
             });
         }
+    });
+
+    // GET /api/actas-recepcion/exportar - Exportar a Excel
+    fastify.get('/api/actas-recepcion/exportar', async (request, reply) => {
+        const actas = await actaRecepcionRepo
+            .createQueryBuilder('acta')
+            .leftJoinAndSelect('acta.notaIngreso', 'notaIngreso')
+            .orderBy('acta.created_at', 'DESC')
+            .getMany();
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Actas de Recepción');
+
+        worksheet.columns = [
+            { header: 'Número Acta', key: 'numero_acta', width: 15 },
+            { header: 'Número Nota Ingreso', key: 'numero_nota', width: 20 },
+            { header: 'Fecha Recepción', key: 'fecha', width: 15 },
+            { header: 'Estado', key: 'estado', width: 15 },
+            { header: 'Observaciones', key: 'observaciones', width: 40 },
+            { header: 'Aprobado', key: 'aprobado', width: 10 }
+        ];
+
+        actas.forEach(acta => {
+            worksheet.addRow({
+                numero_acta: acta.numero_acta,
+                numero_nota: acta.notaIngreso ? acta.notaIngreso.numero_ingreso : 'N/A',
+                fecha: new Date(acta.fecha_recepcion).toLocaleDateString('es-AR'),
+                estado: acta.estado,
+                observaciones: acta.observaciones,
+                aprobado: acta.aprobado ? 'Sí' : 'No'
+            });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        reply.header('Content-Disposition', 'attachment; filename=actas-recepcion.xlsx');
+        return reply.send(buffer);
     });
 
     // GET /api/actas-recepcion/plantilla/descargar - Descargar plantilla

@@ -15,35 +15,36 @@ module.exports = new EntitySchema({
         },
         numero_lote: {
             type: 'varchar',
-            length: 50,
+            length: 100,
             nullable: false
-        },
-        fecha_produccion: {
-            type: 'date',
-            nullable: true
         },
         fecha_vencimiento: {
             type: 'date',
             nullable: true
         },
-        stock_lote: {
+        cantidad_ingresada: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            default: 0
+            nullable: false
         },
-        proveedor: {
-            type: 'varchar',
-            length: 100,
+        cantidad_disponible: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: false
+        },
+        nota_ingreso_id: {
+            type: 'int',
             nullable: true
-        },
-        activo: {
-            type: 'boolean',
-            default: true
         },
         created_at: {
             type: 'timestamp',
             createDate: true
+        },
+        updated_at: {
+            type: 'timestamp',
+            updateDate: true
         }
     },
     relations: {
@@ -52,6 +53,13 @@ module.exports = new EntitySchema({
             target: 'Producto',
             joinColumn: {
                 name: 'producto_id'
+            }
+        },
+        notaIngreso: {
+            type: 'many-to-one',
+            target: 'NotaIngreso',
+            joinColumn: {
+                name: 'nota_ingreso_id'
             }
         }
     }
