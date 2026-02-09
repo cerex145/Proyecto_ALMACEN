@@ -5,20 +5,25 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 
+import RegistrarIngreso from './RegistrarIngreso';
+
 export const HistorialIngresosFuncional = () => {
     const [ingresos, setIngresos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filtro, setFiltro] = useState('');
+    const [showForm, setShowForm] = useState(false);
 
     useEffect(() => {
-        cargarIngresos();
-    }, [filtro]);
+        if (!showForm) {
+            cargarIngresos();
+        }
+    }, [filtro, showForm]);
 
     const cargarIngresos = async () => {
         try {
             setLoading(true);
             const params = filtro ? `?numero_ingreso=${filtro}` : '';
-            const response = await fetch(`http://localhost:3000/api/ingresos${params}`);
+            const response = await fetch(`http://127.0.0.1:3000/api/ingresos${params}`);
             const result = await response.json();
             setIngresos(result.data || []);
         } catch (error) {
@@ -29,7 +34,7 @@ export const HistorialIngresosFuncional = () => {
     };
 
     const handleDownloadPDF = (id) => {
-        window.open(`http://localhost:3000/api/ingresos/${id}/pdf`, '_blank');
+        window.open(`http://127.0.0.1:3000/api/ingresos/${id}/pdf`, '_blank');
     };
 
     const getEstadoBadge = (estado) => {
@@ -41,6 +46,17 @@ export const HistorialIngresosFuncional = () => {
         }
     };
 
+    if (showForm) {
+        return (
+            <div className="max-w-7xl mx-auto">
+                <RegistrarIngreso
+                    onCancel={() => setShowForm(false)}
+                    onSuccess={() => setShowForm(false)}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -48,6 +64,9 @@ export const HistorialIngresosFuncional = () => {
                     <h1 className="text-2xl font-bold text-slate-800">📋 Historial de Ingresos</h1>
                     <p className="text-slate-500">Consulta y descarga de notas de ingreso</p>
                 </div>
+                <Button onClick={() => setShowForm(true)} className="bg-purple-600 hover:bg-purple-700 text-white">
+                    + Nuevo Ingreso
+                </Button>
             </div>
 
             <Card className="p-6">
@@ -85,12 +104,12 @@ export const HistorialIngresosFuncional = () => {
                             {ingresos.map(ingreso => (
                                 <TableRow key={ingreso.id}>
                                     <TableCell><span className="font-semibold text-slate-700">{ingreso.numero_ingreso}</span></TableCell>
-                                    <TableCell>{new Date(ingreso.fecha_ingreso).toLocaleDateString()}</TableCell>
-                                    <TableCell>{ingreso.proveedor?.nombre || 'N/A'}</TableCell>
-                                    <TableCell>{ingreso.responsable?.usuario || 'N/A'}</TableCell>
+                                    <TableCell>{new Date(ingreso.fecha).toLocaleDateString()}</TableCell>
+                                    <TableCell>{ingreso.proveedor || 'N/A'}</TableCell>
+                                    <TableCell>{ingreso.responsable_id || 'N/A'}</TableCell>
                                     <TableCell>{getEstadoBadge(ingreso.estado)}</TableCell>
                                     <TableCell>
-                                        <span className="text-xs text-slate-500">{ingreso.detalle_ingreso?.length || 0} items</span>
+                                        <span className="text-xs text-slate-500">{ingreso.nota_ingreso_detalles?.length || 0} items</span>
                                     </TableCell>
                                     <TableCell>
                                         <Button

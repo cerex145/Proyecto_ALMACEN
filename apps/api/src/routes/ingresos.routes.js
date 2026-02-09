@@ -482,6 +482,138 @@ async function ingresosRoutes(fastify, options) {
         reply.header('Content-Disposition', 'attachment; filename=plantilla-ingreso.xlsx');
         return reply.send(buffer);
     });
+
+
+    // GET /api/ingresos/:id/pdf - Generar PDF de nota de ingreso
+    fastify.get('/api/ingresos/:id/pdf', async (request, reply) => {
+        const { id } = request.params;
+        const {
+            generatePDF
+        } = require('../services/pdf.service');
+
+        const nota = await notaIngresoRepo.findOneBy({
+            id: Number(id)
+        });
+        if (!nota) {
+            return reply.status(404).send({
+                success: false,
+                error: 'Nota de ingreso no encontrada'
+            });
+        }
+
+        const detalles = await notaIngresoDetalleRepo.find({
+            where: {
+                nota_ingreso_id: Number(id)
+            },
+            relations: ['producto']
+        });
+
+        // Definición del documento
+        const docDefinition = {
+            pageSize: 'A4',
+            pageMargins: [40, 60, 40, 60],
+            header: {
+                text: 'SISTEMA DE GESTIÓN DE ALMACÉN',
+                alignment: 'center',
+                margin: [0, 20, 0, 0],
+                fontSize: 16,
+                bold: true
+            },
+            content: [{
+                text: `NOTA DE INGRESO N° ${nota.numero_ingreso}`,
+                style: 'header',
+                alignment: 'center',
+                margin: [0, 20, 0, 20]
+            },
+            {
+                columns: [{
+                    width: '*',
+                    text: [
+                        { text: 'Fecha: ', bold: true },
+                        new Date(nota.fecha).toLocaleDateString('es-PE'),
+                        '\n',
+                        { text: 'Proveedor: ', bold: true },
+                        nota.proveedor || 'N/A',
+                        '\n',
+                        { text: 'Estado: ', bold: true },
+                        nota.estado
+                    ]
+                },
+                {
+                    width: '*',
+                    text: [
+                        { text: 'Responsable ID: ', bold: true },
+                        nota.responsable_id || 'N/A',
+                        '\n',
+                        { text: 'Observaciones: ', bold: true },
+                        nota.observaciones || 'Ninguna'
+                    ]
+                }
+                ]
+            },
+            {
+                text: 'Detalle de Productos',
+                style: 'subheader',
+                margin: [0, 20, 0, 10]
+            },
+            {
+                table: {
+                    headerRows: 1,
+                    widths: ['auto', '*', 'auto', 'auto', 'auto', 'auto'],
+                    body: [
+                        [
+                            { text: 'Código', style: 'tableHeader' },
+                            { text: 'Producto', style: 'tableHeader' },
+                            { text: 'Lote', style: 'tableHeader' },
+                            { text: 'Vencimiento', style: 'tableHeader' },
+                            { text: 'Cant.', style: 'tableHeader' },
+                            { text: 'Precio', style: 'tableHeader' }
+                        ],
+                        ...detalles.map(d => [
+                            d.producto?.codigo || 'N/A',
+                            d.producto?.descripcion || 'N/A',
+                            d.lote_numero,
+                            d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
+                            d.cantidad,
+                            d.precio_unitario || '-'
+                        ])
+                    ]
+                },
+                layout: 'lightHorizontalLines'
+            },
+            {
+                text: '\n\n',
+            },
+            {
+                columns: [
+                    { text: '______________________\nEntregado por', alignment: 'center' },
+                    { text: '______________________\nRecibido por', alignment: 'center' }
+                ],
+                margin: [0, 50, 0, 0]
+            }
+            ],
+            styles: {
+                header: { fontSize: 18, bold: true },
+                subheader: { fontSize: 14, bold: true },
+                tableHeader: { bold: true, fontSize: 12, color: 'black', fillColor: '#eeeeee' }
+            }
+        };
+
+        try {
+            const buffer = await generatePDF(docDefinition);
+            reply.header('Content-Type', 'application/pdf');
+            reply.header('Content-Disposition', `inline; filename=ingreso-${nota.numero_ingreso}.pdf`);
+            return reply.send(buffer);
+        } catch (error) {
+            console.error('Error generando PDF:', error);
+            return reply.status(500).send({
+                success: false,
+                error: 'Error al generar el PDF'
+            });
+        }
+    });
+
 }
 
 module.exports = ingresosRoutes;
+

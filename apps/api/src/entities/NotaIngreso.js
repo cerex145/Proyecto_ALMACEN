@@ -45,5 +45,17 @@ module.exports = new EntitySchema({
             type: 'timestamp',
             updateDate: true
         }
+    },
+    relations: {
+        responsable: {
+            type: 'many-to-one',
+            target: 'Usuario',
+            joinColumn: { name: 'responsable_id' }
+        },
+        detalles: {
+            type: 'one-to-many',
+            target: 'NotaIngresoDetalle',
+            inverseSide: 'nota_ingreso'
+        }
     }
 });

@@ -44,5 +44,22 @@ module.exports = new EntitySchema({
             type: 'timestamp',
             updateDate: true
         }
+    },
+    relations: {
+        cliente: {
+            type: 'many-to-one',
+            target: 'Cliente',
+            joinColumn: { name: 'cliente_id' }
+        },
+        responsable: {
+            type: 'many-to-one',
+            target: 'Usuario',
+            joinColumn: { name: 'responsable_id' }
+        },
+        detalles: {
+            type: 'one-to-many',
+            target: 'NotaSalidaDetalle',
+            inverseSide: 'nota_salida'
+        }
     }
 });
