@@ -57,11 +57,11 @@ module.exports = new EntitySchema({
         }
     },
     relations: {
-        responsable: {
-            type: 'many-to-one',
-            target: 'Usuario',
-            joinColumn: { name: 'responsable_id' }
-        },
+        // responsable: {
+        //     type: 'many-to-one',
+        //     target: 'Usuario',
+        //     joinColumn: { name: 'responsable_id' }
+        // },
         detalles: {
             type: 'one-to-many',
             target: 'NotaIngresoDetalle',

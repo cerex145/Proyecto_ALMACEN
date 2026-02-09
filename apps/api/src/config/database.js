@@ -9,8 +9,8 @@ const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   entities: [__dirname + '/../entities/*.js'],
-  synchronize: process.env.DB_SYNC === 'true', // Use migrations in production; enable only when you want auto-sync
-  logging: process.env.DB_LOGGING === 'true', // Enable logging explicitly via env
+  synchronize: true, // TEMPORARY: Enable to sync schema
+  logging: true, // TEMPORARY: Enable logging to debug SQL
   charset: 'utf8mb4',
 });
 
