@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS `notas_ingreso` (
   `numero_ingreso` VARCHAR(50) NOT NULL,
   `fecha` DATE NOT NULL,
   `proveedor` VARCHAR(200) NOT NULL,
+  `tipo_documento` ENUM('Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra') NULL,
+  `numero_documento` VARCHAR(100) NULL,
   `responsable_id` INT NULL,
   `estado` ENUM('REGISTRADA', 'PARCIALMENTE_RECIBIDA', 'RECIBIDA_CONFORME', 'RECIBIDA_OBSERVADA') NOT NULL DEFAULT 'REGISTRADA',
   `observaciones` TEXT NULL,

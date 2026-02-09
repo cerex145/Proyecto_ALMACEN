@@ -103,6 +103,8 @@ async function ingresosRoutes(fastify, options) {
         const {
             fecha,
             proveedor,
+            tipo_documento,
+            numero_documento,
             responsable_id,
             detalles,
             observaciones
@@ -163,6 +165,8 @@ async function ingresosRoutes(fastify, options) {
                 numero_ingreso: numeroIngreso,
                 fecha,
                 proveedor,
+                tipo_documento: tipo_documento || null,
+                numero_documento: numero_documento || null,
                 responsable_id,
                 observaciones,
                 estado: 'REGISTRADA'
@@ -250,7 +254,7 @@ async function ingresosRoutes(fastify, options) {
     // PUT /api/ingresos/:id - Actualizar nota de ingreso
     fastify.put('/api/ingresos/:id', async (request, reply) => {
         const { id } = request.params;
-        const { fecha, proveedor, estado, observaciones } = request.body;
+        const { fecha, proveedor, tipo_documento, numero_documento, estado, observaciones } = request.body;
 
         const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
         if (!nota) {
@@ -259,6 +263,8 @@ async function ingresosRoutes(fastify, options) {
 
         if (fecha) nota.fecha = fecha;
         if (proveedor) nota.proveedor = proveedor;
+        if (tipo_documento !== undefined) nota.tipo_documento = tipo_documento || null;
+        if (numero_documento !== undefined) nota.numero_documento = numero_documento || null;
         if (estado) nota.estado = estado;
         if (observaciones) nota.observaciones = observaciones;
 

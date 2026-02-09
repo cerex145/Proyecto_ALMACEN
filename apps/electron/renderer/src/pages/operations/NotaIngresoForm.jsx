@@ -12,6 +12,8 @@ export const NotaIngresoForm = () => {
             proveedor: '',
             fecha: new Date().toISOString().split('T')[0],
             numero_ingreso: '',
+            tipo_documento: '',
+            numero_documento: '',
             responsable_id: 1,
             detalles: []
         }
@@ -25,6 +27,12 @@ export const NotaIngresoForm = () => {
     const [products, setProducts] = useState([]);
     const [clients, setClients] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState('');
+    const [selectedClient, setSelectedClient] = useState('');
+    const [clienteRuc, setClienteRuc] = useState('');
+    const [lotesDisponibles, setLotesDisponibles] = useState([]);
+    const [selectedLoteOption, setSelectedLoteOption] = useState('');
+    const [loteManual, setLoteManual] = useState('');
+    const [lastIngresoId, setLastIngresoId] = useState(null);
 
     // Calculator State
     const [cajas, setCajas] = useState('');
@@ -39,6 +47,35 @@ export const NotaIngresoForm = () => {
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        if (!selectedClient) {
+            setClienteRuc('');
+            return;
+        }
+        const client = clients.find(c => String(c.id) === String(selectedClient));
+        if (client) {
+            setClienteRuc(client.cuit || '');
+        }
+    }, [selectedClient, clients]);
+
+    useEffect(() => {
+        if (!selectedProduct) {
+            setLotesDisponibles([]);
+            setSelectedLoteOption('');
+            setLoteManual('');
+            return;
+        }
+        const product = products.find(p => p.id === parseInt(selectedProduct));
+        const lotes = Array.isArray(product?.lotes)
+            ? product.lotes.map(l => l.numero_lote || l.lote_numero).filter(Boolean)
+            : (product?.lote ? [product.lote] : []);
+        setLotesDisponibles(lotes);
+        const first = lotes[0] || '';
+        setSelectedLoteOption(first);
+        setLoteManual('');
+        setLote(first);
+    }, [selectedProduct, products]);
 
     const loadData = async () => {
         // Load Products
@@ -74,7 +111,8 @@ export const NotaIngresoForm = () => {
     }, [cajas, unidadesCaja, fraccion]);
 
     const handleAddProduct = () => {
-        if (!selectedProduct || !quantity || !lote || !vencimiento) {
+        const loteFinal = selectedLoteOption === 'OTRO' ? loteManual : selectedLoteOption;
+        if (!selectedProduct || !quantity || !loteFinal || !vencimiento) {
             alert("Por favor complete todos los datos del producto (Lote y Vencimiento son obligatorios)");
             return;
         }
@@ -98,7 +136,7 @@ export const NotaIngresoForm = () => {
             producto_id: parseInt(selectedProduct),
             producto_nombre: product.descripcion,
             cantidad: parseFloat(quantity),
-            lote_numero: lote,
+            lote_numero: loteFinal,
             fecha_vencimiento: vencimiento,
             precio_unitario: parseFloat(precio || 0),
             // Optional: Store calc details if needed later
@@ -112,6 +150,8 @@ export const NotaIngresoForm = () => {
         setFraccion('');
         setQuantity(0);
         setLote('');
+        setSelectedLoteOption('');
+        setLoteManual('');
         setVencimiento('');
         setPrecio('');
     };
@@ -121,11 +161,14 @@ export const NotaIngresoForm = () => {
             const payload = {
                 fecha: data.fecha,
                 proveedor: data.proveedor,
+                tipo_documento: data.tipo_documento || null,
+                numero_documento: data.numero_documento || null,
                 responsable_id: data.responsable_id,
                 detalles: data.detalles,
                 observaciones: data.numero_ingreso ? `Documento: ${data.numero_ingreso}` : undefined
             };
-            await operationService.createIngreso(payload);
+            const created = await operationService.createIngreso(payload);
+            setLastIngresoId(created?.id || null);
             alert('✅ Nota de Ingreso registrada con éxito');
             reset();
             setQuantity(0);
@@ -134,6 +177,45 @@ export const NotaIngresoForm = () => {
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
             alert(`❌ Error al registrar ingreso. ${mensaje}`);
         }
+    };
+
+    const handleExportPdf = async () => {
+        if (!lastIngresoId) {
+            alert('Primero guarda la nota de ingreso para exportar PDF.');
+            return;
+        }
+        try {
+            const response = await fetch(`http://localhost:3000/api/ingresos/${lastIngresoId}/pdf`);
+            if (!response.ok) throw new Error('No se pudo generar el PDF');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `nota-ingreso-${lastIngresoId}.pdf`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error(error);
+            alert('Error al exportar PDF');
+        }
+    };
+
+    const handleLimpiar = () => {
+        reset();
+        setSelectedProduct('');
+        setSelectedClient('');
+        setClienteRuc('');
+        setLotesDisponibles([]);
+        setSelectedLoteOption('');
+        setLoteManual('');
+        setLote('');
+        setVencimiento('');
+        setPrecio('');
+        setCajas('');
+        setUnidadesCaja('');
+        setFraccion('');
+        setQuantity(0);
+        setLastIngresoId(null);
     };
 
     return (
@@ -148,26 +230,116 @@ export const NotaIngresoForm = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                 {/* Datos Generales */}
                 <Card className="p-6">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Información del Documento</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Ingreso Individual</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
-                            <label className="label-premium">Número de Nota/Factura (opcional)</label>
+                            <label className="label-premium">Código de Cliente</label>
+                            <select
+                                value={selectedClient}
+                                onChange={(e) => {
+                                    setSelectedClient(e.target.value);
+                                    const client = clients.find(c => String(c.id) === String(e.target.value));
+                                    if (client) {
+                                        const value = client.razon_social || '';
+                                        const eventLike = { target: { name: 'proveedor', value } };
+                                        register('proveedor').onChange(eventLike);
+                                    }
+                                }}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione cliente...</option>
+                                {clients.map(client => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.codigo} - {client.razon_social}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-premium">RUC de Cliente</label>
+                            <input value={clienteRuc} readOnly className="input-premium" />
+                        </div>
+                        <div>
+                            <label className="label-premium">Producto</label>
+                            <select
+                                value={selectedProduct}
+                                onChange={(e) => setSelectedProduct(e.target.value)}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione producto...</option>
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-premium">Lote</label>
+                            <select
+                                value={selectedLoteOption}
+                                onChange={(e) => {
+                                    setSelectedLoteOption(e.target.value);
+                                    setLote(e.target.value);
+                                }}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione lote...</option>
+                                {lotesDisponibles.map((l) => (
+                                    <option key={l} value={l}>{l}</option>
+                                ))}
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        {selectedLoteOption === 'OTRO' && (
+                            <div>
+                                <label className="label-premium">Agregue lote manualmente</label>
+                                <input
+                                    value={loteManual}
+                                    onChange={(e) => setLoteManual(e.target.value)}
+                                    type="text"
+                                    className="input-premium"
+                                    placeholder="Lote..."
+                                />
+                            </div>
+                        )}
+                    </div>
+                </Card>
+
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos del Documento</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="label-premium">Tipo de Documento</label>
+                            <select
+                                {...register('tipo_documento')}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione...</option>
+                                <option value="Factura">Factura</option>
+                                <option value="Invoice">Invoice</option>
+                                <option value="Boleta de Venta">Boleta de Venta</option>
+                                <option value="Guía de Remisión Remitente">Guía de Remisión Remitente</option>
+                                <option value="Guía de Remisión Transportista">Guía de Remisión Transportista</option>
+                                <option value="Orden de Compra">Orden de Compra</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-premium">Número de Documento</label>
                             <input
-                                {...register('numero_ingreso')}
+                                {...register('numero_documento')}
                                 type="text"
                                 className="input-premium"
                                 placeholder="Ej: F001-000213"
                             />
                         </div>
                         <div>
-                            <label className="label-premium">Fecha de Emisión</label>
+                            <label className="label-premium">Fecha de Ingreso</label>
                             <input
                                 {...register('fecha', { required: 'Requerido' })}
                                 type="date"
                                 className="input-premium"
                             />
                         </div>
-                        <div className="md:col-span-2">
+                        <div className="md:col-span-3">
                             <label className="label-premium">Proveedor</label>
                             <select
                                 {...register('proveedor', { required: 'Requerido' })}
@@ -204,14 +376,33 @@ export const NotaIngresoForm = () => {
                         </div>
                         <div className="md:col-span-2">
                             <label className="label-premium">Lote</label>
-                            <input
-                                value={lote}
-                                onChange={(e) => setLote(e.target.value)}
-                                type="text"
+                            <select
+                                value={selectedLoteOption}
+                                onChange={(e) => {
+                                    setSelectedLoteOption(e.target.value);
+                                    setLote(e.target.value);
+                                }}
                                 className="input-premium"
-                                placeholder="Lote..."
-                            />
+                            >
+                                <option value="">Seleccione lote...</option>
+                                {lotesDisponibles.map((l) => (
+                                    <option key={l} value={l}>{l}</option>
+                                ))}
+                                <option value="OTRO">Otro</option>
+                            </select>
                         </div>
+                        {selectedLoteOption === 'OTRO' && (
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Agregue lote manualmente</label>
+                                <input
+                                    value={loteManual}
+                                    onChange={(e) => setLoteManual(e.target.value)}
+                                    type="text"
+                                    className="input-premium"
+                                    placeholder="Lote..."
+                                />
+                            </div>
+                        )}
                         <div className="md:col-span-2">
                             <label className="label-premium">Vencimiento</label>
                             <input
@@ -309,7 +500,21 @@ export const NotaIngresoForm = () => {
                     </table>
                 </div>
 
-                <div className="flex justify-end pt-4 border-t border-slate-200">
+                <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleLimpiar}
+                    >
+                        Limpiar
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleExportPdf}
+                    >
+                        Exportar a PDF
+                    </Button>
                     <Button
                         type="submit"
                         isLoading={isSubmitting}
@@ -317,7 +522,7 @@ export const NotaIngresoForm = () => {
                         size="lg"
                         className="btn-gradient-primary shadow-lg shadow-blue-500/30"
                     >
-                        Guardar Ingreso
+                        Ingresar
                     </Button>
                 </div>
             </form>

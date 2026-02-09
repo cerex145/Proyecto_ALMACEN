@@ -24,6 +24,16 @@ module.exports = new EntitySchema({
             length: 200,
             nullable: false
         },
+        tipo_documento: {
+            type: 'enum',
+            enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'],
+            nullable: true
+        },
+        numero_documento: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
         responsable_id: {
             type: 'int',
             nullable: true

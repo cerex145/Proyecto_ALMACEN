@@ -66,20 +66,41 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
 
     const onSubmit = async (data) => {
         try {
-            if (!data.proveedor) {
-                data.proveedor = data.razon_social || '';
-            }
+            const payload = {
+                ...data,
+                proveedor: data.proveedor || data.razon_social || '',
+                tipo_documento: data.tipo_documento || null,
+                numero_documento: data.numero_documento || null,
+                registro_sanitario: data.registro_sanitario || null,
+                lote: data.lote || null,
+                fabricante: data.fabricante || null,
+                procedencia: data.procedencia || null,
+                fecha_vencimiento: data.fecha_vencimiento || null,
+                unidad: data.unidad || 'UND',
+                unidad_otro: data.unidad === 'OTRO' ? (data.unidad_otro || null) : null,
+                um: data.um ? data.um : null,
+                temperatura_min_c: data.temperatura_min_c !== '' && data.temperatura_min_c !== undefined ? Number(data.temperatura_min_c) : null,
+                temperatura_max_c: data.temperatura_max_c !== '' && data.temperatura_max_c !== undefined ? Number(data.temperatura_max_c) : null,
+                cantidad_bultos: data.cantidad_bultos !== '' && data.cantidad_bultos !== undefined ? Number(data.cantidad_bultos) : 0,
+                cantidad_cajas: data.cantidad_cajas !== '' && data.cantidad_cajas !== undefined ? Number(data.cantidad_cajas) : 0,
+                cantidad_por_caja: data.cantidad_por_caja !== '' && data.cantidad_por_caja !== undefined ? Number(data.cantidad_por_caja) : 0,
+                cantidad_fraccion: data.cantidad_fraccion !== '' && data.cantidad_fraccion !== undefined ? Number(data.cantidad_fraccion) : 0,
+                cantidad_total: data.cantidad_total !== '' && data.cantidad_total !== undefined ? Number(data.cantidad_total) : 0,
+                observaciones: data.observaciones || null,
+                stock_actual: data.stock_actual !== '' && data.stock_actual !== undefined ? Number(data.stock_actual) : 0
+            };
             // If editing
             if (productToEdit?.id) {
-                await productService.updateProduct(productToEdit.id, data);
+                await productService.updateProduct(productToEdit.id, payload);
             } else {
-                await productService.createProduct(data);
+                await productService.createProduct(payload);
             }
             alert('Producto guardado correctamente');
             if (onSuccess) onSuccess();
         } catch (error) {
             console.error(error);
-            alert('Error al guardar producto');
+            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Error al guardar producto';
+            alert(mensaje);
         }
     };
 
