@@ -18,7 +18,8 @@ const ProductoSchema = {
         unidad: { type: 'string', nullable: true },
         unidad_otro: { type: 'string', nullable: true },
         um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'], nullable: true },
-        temperatura_c: { type: 'number', nullable: true },
+        temperatura_min_c: { type: 'number', nullable: true },
+        temperatura_max_c: { type: 'number', nullable: true },
         cantidad_bultos: { type: 'number' },
         cantidad_cajas: { type: 'number' },
         cantidad_por_caja: { type: 'number' },
@@ -215,7 +216,8 @@ async function productoRoutes(fastify, options) {
                     unidad: { type: 'string' },
                     unidad_otro: { type: 'string' },
                     um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'] },
-                    temperatura_c: { type: 'number' },
+                    temperatura_min_c: { type: 'number' },
+                    temperatura_max_c: { type: 'number' },
                     cantidad_bultos: { type: 'number' },
                     cantidad_cajas: { type: 'number' },
                     cantidad_por_caja: { type: 'number' },
@@ -246,7 +248,8 @@ async function productoRoutes(fastify, options) {
             unidad,
             unidad_otro,
             um,
-            temperatura_c,
+            temperatura_min_c,
+            temperatura_max_c,
             cantidad_bultos,
             cantidad_cajas,
             cantidad_por_caja,
@@ -297,7 +300,8 @@ async function productoRoutes(fastify, options) {
             unidad: unidad || 'UND',
             unidad_otro: unidad_otro || null,
             um: um !== undefined ? um : null,
-            temperatura_c: temperatura_c !== undefined ? temperatura_c : null,
+            temperatura_min_c: temperatura_min_c !== undefined ? temperatura_min_c : null,
+            temperatura_max_c: temperatura_max_c !== undefined ? temperatura_max_c : null,
             cantidad_bultos: cantidad_bultos || 0,
             cantidad_cajas: cantidad_cajas || 0,
             cantidad_por_caja: cantidad_por_caja || 0,
@@ -344,7 +348,8 @@ async function productoRoutes(fastify, options) {
                     unidad: { type: 'string' },
                     unidad_otro: { type: 'string' },
                     um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'] },
-                    temperatura_c: { type: 'number' },
+                    temperatura_min_c: { type: 'number' },
+                    temperatura_max_c: { type: 'number' },
                     cantidad_bultos: { type: 'number' },
                     cantidad_cajas: { type: 'number' },
                     cantidad_por_caja: { type: 'number' },
@@ -377,7 +382,8 @@ async function productoRoutes(fastify, options) {
             unidad,
             unidad_otro,
             um,
-            temperatura_c,
+            temperatura_min_c,
+            temperatura_max_c,
             cantidad_bultos,
             cantidad_cajas,
             cantidad_por_caja,
@@ -425,7 +431,8 @@ async function productoRoutes(fastify, options) {
         if (unidad !== undefined) producto.unidad = unidad || 'UND';
         if (unidad_otro !== undefined) producto.unidad_otro = unidad_otro || null;
         if (um !== undefined) producto.um = um || null;
-        if (temperatura_c !== undefined) producto.temperatura_c = temperatura_c;
+        if (temperatura_min_c !== undefined) producto.temperatura_min_c = temperatura_min_c;
+        if (temperatura_max_c !== undefined) producto.temperatura_max_c = temperatura_max_c;
         if (cantidad_bultos !== undefined) producto.cantidad_bultos = cantidad_bultos;
         if (cantidad_cajas !== undefined) producto.cantidad_cajas = cantidad_cajas;
         if (cantidad_por_caja !== undefined) producto.cantidad_por_caja = cantidad_por_caja;

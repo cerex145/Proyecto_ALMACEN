@@ -79,7 +79,13 @@ module.exports = new EntitySchema({
             enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'],
             nullable: true
         },
-        temperatura_c: {
+        temperatura_min_c: {
+            type: 'decimal',
+            precision: 6,
+            scale: 2,
+            nullable: true
+        },
+        temperatura_max_c: {
             type: 'decimal',
             precision: 6,
             scale: 2,
