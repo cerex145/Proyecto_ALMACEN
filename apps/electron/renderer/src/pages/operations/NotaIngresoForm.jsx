@@ -40,6 +40,11 @@ export const NotaIngresoForm = () => {
     const [fraccion, setFraccion] = useState('');
     const [quantity, setQuantity] = useState(0);
 
+    const [bultos, setBultos] = useState('');
+    const [um, setUm] = useState('');
+    const [fabricante, setFabricante] = useState('');
+    const [temperatura, setTemperatura] = useState('');
+
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
     const [precio, setPrecio] = useState('');
@@ -134,13 +139,22 @@ export const NotaIngresoForm = () => {
 
         append({
             producto_id: parseInt(selectedProduct),
+            producto_codigo: product?.codigo || '',
             producto_nombre: product.descripcion,
             cantidad: parseFloat(quantity),
             lote_numero: loteFinal,
             fecha_vencimiento: vencimiento,
+            um: um || '',
+            fabricante: fabricante || '',
+            temperatura: temperatura || '',
+            cantidad_bultos: parseFloat(bultos || 0),
+            cantidad_cajas: parseFloat(cajas || 0),
+            cantidad_por_caja: parseFloat(unidadesCaja || 0),
+            cantidad_fraccion: parseFloat(fraccion || 0),
+            cantidad_total: parseFloat(quantity || 0),
             precio_unitario: parseFloat(precio || 0),
             // Optional: Store calc details if needed later
-            detalle_calculo: `Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
+            detalle_calculo: `Bultos: ${bultos || 0}, Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
         });
 
         // Reset fields
@@ -149,6 +163,10 @@ export const NotaIngresoForm = () => {
         setUnidadesCaja('');
         setFraccion('');
         setQuantity(0);
+        setBultos('');
+        setUm('');
+        setFabricante('');
+        setTemperatura('');
         setLote('');
         setSelectedLoteOption('');
         setLoteManual('');
@@ -185,15 +203,11 @@ export const NotaIngresoForm = () => {
             return;
         }
         try {
-            const response = await fetch(`http://localhost:3000/api/ingresos/${lastIngresoId}/pdf`);
-            if (!response.ok) throw new Error('No se pudo generar el PDF');
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `nota-ingreso-${lastIngresoId}.pdf`;
-            a.click();
-            window.URL.revokeObjectURL(url);
+            const pdfUrl = `http://localhost:3000/api/ingresos/${lastIngresoId}/pdf`;
+            const opened = window.open(pdfUrl, '_blank');
+            if (!opened) {
+                alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
+            }
         } catch (error) {
             console.error(error);
             alert('Error al exportar PDF');
@@ -215,6 +229,10 @@ export const NotaIngresoForm = () => {
         setUnidadesCaja('');
         setFraccion('');
         setQuantity(0);
+        setBultos('');
+        setUm('');
+        setFabricante('');
+        setTemperatura('');
         setLastIngresoId(null);
     };
 
@@ -359,6 +377,21 @@ export const NotaIngresoForm = () => {
 
                 {/* Agregar Productos */}
                 <Card className="p-6 bg-blue-50/50 border-blue-100">
+                    <div className="flex flex-wrap gap-2 justify-end mb-4">
+                        <Button type="button" onClick={handleAddProduct} variant="primary">
+                            Ingresar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => fields.length > 0 && remove(fields.length - 1)}>
+                            Eliminar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={handleLimpiar}>
+                            Limpiar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={handleExportPdf}>
+                            PDF
+                        </Button>
+                    </div>
+
                     <h3 className="text-lg font-semibold text-blue-800 mb-4">Detalle de Productos (Lotes)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                         <div className="md:col-span-4">
@@ -413,8 +446,56 @@ export const NotaIngresoForm = () => {
                             />
                         </div>
 
+                        <div className="md:col-span-2">
+                            <label className="label-premium">UM</label>
+                            <select
+                                value={um}
+                                onChange={(e) => setUm(e.target.value)}
+                                className="input-premium"
+                            >
+                                <option value=""></option>
+                                <option value="AMP">AMP</option>
+                                <option value="FRS">FRS</option>
+                                <option value="BLT">BLT</option>
+                                <option value="TUB">TUB</option>
+                                <option value="SOB">SOB</option>
+                                <option value="CJ">CJ</option>
+                                <option value="KG">KG</option>
+                                <option value="G">G</option>
+                            </select>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Fabricante</label>
+                            <input
+                                value={fabricante}
+                                onChange={(e) => setFabricante(e.target.value)}
+                                type="text"
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Temp. (°C)</label>
+                            <input
+                                value={temperatura}
+                                onChange={(e) => setTemperatura(e.target.value)}
+                                type="number"
+                                step="0.01"
+                                className="input-premium"
+                            />
+                        </div>
+
                         {/* Calculator Section */}
-                        <div className="md:col-span-4 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                        <div className="md:col-span-6 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
+                                <input
+                                    type="number"
+                                    value={bultos}
+                                    onChange={(e) => setBultos(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
                                 <input
@@ -436,7 +517,7 @@ export const NotaIngresoForm = () => {
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase">Saldoa</label>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
                                 <input
                                     type="number"
                                     value={fraccion}
@@ -464,20 +545,36 @@ export const NotaIngresoForm = () => {
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
                             <tr>
+                                <th className="px-6 py-4">Cod.Producto</th>
                                 <th className="px-6 py-4">Producto</th>
                                 <th className="px-6 py-4">Lote</th>
                                 <th className="px-6 py-4">Vencimiento</th>
-                                <th className="px-6 py-4 text-right">Cantidad</th>
+                                <th className="px-6 py-4">UM</th>
+                                <th className="px-6 py-4">Fabri.</th>
+                                <th className="px-6 py-4">Temp.</th>
+                                <th className="px-6 py-4">Cant.Bulto</th>
+                                <th className="px-6 py-4">Cant.Cajas</th>
+                                <th className="px-6 py-4">Cant.x Caja</th>
+                                <th className="px-6 py-4">Cant.Fracción</th>
+                                <th className="px-6 py-4 text-right">Cant.Total</th>
                                 <th className="px-6 py-4 text-center">Acción</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {fields.map((field, index) => (
                                 <tr key={field.id} className="hover:bg-slate-50/50">
+                                    <td className="px-6 py-3 font-mono text-xs">{field.producto_codigo || '-'}</td>
                                     <td className="px-6 py-3 font-medium text-slate-700">{field.producto_nombre}</td>
                                     <td className="px-6 py-3">{field.lote_numero}</td>
                                     <td className="px-6 py-3">{field.fecha_vencimiento}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-blue-600">{field.cantidad}</td>
+                                    <td className="px-6 py-3">{field.um || '-'}</td>
+                                    <td className="px-6 py-3">{field.fabricante || '-'}</td>
+                                    <td className="px-6 py-3">{field.temperatura || '-'}</td>
+                                    <td className="px-6 py-3">{field.cantidad_bultos ?? 0}</td>
+                                    <td className="px-6 py-3">{field.cantidad_cajas ?? 0}</td>
+                                    <td className="px-6 py-3">{field.cantidad_por_caja ?? 0}</td>
+                                    <td className="px-6 py-3">{field.cantidad_fraccion ?? 0}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-blue-600">{field.cantidad_total ?? field.cantidad}</td>
                                     <td className="px-6 py-3 text-center">
                                         <button
                                             type="button"
@@ -491,7 +588,7 @@ export const NotaIngresoForm = () => {
                             ))}
                             {fields.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-slate-400 italic">
+                                    <td colSpan={13} className="px-6 py-8 text-center text-slate-400 italic">
                                         No hay productos agregados a la nota.
                                     </td>
                                 </tr>

@@ -216,72 +216,83 @@ async function reportesRoutes(fastify, options) {
     fastify.get('/api/reportes/exportar', async (request, reply) => {
         const { tipo = 'completo' } = request.query;
 
-        const workbook = new ExcelJS.Workbook();
+        const safeDate = (value) => {
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return '-';
+            return d.toLocaleDateString('es-PE');
+        };
 
-        // Hoja 1: Stock Actual
-        const wsStock = workbook.addWorksheet('Stock Actual');
-        wsStock.columns = [
-            { header: 'Código', key: 'codigo', width: 15 },
-            { header: 'Descripción', key: 'descripcion', width: 40 },
-            { header: 'Proveedor', key: 'proveedor', width: 20 },
-            { header: 'Categoría', key: 'categoria', width: 15 },
-            { header: 'Stock', key: 'stock', width: 12 }
-        ];
+        try {
+            const workbook = new ExcelJS.Workbook();
 
-        const productos = await productoRepo.find({ where: { activo: true } });
-        productos.forEach(p => {
-            wsStock.addRow({
-                codigo: p.codigo,
-                descripcion: p.descripcion,
-                proveedor: p.proveedor || 'N/A',
-                categoria: p.categoria_ingreso || 'N/A',
-                stock: Number(p.stock_actual)
+            // Hoja 1: Stock Actual
+            const wsStock = workbook.addWorksheet('Stock Actual');
+            wsStock.columns = [
+                { header: 'Código', key: 'codigo', width: 15 },
+                { header: 'Descripción', key: 'descripcion', width: 40 },
+                { header: 'Proveedor', key: 'proveedor', width: 20 },
+                { header: 'Categoría', key: 'categoria', width: 15 },
+                { header: 'Stock', key: 'stock', width: 12 }
+            ];
+
+            const productos = await productoRepo.find({ where: { activo: true } });
+            productos.forEach(p => {
+                wsStock.addRow({
+                    codigo: p.codigo,
+                    descripcion: p.descripcion,
+                    proveedor: p.proveedor || 'N/A',
+                    categoria: p.categoria_ingreso || 'N/A',
+                    stock: Number(p.stock_actual)
+                });
             });
-        });
 
-        // Hoja 2: Ingresos
-        const wsIngresos = workbook.addWorksheet('Ingresos');
-        wsIngresos.columns = [
-            { header: 'Número', key: 'numero', width: 15 },
-            { header: 'Fecha', key: 'fecha', width: 15 },
-            { header: 'Proveedor', key: 'proveedor', width: 30 },
-            { header: 'Estado', key: 'estado', width: 20 }
-        ];
+            // Hoja 2: Ingresos
+            const wsIngresos = workbook.addWorksheet('Ingresos');
+            wsIngresos.columns = [
+                { header: 'Número', key: 'numero', width: 15 },
+                { header: 'Fecha', key: 'fecha', width: 15 },
+                { header: 'Proveedor', key: 'proveedor', width: 30 },
+                { header: 'Estado', key: 'estado', width: 20 }
+            ];
 
-        const ingresos = await notaIngresoRepo.find();
-        ingresos.forEach(i => {
-            wsIngresos.addRow({
-                numero: i.numero_ingreso,
-                fecha: new Date(i.fecha).toLocaleDateString('es-AR'),
-                proveedor: i.proveedor,
-                estado: i.estado
+            const ingresos = await notaIngresoRepo.find();
+            ingresos.forEach(i => {
+                wsIngresos.addRow({
+                    numero: i.numero_ingreso,
+                    fecha: safeDate(i.fecha),
+                    proveedor: i.proveedor,
+                    estado: i.estado
+                });
             });
-        });
 
-        // Hoja 3: Salidas
-        const wsSalidas = workbook.addWorksheet('Salidas');
-        wsSalidas.columns = [
-            { header: 'Número', key: 'numero', width: 15 },
-            { header: 'Fecha', key: 'fecha', width: 15 },
-            { header: 'Cliente', key: 'cliente', width: 30 },
-            { header: 'Estado', key: 'estado', width: 20 }
-        ];
+            // Hoja 3: Salidas
+            const wsSalidas = workbook.addWorksheet('Salidas');
+            wsSalidas.columns = [
+                { header: 'Número', key: 'numero', width: 15 },
+                { header: 'Fecha', key: 'fecha', width: 15 },
+                { header: 'Cliente', key: 'cliente', width: 30 },
+                { header: 'Estado', key: 'estado', width: 20 }
+            ];
 
-        const salidas = await notaSalidaRepo.find({ relations: ['cliente'] });
-        salidas.forEach(s => {
-            wsSalidas.addRow({
-                numero: s.numero_salida,
-                fecha: new Date(s.fecha).toLocaleDateString('es-AR'),
-                cliente: s.cliente?.razon_social || 'N/A',
-                estado: s.estado
+            const salidas = await notaSalidaRepo.find({ relations: ['cliente'] });
+            salidas.forEach(s => {
+                wsSalidas.addRow({
+                    numero: s.numero_salida,
+                    fecha: safeDate(s.fecha),
+                    cliente: s.cliente?.razon_social || 'N/A',
+                    estado: s.estado
+                });
             });
-        });
 
-        const buffer = await workbook.xlsx.writeBuffer();
+            const buffer = await workbook.xlsx.writeBuffer();
 
-        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        reply.header('Content-Disposition', `attachment; filename=reporte-${new Date().toISOString().split('T')[0]}.xlsx`);
-        return reply.send(buffer);
+            reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            reply.header('Content-Disposition', `attachment; filename=reporte-${new Date().toISOString().split('T')[0]}.xlsx`);
+            return reply.send(buffer);
+        } catch (error) {
+            fastify.log.error(error);
+            return reply.status(500).send({ success: false, error: 'Error al exportar Excel' });
+        }
     });
     // GET /api/reportes/exportar/pdf - Exportar reporte PDF
     const { generatePDF } = require('../services/pdf.service');

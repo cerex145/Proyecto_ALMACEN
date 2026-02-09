@@ -23,6 +23,24 @@ module.exports = new EntitySchema({
             type: 'date',
             nullable: false
         },
+        tipo_documento: {
+            type: 'varchar',
+            length: 50,
+            nullable: true
+        },
+        numero_documento: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        fecha_ingreso: {
+            type: 'date',
+            nullable: true
+        },
+        motivo_salida: {
+            type: 'text',
+            nullable: true
+        },
         responsable_id: {
             type: 'int',
             nullable: true

@@ -119,7 +119,11 @@ async function salidasRoutes(fastify, options) {
             fecha,
             responsable_id,
             detalles,
-            observaciones
+            observaciones,
+            tipo_documento,
+            numero_documento,
+            fecha_ingreso,
+            motivo_salida
         } = request.body;
 
         // Validaciones
@@ -188,6 +192,10 @@ async function salidasRoutes(fastify, options) {
                 cliente_id: Number(cliente_id),
                 fecha,
                 responsable_id,
+                tipo_documento: tipo_documento || null,
+                numero_documento: numero_documento || null,
+                fecha_ingreso: fecha_ingreso || null,
+                motivo_salida: motivo_salida || null,
                 observaciones,
                 estado: 'REGISTRADA'
             });

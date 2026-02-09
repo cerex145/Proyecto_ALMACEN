@@ -514,95 +514,184 @@ async function ingresosRoutes(fastify, options) {
             relations: ['producto']
         });
 
+        const totalBultos = detalles.reduce((acc, d) => acc + Number(d.cant_bulto || 0), 0);
+        const totalCajas = detalles.reduce((acc, d) => acc + Number(d.cant_caja || 0), 0);
+        const totalFraccion = detalles.reduce((acc, d) => acc + Number(d.cant_fraccion || 0), 0);
+        const totalUnidades = detalles.reduce((acc, d) => acc + Number(d.cantidad || 0), 0);
+
         // Definición del documento
         const docDefinition = {
             pageSize: 'A4',
-            pageMargins: [40, 60, 40, 60],
-            header: {
-                text: 'SISTEMA DE GESTIÓN DE ALMACÉN',
-                alignment: 'center',
-                margin: [0, 20, 0, 0],
-                fontSize: 16,
-                bold: true
-            },
-            content: [{
-                text: `NOTA DE INGRESO N° ${nota.numero_ingreso}`,
-                style: 'header',
-                alignment: 'center',
-                margin: [0, 20, 0, 20]
-            },
-            {
-                columns: [{
-                    width: '*',
-                    text: [
-                        { text: 'Fecha: ', bold: true },
-                        new Date(nota.fecha).toLocaleDateString('es-PE'),
-                        '\n',
-                        { text: 'Proveedor: ', bold: true },
-                        nota.proveedor || 'N/A',
-                        '\n',
-                        { text: 'Estado: ', bold: true },
-                        nota.estado
-                    ]
+            pageMargins: [25, 35, 25, 35],
+            content: [
+                {
+                    table: {
+                        widths: ['auto', '*', 'auto'],
+                        body: [
+                            [
+                                { text: 'AGUPAL PERU', style: 'brand' },
+                                { text: 'NOTA DE INGRESO', style: 'title', alignment: 'center' },
+                                { text: `N° ${nota.numero_ingreso || '-'}`, style: 'titleRight', alignment: 'right' }
+                            ]
+                        ]
+                    },
+                    layout: 'headerBox',
+                    margin: [0, 0, 0, 6]
                 },
                 {
-                    width: '*',
-                    text: [
-                        { text: 'Responsable ID: ', bold: true },
-                        nota.responsable_id || 'N/A',
-                        '\n',
-                        { text: 'Observaciones: ', bold: true },
-                        nota.observaciones || 'Ninguna'
-                    ]
-                }
-                ]
-            },
-            {
-                text: 'Detalle de Productos',
-                style: 'subheader',
-                margin: [0, 20, 0, 10]
-            },
-            {
-                table: {
-                    headerRows: 1,
-                    widths: ['auto', '*', 'auto', 'auto', 'auto', 'auto'],
-                    body: [
-                        [
-                            { text: 'Código', style: 'tableHeader' },
-                            { text: 'Producto', style: 'tableHeader' },
-                            { text: 'Lote', style: 'tableHeader' },
-                            { text: 'Vencimiento', style: 'tableHeader' },
-                            { text: 'Cant.', style: 'tableHeader' },
-                            { text: 'Precio', style: 'tableHeader' }
-                        ],
-                        ...detalles.map(d => [
-                            d.producto?.codigo || 'N/A',
-                            d.producto?.descripcion || 'N/A',
-                            d.lote_numero,
-                            d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
-                            d.cantidad,
-                            d.precio_unitario || '-'
-                        ])
-                    ]
+                    columns: [
+                        {
+                            width: '*',
+                            table: {
+                                body: [
+                                    [
+                                        { text: 'Razón Social', style: 'label' },
+                                        { text: nota.cliente?.razon_social || nota.proveedor || '-', style: 'value' }
+                                    ],
+                                    [
+                                        { text: 'Código Cliente', style: 'label' },
+                                        { text: nota.cliente?.codigo || nota.cliente_id || '-', style: 'value' }
+                                    ],
+                                    [
+                                        { text: 'RUC', style: 'label' },
+                                        { text: nota.cliente?.cuit || '-', style: 'value' }
+                                    ],
+                                    [
+                                        { text: 'Dirección', style: 'label' },
+                                        { text: nota.cliente?.direccion || '-', style: 'value' }
+                                    ]
+                                ]
+                            },
+                            layout: 'noBorders'
+                        },
+                        {
+                            width: 180,
+                            table: {
+                                body: [
+                                    [
+                                        { text: 'Fecha de Ingreso', style: 'label' },
+                                        { text: new Date(nota.fecha).toLocaleDateString('es-PE'), style: 'value' }
+                                    ]
+                                ]
+                            },
+                            layout: 'noBorders'
+                        }
+                    ],
+                    margin: [0, 0, 0, 8]
                 },
-                layout: 'lightHorizontalLines'
-            },
-            {
-                text: '\n\n',
-            },
-            {
-                columns: [
-                    { text: '______________________\nEntregado por', alignment: 'center' },
-                    { text: '______________________\nRecibido por', alignment: 'center' }
-                ],
-                margin: [0, 50, 0, 0]
-            }
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: [18, 70, '*', 55, 55, 30, 50, 40, 45, 50, 50, 50, 50],
+                        body: [
+                            [
+                                { text: 'Item', style: 'tableHeader' },
+                                { text: 'Cod.Producto', style: 'tableHeader' },
+                                { text: 'Producto', style: 'tableHeader' },
+                                { text: 'Lote', style: 'tableHeader' },
+                                { text: 'Fecha Vcto', style: 'tableHeader' },
+                                { text: 'UM', style: 'tableHeader' },
+                                { text: 'Fabri.', style: 'tableHeader' },
+                                { text: 'Temp.', style: 'tableHeader' },
+                                { text: 'Cant.Bulto', style: 'tableHeader' },
+                                { text: 'Cant.Cajas', style: 'tableHeader' },
+                                { text: 'Cant.x Caja', style: 'tableHeader' },
+                                { text: 'Cant.Fracción', style: 'tableHeader' },
+                                { text: 'Cant.Total', style: 'tableHeader' }
+                            ],
+                            ...detalles.map((d, idx) => [
+                                String(idx + 1),
+                                d.producto?.codigo || '-',
+                                d.producto?.descripcion || '-',
+                                d.lote_numero || '-',
+                                d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
+                                d.producto?.um || '-',
+                                d.producto?.fabricante || '-',
+                                (d.producto?.temperatura_min_c != null || d.producto?.temperatura_max_c != null)
+                                    ? `${d.producto?.temperatura_min_c ?? '-'} a ${d.producto?.temperatura_max_c ?? '-'}`
+                                    : '-',
+                                d.cant_bulto ?? '-',
+                                d.cant_caja ?? '-',
+                                d.cant_por_caja ?? '-',
+                                d.cant_fraccion ?? '-',
+                                d.cantidad ?? '-'
+                            ])
+                        ]
+                    },
+                    layout: 'lightHorizontalLines',
+                    margin: [0, 0, 0, 8]
+                },
+                {
+                    columns: [
+                        {
+                            width: '*',
+                            stack: [
+                                { text: 'Motivo de la Salida:', style: 'label' },
+                                { text: nota.motivo || '-', style: 'value', margin: [0, 2, 0, 8] },
+                                { text: 'Observaciones:', style: 'label' },
+                                { text: nota.observaciones || '-', style: 'value' }
+                            ]
+                        },
+                        {
+                            width: 220,
+                            table: {
+                                body: [
+                                    [
+                                        { text: 'BULTOS', style: 'label' },
+                                        { text: String(totalBultos), style: 'value' }
+                                    ],
+                                    [
+                                        { text: 'PALETS', style: 'label' },
+                                        { text: '-', style: 'value' }
+                                    ],
+                                    [
+                                        { text: 'FRACCIONES', style: 'label' },
+                                        { text: String(totalFraccion), style: 'value' }
+                                    ],
+                                    [
+                                        { text: 'CANTIDAD TOTAL DE UNIDADES', style: 'label' },
+                                        { text: String(totalUnidades), style: 'value' }
+                                    ]
+                                ]
+                            },
+                            layout: 'lightHorizontalLines'
+                        }
+                    ],
+                    margin: [0, 0, 0, 8]
+                },
+                {
+                    text: 'LEYENDA: Cant. Bulto: N° de cajas selladas (empaque primario)\nCant. Cajas: N° de unidades por caja sellada\nCant. x Caja: N° de unidades por caja sellada\nCant. Fracción: Unidades sueltas\nCant. Total: Total de unidades = (Bultos x Cajas x xCaja) + saldo',
+                    style: 'legend',
+                    margin: [0, 2, 0, 8]
+                },
+                {
+                    text: `Son ${totalUnidades} unidades en total`,
+                    style: 'legend'
+                },
+                {
+                    columns: [
+                        { text: '________________________\nJefe de Almacén', alignment: 'center' },
+                        { text: '________________________\nVerificado por', alignment: 'center' }
+                    ],
+                    margin: [0, 25, 0, 0]
+                }
             ],
             styles: {
-                header: { fontSize: 18, bold: true },
-                subheader: { fontSize: 14, bold: true },
-                tableHeader: { bold: true, fontSize: 12, color: 'black', fillColor: '#eeeeee' }
-            }
+                brand: { fontSize: 10, bold: true, color: '#0b6aa2' },
+                title: { fontSize: 11, bold: true },
+                titleRight: { fontSize: 9, bold: true },
+                label: { fontSize: 7, bold: true },
+                value: { fontSize: 7 },
+                tableHeader: { fontSize: 7, bold: true, fillColor: '#eeeeee' },
+                legend: { fontSize: 6 }
+            },
+            footer: (currentPage, pageCount) => ({
+                text: `Página ${currentPage} de ${pageCount}`,
+                alignment: 'right',
+                margin: [0, 0, 30, 0],
+                fontSize: 6
+            }),
+            background: []
         };
 
         try {

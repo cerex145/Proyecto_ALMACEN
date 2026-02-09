@@ -2,44 +2,117 @@ import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
-import { Button } from '../../components/common/Button';
-import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
-import { SelectorLote } from './SelectorLote';
-import { Card } from '../../components/common/Card';
-
 import { clientesService } from '../../services/clientes.service';
+import { Button } from '../../components/common/Button';
+import { Card } from '../../components/common/Card';
+import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 
 export const NotaSalidaForm = () => {
-    const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    const { register, control, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             cliente_id: '',
             fecha: new Date().toISOString().split('T')[0],
-            responsable_id: 1, // Mock ID
+            responsable_id: 1,
+            tipo_documento: '',
+            numero_documento: '',
+            fecha_ingreso: new Date().toISOString().split('T')[0],
+            motivo_salida: '',
             detalles: []
         }
     });
 
     const { fields, append, remove } = useFieldArray({
         control,
-        name: "detalles"
+        name: 'detalles'
     });
 
     const [products, setProducts] = useState([]);
     const [clients, setClients] = useState([]);
+    const [selectedClient, setSelectedClient] = useState('');
+    const [clienteRuc, setClienteRuc] = useState('');
+    const [clienteCodigo, setClienteCodigo] = useState('');
 
-    // Temporary state for adding a product line
-    const [addItem, setAddItem] = useState({
-        productId: '',
-        quantity: '',
-        selections: {} // { loteId: quantity }
-    });
+    const [selectedProduct, setSelectedProduct] = useState('');
+    const [lotesDisponibles, setLotesDisponibles] = useState([]);
+    const [selectedLoteId, setSelectedLoteId] = useState('');
+    const [fechaVencimiento, setFechaVencimiento] = useState('');
+
+    const [um, setUm] = useState('');
+    const [bultos, setBultos] = useState('');
+    const [cajas, setCajas] = useState('');
+    const [unidadesCaja, setUnidadesCaja] = useState('');
+    const [fraccion, setFraccion] = useState('');
+    const [cantidadTotal, setCantidadTotal] = useState(0);
+    const [lastSalidaId, setLastSalidaId] = useState(null);
 
     useEffect(() => {
         loadData();
     }, []);
 
+    useEffect(() => {
+        if (!selectedClient) {
+            setClienteRuc('');
+            setClienteCodigo('');
+            setValue('cliente_id', '', { shouldValidate: true });
+            return;
+        }
+        const client = clients.find(c => String(c.id) === String(selectedClient));
+        if (client) {
+            setClienteRuc(client.cuit || '');
+            setClienteCodigo(client.codigo || '');
+        }
+        setValue('cliente_id', selectedClient, { shouldValidate: true });
+    }, [selectedClient, clients, setValue]);
+
+    useEffect(() => {
+        if (!selectedProduct) {
+            setLotesDisponibles([]);
+            setSelectedLoteId('');
+            setFechaVencimiento('');
+            setUm('');
+            return;
+        }
+        const product = products.find(p => p.id === parseInt(selectedProduct));
+        setUm(product?.um || '');
+        const loadLotes = async () => {
+            try {
+                const lotes = await productService.getLotesByProduct(selectedProduct);
+                const activos = Array.isArray(lotes)
+                    ? lotes.filter(l => Number(l.cantidad_disponible) > 0)
+                    : [];
+                setLotesDisponibles(activos);
+                const first = activos[0]?.id ? String(activos[0].id) : '';
+                setSelectedLoteId(first);
+                setFechaVencimiento(activos[0]?.fecha_vencimiento || '');
+            } catch (error) {
+                console.error('Error cargando lotes:', error);
+                setLotesDisponibles([]);
+                setSelectedLoteId('');
+                setFechaVencimiento('');
+            }
+        };
+        loadLotes();
+    }, [selectedProduct, products]);
+
+    useEffect(() => {
+        if (!selectedLoteId) {
+            setFechaVencimiento('');
+            return;
+        }
+        const lote = lotesDisponibles.find(l => String(l.id) === String(selectedLoteId));
+        setFechaVencimiento(lote?.fecha_vencimiento || '');
+    }, [selectedLoteId, lotesDisponibles]);
+
+    useEffect(() => {
+        const b = parseFloat(bultos) || 0;
+        const c = parseFloat(cajas) || 0;
+        const u = parseFloat(unidadesCaja) || 0;
+        const f = parseFloat(fraccion) || 0;
+        const total = (b * c * u) + f;
+        setCantidadTotal(total);
+    }, [bultos, cajas, unidadesCaja, fraccion]);
+
     const loadData = async () => {
-        // Load Products
         try {
             const productsResponse = await productService.getProducts();
             setProducts(Array.isArray(productsResponse) ? productsResponse : []);
@@ -48,7 +121,6 @@ export const NotaSalidaForm = () => {
             alert('Error al cargar lista de Productos.');
         }
 
-        // Load Clients
         try {
             const clientsResponse = await clientesService.listar();
             const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
@@ -59,74 +131,174 @@ export const NotaSalidaForm = () => {
         }
     };
 
-    const handleLoteSelection = (selections) => {
-        setAddItem(prev => ({ ...prev, selections }));
-    };
-
     const handleAddLine = () => {
-        const { productId, quantity, selections } = addItem;
-        if (!productId || !quantity || Object.keys(selections).length === 0) {
-            alert("Complete la selección de producto y lotes");
+        if (!selectedProduct || !selectedLoteId || Number(cantidadTotal) <= 0) {
+            alert('Complete producto, lote y cantidad total');
             return;
         }
 
-        const totalSelected = Object.values(selections).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
-        if (Math.abs(totalSelected - parseFloat(quantity)) > 0.01) {
-            alert("La suma de lotes seleccionados debe ser igual a la cantidad total");
-            return;
-        }
+        const product = products.find(p => p.id === parseInt(selectedProduct));
+        const lote = lotesDisponibles.find(l => String(l.id) === String(selectedLoteId));
 
-        const product = products.find(p => p.id === parseInt(productId));
-
-        // Create a flat list of details (one row per LOT used)
-        Object.entries(selections).forEach(([loteId, qty]) => {
-            if (qty > 0) {
-                append({
-                    producto_id: parseInt(productId),
-                    producto_nombre: product.descripcion,
-                    lote_id: parseInt(loteId),
-                    cantidad: parseFloat(qty)
-                });
-            }
+        append({
+            producto_id: parseInt(selectedProduct),
+            producto_codigo: product?.codigo || '',
+            producto_nombre: product?.descripcion || '',
+            lote_id: parseInt(selectedLoteId),
+            lote_numero: lote?.numero_lote || '',
+            fecha_vencimiento: lote?.fecha_vencimiento || '',
+            um: um || '',
+            cant_bulto: parseFloat(bultos || 0),
+            cant_caja: parseFloat(cajas || 0),
+            cant_por_caja: parseFloat(unidadesCaja || 0),
+            cant_fraccion: parseFloat(fraccion || 0),
+            cant_total: parseFloat(cantidadTotal || 0),
+            cantidad: parseFloat(cantidadTotal || 0)
         });
 
-        // Reset add form
-        setAddItem({ productId: '', quantity: '', selections: {} });
+        setSelectedProduct('');
+        setSelectedLoteId('');
+        setFechaVencimiento('');
+        setUm('');
+        setBultos('');
+        setCajas('');
+        setUnidadesCaja('');
+        setFraccion('');
+        setCantidadTotal(0);
     };
 
     const onSubmit = async (data) => {
-        // Data contains 'detalles' which is already a list of { producto_id, lote_id, cantidad }
-        // This matches the backend expectation for bulk insert or transaction
         try {
-            await operationService.createSalida(data);
-            alert('Salida registrada correctamente');
-            reset();
+            const payload = {
+                cliente_id: data.cliente_id,
+                fecha: data.fecha,
+                responsable_id: data.responsable_id,
+                tipo_documento: data.tipo_documento || null,
+                numero_documento: data.numero_documento || null,
+                fecha_ingreso: data.fecha_ingreso || null,
+                motivo_salida: data.motivo_salida || null,
+                detalles: data.detalles
+            };
+            const created = await operationService.createSalida(payload);
+            setLastSalidaId(created?.id || null);
+            alert('✅ Nota de salida registrada correctamente');
+            handleLimpiar();
         } catch (error) {
             console.error(error);
-            alert('Error al registrar salida');
+            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
+            alert(`❌ Error al registrar salida. ${mensaje}`);
         }
     };
 
+    const handleExportPdf = async () => {
+        if (!lastSalidaId) {
+            alert('Primero guarda la nota de salida para exportar PDF.');
+            return;
+        }
+        try {
+            const pdfUrl = `http://localhost:3000/api/salidas/${lastSalidaId}/pdf`;
+            const opened = window.open(pdfUrl, '_blank');
+            if (!opened) {
+                alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al exportar PDF');
+        }
+    };
+
+    const handleLimpiar = () => {
+        reset();
+        setSelectedClient('');
+        setClienteRuc('');
+        setClienteCodigo('');
+        setSelectedProduct('');
+        setLotesDisponibles([]);
+        setSelectedLoteId('');
+        setFechaVencimiento('');
+        setUm('');
+        setBultos('');
+        setCajas('');
+        setUnidadesCaja('');
+        setFraccion('');
+        setCantidadTotal(0);
+        setLastSalidaId(null);
+    };
+
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Registro de Salida</h2>
-                    <p className="text-slate-500">Venta, Traslado o Baja de Mercadería</p>
+                    <h2 className="text-2xl font-bold text-slate-800">Registro de Nota de Salida</h2>
+                    <p className="text-slate-500">Controles de Nota de Salida</p>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                 <Card className="p-6">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos Generales</h3>
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Nota de Salida Individual</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
-                            <label className="label-premium">Número de Salida</label>
+                            <label className="label-premium">Código de Cliente</label>
+                            <select
+                                value={selectedClient}
+                                onChange={(e) => {
+                                    setSelectedClient(e.target.value);
+                                    const client = clients.find(c => String(c.id) === String(e.target.value));
+                                    if (client) {
+                                        setClienteRuc(client.cuit || '');
+                                        setClienteCodigo(client.codigo || '');
+                                    }
+                                }}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione cliente...</option>
+                                {clients.map(client => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.codigo} - {client.razon_social}
+                                    </option>
+                                ))}
+                            </select>
+                            <input type="hidden" {...register('cliente_id', { required: 'Requerido' })} />
+                            {errors.cliente_id && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div>
+                            <label className="label-premium">RUC de Cliente</label>
+                            <input value={clienteRuc} readOnly className="input-premium" />
+                        </div>
+                        <div>
+                            <label className="label-premium">Código Cliente</label>
+                            <input value={clienteCodigo} readOnly className="input-premium" />
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos del Documento</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="label-premium">Tipo de Documento</label>
                             <input
+                                {...register('tipo_documento')}
                                 type="text"
-                                className="input-premium bg-slate-50"
-                                placeholder="Se genera automáticamente"
-                                readOnly
+                                className="input-premium"
+                                placeholder="Guía..."
+                            />
+                        </div>
+                        <div>
+                            <label className="label-premium">Número de Documento</label>
+                            <input
+                                {...register('numero_documento')}
+                                type="text"
+                                className="input-premium"
+                            />
+                        </div>
+                        <div>
+                            <label className="label-premium">Fecha de Ingreso</label>
+                            <input
+                                {...register('fecha_ingreso')}
+                                type="date"
+                                className="input-premium"
                             />
                         </div>
                         <div>
@@ -137,113 +309,216 @@ export const NotaSalidaForm = () => {
                                 className="input-premium"
                             />
                         </div>
-                        <div>
-                            <label className="label-premium">Cliente / Destino</label>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Motivo de Salida</label>
+                            <input
+                                {...register('motivo_salida')}
+                                type="text"
+                                className="input-premium"
+                                placeholder="Motivo de salida"
+                            />
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-6 bg-blue-50/50 border-blue-100">
+                    <div className="flex flex-wrap gap-2 justify-end mb-4">
+                        <Button type="button" onClick={handleAddLine} variant="primary">
+                            Ingresar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={() => fields.length > 0 && remove(fields.length - 1)}>
+                            Eliminar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={handleLimpiar}>
+                            Limpiar
+                        </Button>
+                        <Button type="button" variant="secondary" onClick={handleExportPdf}>
+                            PDF
+                        </Button>
+                    </div>
+
+                    <h3 className="text-lg font-semibold text-blue-800 mb-4">Detalle de Productos (Lotes)</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div className="md:col-span-4">
+                            <label className="label-premium">Producto</label>
                             <select
-                                {...register('cliente_id', { required: 'Requerido' })}
+                                value={selectedProduct}
+                                onChange={(e) => setSelectedProduct(e.target.value)}
                                 className="input-premium"
                             >
-                                <option value="">Seleccione cliente...</option>
-                                {clients.map(client => (
-                                    <option key={client.id} value={client.id}>
-                                        {client.razon_social} (RUC: {client.cuit})
+                                <option value="">Seleccione producto...</option>
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Lote</label>
+                            <select
+                                value={selectedLoteId}
+                                onChange={(e) => setSelectedLoteId(e.target.value)}
+                                className="input-premium"
+                                disabled={!selectedProduct}
+                            >
+                                <option value="">Seleccione lote...</option>
+                                {lotesDisponibles.map(lote => (
+                                    <option key={lote.id} value={lote.id}>
+                                        {lote.numero_lote}
                                     </option>
                                 ))}
                             </select>
-                            {errors.cliente_id && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
-                    </div>
-                </Card>
-
-                {/* Add Product Section */}
-                <Card className="p-6 bg-orange-50/50 border-orange-100">
-                    <h4 className="text-lg font-semibold text-orange-800 mb-4">Selección de Producto y Lotes (FEFO)</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
                         <div className="md:col-span-2">
-                            <label className="label-premium">Producto</label>
-                            <select
-                                value={addItem.productId}
-                                onChange={(e) => setAddItem({ ...addItem, productId: e.target.value, selections: {} })}
-                                className="input-premium"
-                            >
-                                <option value="">Seleccione...</option>
-                                {products.map(p => (
-                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion} (Stock: {p.stock_actual})</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="label-premium">Cantidad Total</label>
+                            <label className="label-premium">Vencimiento</label>
                             <input
-                                type="number"
-                                value={addItem.quantity}
-                                onChange={(e) => setAddItem({ ...addItem, quantity: e.target.value })}
+                                type="date"
+                                className="input-premium bg-slate-50"
+                                value={fechaVencimiento ? new Date(fechaVencimiento).toISOString().split('T')[0] : ''}
+                                readOnly
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">UM</label>
+                            <input
+                                type="text"
                                 className="input-premium"
-                                placeholder="0"
+                                value={um}
+                                onChange={(e) => setUm(e.target.value)}
                             />
                         </div>
-                    </div>
 
-                    {/* Selector Component - Shows only when product & qty are present */}
-                    {addItem.productId && addItem.quantity > 0 && (
-                        <div className="bg-white p-4 rounded-lg border border-orange-200 shadow-sm mb-4">
-                            <SelectorLote
-                                productId={addItem.productId}
-                                quantityRequired={parseFloat(addItem.quantity)}
-                                onSelectionChange={handleLoteSelection}
-                            />
+                        <div className="md:col-span-6 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
+                                <input
+                                    type="number"
+                                    value={bultos}
+                                    onChange={(e) => setBultos(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
+                                <input
+                                    type="number"
+                                    value={cajas}
+                                    onChange={(e) => setCajas(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
+                                <input
+                                    type="number"
+                                    value={unidadesCaja}
+                                    onChange={(e) => setUnidadesCaja(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
+                                <input
+                                    type="number"
+                                    value={fraccion}
+                                    onChange={(e) => setFraccion(e.target.value)}
+                                    className="input-premium h-8 text-sm p-1"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="col-span-3 flex justify-between items-center pt-1 border-t border-slate-100 mt-1">
+                                <span className="text-xs text-slate-400 font-medium">Total Unidades:</span>
+                                <span className="font-bold text-blue-600 text-lg">{cantidadTotal}</span>
+                            </div>
                         </div>
-                    )}
 
-                    <div className="flex justify-end">
-                        <Button type="button" onClick={handleAddLine} disabled={!addItem.productId} variant="primary">
-                            + Agregar a la Lista
-                        </Button>
+                        <div className="md:col-span-12 flex justify-end">
+                            <Button type="button" onClick={handleAddLine} variant="primary" className="w-full md:w-auto">
+                                + Agregar Item
+                            </Button>
+                        </div>
                     </div>
                 </Card>
 
-                {/* List of items to save */}
                 <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>Producto</TableHeader>
-                                <TableHeader>Lote ID</TableHeader>
-                                <TableHeader>Cantidad</TableHeader>
-                                <TableHeader>Acción</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-4">Cod.Producto</th>
+                                <th className="px-6 py-4">Producto</th>
+                                <th className="px-6 py-4">Lote</th>
+                                <th className="px-6 py-4">Vencimiento</th>
+                                <th className="px-6 py-4">UM</th>
+                                <th className="px-6 py-4">Cant.Bulto</th>
+                                <th className="px-6 py-4">Cant.Cajas</th>
+                                <th className="px-6 py-4">Cant.x Caja</th>
+                                <th className="px-6 py-4">Cant.Fracción</th>
+                                <th className="px-6 py-4 text-right">Cant.Total</th>
+                                <th className="px-6 py-4 text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
                             {fields.map((field, index) => (
-                                <TableRow key={field.id}>
-                                    <TableCell>{field.producto_nombre}</TableCell>
-                                    <TableCell><span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded">{field.lote_id}</span></TableCell>
-                                    <TableCell><strong>{field.cantidad}</strong></TableCell>
-                                    <TableCell>
+                                <tr key={field.id} className="hover:bg-slate-50/50">
+                                    <td className="px-6 py-3 font-mono text-xs">{field.producto_codigo || '-'}</td>
+                                    <td className="px-6 py-3 font-medium text-slate-700">{field.producto_nombre}</td>
+                                    <td className="px-6 py-3">{field.lote_numero}</td>
+                                    <td className="px-6 py-3">
+                                        {field.fecha_vencimiento ? new Date(field.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
+                                    </td>
+                                    <td className="px-6 py-3">{field.um || '-'}</td>
+                                    <td className="px-6 py-3">{field.cant_bulto ?? 0}</td>
+                                    <td className="px-6 py-3">{field.cant_caja ?? 0}</td>
+                                    <td className="px-6 py-3">{field.cant_por_caja ?? 0}</td>
+                                    <td className="px-6 py-3">{field.cant_fraccion ?? 0}</td>
+                                    <td className="px-6 py-3 text-right font-bold text-blue-600">{field.cant_total ?? field.cantidad}</td>
+                                    <td className="px-6 py-3 text-center">
                                         <button
                                             type="button"
                                             onClick={() => remove(index)}
-                                            className="text-red-500 hover:text-red-700 font-medium text-xs"
+                                            className="text-red-500 hover:text-red-700 font-medium text-xs bg-red-50 px-2 py-1 rounded-lg"
                                         >
                                             Quitar
                                         </button>
-                                    </TableCell>
-                                </TableRow>
+                                    </td>
+                                </tr>
                             ))}
                             {fields.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-8 text-slate-400">
-                                        No hay productos seleccionados para salida.
-                                    </TableCell>
-                                </TableRow>
+                                <tr>
+                                    <td colSpan={11} className="px-6 py-8 text-center text-slate-400 italic">
+                                        No hay productos agregados a la nota.
+                                    </td>
+                                </tr>
                             )}
-                        </TableBody>
-                    </Table>
+                        </tbody>
+                    </table>
                 </div>
 
-                <div className="flex justify-end pt-4 border-t border-slate-200">
-                    <Button type="submit" isLoading={isSubmitting} disabled={fields.length === 0} size="lg" className="btn-gradient-primary">
-                        Procesar Salida
+                <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleLimpiar}
+                    >
+                        Limpiar
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleExportPdf}
+                    >
+                        Exportar a PDF
+                    </Button>
+                    <Button
+                        type="submit"
+                        isLoading={isSubmitting}
+                        disabled={fields.length === 0}
+                        size="lg"
+                        className="btn-gradient-primary shadow-lg shadow-blue-500/30"
+                    >
+                        Ingresar
                     </Button>
                 </div>
             </form>
