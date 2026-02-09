@@ -26,8 +26,7 @@ export const ClienteListForm = () => {
     const cargarClientes = async () => {
         try {
             setLoading(true);
-            // Simular carga desde API
-            const response = await fetch('http://localhost:3000/api/clientes');
+            const response = await fetch('http://localhost:3000/api/clientes?activo=true');
             const result = await response.json();
             setClientes(result.data || []);
         } catch (error) {
@@ -96,10 +95,15 @@ export const ClienteListForm = () => {
     const handleDelete = async (id) => {
         if (!window.confirm('¿Eliminar cliente?')) return;
         try {
-            await fetch(`http://localhost:3000/api/clientes/${id}`, { method: 'DELETE' });
+            const response = await fetch(`http://localhost:3000/api/clientes/${id}`, { method: 'DELETE' });
+            if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                throw new Error(result.error || 'No se pudo eliminar el cliente');
+            }
             cargarClientes();
         } catch (error) {
             console.error('Error:', error);
+            alert(error.message || 'Error al eliminar cliente');
         }
     };
 

@@ -16,7 +16,6 @@ import { ReportsPage } from './pages/reports/ReportsPage';
 import { AjustesPage } from './pages/admin/AjustesPage';
 
 // Layouts & Components
-import NotaIngresoLayout from './components/NotaIngresoLayout';
 import NotaSalidaLayout from './components/NotaSalidaLayout';
 import { MainLayout } from './components/layout/MainLayout';
 
@@ -31,7 +30,7 @@ function App() {
 
           {/* Operaciones */}
           <Route path="/ingresos/nuevo" element={<NotaIngresoForm />} />
-          <Route path="/ingresos/controles" element={<NotaIngresoLayout />} />
+          <Route path="/ingresos/controles" element={<NotaIngresoForm />} />
           <Route path="/ingresos/historial" element={<HistorialIngresosFuncional />} />
 
           <Route path="/salidas/nuevo" element={<NotaSalidaForm />} />

@@ -54,7 +54,7 @@ export const Sidebar = () => {
                 <MenuLink to="/clientes/registro" icon={<UsersIcon />} label="Clientes" />
 
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-8">Operaciones</div>
-                <MenuLink to="/ingresos/controles" icon={<ArrowDownIcon />} label="Ingresos" />
+                <MenuLink to="/ingresos/nuevo" icon={<ArrowDownIcon />} label="Nota de ingreso" />
                 <MenuLink to="/recepcion/acta" icon={<FileTextIcon />} label="Actas Recepción" />
                 <MenuLink to="/salidas/controles" icon={<ArrowUpIcon />} label="Salidas" />
                 <MenuLink to="/reportes" icon={<FileTextIcon />} label="Reportes" />
