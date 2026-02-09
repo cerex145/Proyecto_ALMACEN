@@ -31,6 +31,31 @@ module.exports = new EntitySchema({
             length: 300,
             nullable: true
         },
+        distrito: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        provincia: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        departamento: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        categoria_riesgo: {
+            type: 'enum',
+            enum: ['Bajo', 'Alto', 'No verificado'],
+            nullable: true
+        },
+        estado: {
+            type: 'enum',
+            enum: ['Activo', 'Inactivo', 'Potencial', 'Blokeado'],
+            default: 'Activo'
+        },
         telefono: {
             type: 'varchar',
             length: 50,

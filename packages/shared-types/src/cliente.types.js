@@ -11,6 +11,11 @@ module.exports = {
         razon_social: String,
         cuit: String,
         direccion: String,
+        distrito: String,
+        provincia: String,
+        departamento: String,
+        categoria_riesgo: String,
+        estado: String,
         telefono: String,
         email: String
     },
@@ -20,6 +25,11 @@ module.exports = {
         razon_social: String,
         cuit: String,
         direccion: String,
+        distrito: String,
+        provincia: String,
+        departamento: String,
+        categoria_riesgo: String,
+        estado: String,
         telefono: String,
         email: String,
         activo: Boolean

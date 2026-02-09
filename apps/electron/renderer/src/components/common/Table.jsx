@@ -1,17 +1,17 @@
 import React from 'react';
 
-export const Table = ({ children }) => {
+export const Table = ({ children, containerClassName = '', tableClassName = '' }) => {
     return (
-        <div className="w-full overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
-            <table className="w-full text-sm text-left text-slate-600">
+        <div className={`w-full overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white ${containerClassName}`}>
+            <table className={`w-full text-sm text-left text-slate-600 ${tableClassName}`}>
                 {children}
             </table>
         </div>
     );
 };
 
-export const TableHead = ({ children }) => (
-    <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-slate-200">
+export const TableHead = ({ children, className = '' }) => (
+    <thead className={`bg-slate-50 text-xs uppercase text-slate-500 font-semibold border-b border-slate-200 ${className}`}>
         {children}
     </thead>
 );
@@ -28,8 +28,8 @@ export const TableRow = ({ children }) => (
     </tr>
 );
 
-export const TableHeader = ({ children }) => (
-    <th className="px-6 py-4 tracking-wider">
+export const TableHeader = ({ children, className = '' }) => (
+    <th className={`px-6 py-4 tracking-wider ${className}`}>
         {children}
     </th>
 );

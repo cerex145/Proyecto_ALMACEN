@@ -7,8 +7,24 @@ const ProductoSchema = {
         codigo: { type: 'string' },
         descripcion: { type: 'string' },
         proveedor: { type: 'string', nullable: true },
+        tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
+        numero_documento: { type: 'string', nullable: true },
+        registro_sanitario: { type: 'string', nullable: true },
+        lote: { type: 'string', nullable: true },
+        fabricante: { type: 'string', nullable: true },
         categoria_ingreso: { type: 'string', nullable: true },
         procedencia: { type: 'string', nullable: true },
+        fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+        unidad: { type: 'string', nullable: true },
+        unidad_otro: { type: 'string', nullable: true },
+        um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'], nullable: true },
+        temperatura_c: { type: 'number', nullable: true },
+        cantidad_bultos: { type: 'number' },
+        cantidad_cajas: { type: 'number' },
+        cantidad_por_caja: { type: 'number' },
+        cantidad_fraccion: { type: 'number' },
+        cantidad_total: { type: 'number' },
+        observaciones: { type: 'string', nullable: true },
         stock_actual: { type: 'number' },
         activo: { type: 'boolean' },
         created_at: { type: 'string', format: 'date-time' },
@@ -188,8 +204,24 @@ async function productoRoutes(fastify, options) {
                     descripcion: { type: 'string' },
                     stock_actual: { type: 'number' },
                     proveedor: { type: 'string' },
+                    tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'] },
+                    numero_documento: { type: 'string' },
+                    registro_sanitario: { type: 'string' },
+                    lote: { type: 'string' },
+                    fabricante: { type: 'string' },
                     categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
-                    procedencia: { type: 'string' }
+                    procedencia: { type: 'string' },
+                    fecha_vencimiento: { type: 'string', format: 'date' },
+                    unidad: { type: 'string' },
+                    unidad_otro: { type: 'string' },
+                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'] },
+                    temperatura_c: { type: 'number' },
+                    cantidad_bultos: { type: 'number' },
+                    cantidad_cajas: { type: 'number' },
+                    cantidad_por_caja: { type: 'number' },
+                    cantidad_fraccion: { type: 'number' },
+                    cantidad_total: { type: 'number' },
+                    observaciones: { type: 'string' }
                 }
             },
             response: {
@@ -203,8 +235,24 @@ async function productoRoutes(fastify, options) {
             descripcion, 
             stock_actual,
             proveedor,
+            tipo_documento,
+            numero_documento,
+            registro_sanitario,
+            lote,
+            fabricante,
             categoria_ingreso,
-            procedencia
+            procedencia,
+            fecha_vencimiento,
+            unidad,
+            unidad_otro,
+            um,
+            temperatura_c,
+            cantidad_bultos,
+            cantidad_cajas,
+            cantidad_por_caja,
+            cantidad_fraccion,
+            cantidad_total,
+            observaciones
         } = request.body;
 
         // Validaciones
@@ -238,8 +286,24 @@ async function productoRoutes(fastify, options) {
             descripcion,
             stock_actual: stock_actual || 0,
             proveedor,
+            tipo_documento: tipo_documento || null,
+            numero_documento: numero_documento || null,
+            registro_sanitario: registro_sanitario || null,
+            lote: lote || null,
+            fabricante: fabricante || null,
             categoria_ingreso,
             procedencia,
+            fecha_vencimiento: fecha_vencimiento || null,
+            unidad: unidad || 'UND',
+            unidad_otro: unidad_otro || null,
+            um: um !== undefined ? um : null,
+            temperatura_c: temperatura_c !== undefined ? temperatura_c : null,
+            cantidad_bultos: cantidad_bultos || 0,
+            cantidad_cajas: cantidad_cajas || 0,
+            cantidad_por_caja: cantidad_por_caja || 0,
+            cantidad_fraccion: cantidad_fraccion || 0,
+            cantidad_total: cantidad_total || 0,
+            observaciones: observaciones || null,
             activo: true
         });
 
@@ -269,8 +333,24 @@ async function productoRoutes(fastify, options) {
                     descripcion: { type: 'string' },
                     activo: { type: 'boolean' },
                     proveedor: { type: 'string' },
+                    tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'] },
+                    numero_documento: { type: 'string' },
+                    registro_sanitario: { type: 'string' },
+                    lote: { type: 'string' },
+                    fabricante: { type: 'string' },
                     categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
-                    procedencia: { type: 'string' }
+                    procedencia: { type: 'string' },
+                    fecha_vencimiento: { type: 'string', format: 'date' },
+                    unidad: { type: 'string' },
+                    unidad_otro: { type: 'string' },
+                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'] },
+                    temperatura_c: { type: 'number' },
+                    cantidad_bultos: { type: 'number' },
+                    cantidad_cajas: { type: 'number' },
+                    cantidad_por_caja: { type: 'number' },
+                    cantidad_fraccion: { type: 'number' },
+                    cantidad_total: { type: 'number' },
+                    observaciones: { type: 'string' }
                 }
             },
             response: {
@@ -286,8 +366,24 @@ async function productoRoutes(fastify, options) {
             descripcion, 
             activo,
             proveedor,
+            tipo_documento,
+            numero_documento,
+            registro_sanitario,
+            lote,
+            fabricante,
             categoria_ingreso,
-            procedencia
+            procedencia,
+            fecha_vencimiento,
+            unidad,
+            unidad_otro,
+            um,
+            temperatura_c,
+            cantidad_bultos,
+            cantidad_cajas,
+            cantidad_por_caja,
+            cantidad_fraccion,
+            cantidad_total,
+            observaciones
         } = request.body;
 
         const producto = await productoRepo.findOneBy({ id: Number(id) });
@@ -318,8 +414,24 @@ async function productoRoutes(fastify, options) {
         producto.descripcion = descripcion;
         if (activo !== undefined) producto.activo = activo;
         if (proveedor) producto.proveedor = proveedor;
+        if (tipo_documento !== undefined) producto.tipo_documento = tipo_documento || null;
+        if (numero_documento !== undefined) producto.numero_documento = numero_documento || null;
+        if (registro_sanitario !== undefined) producto.registro_sanitario = registro_sanitario || null;
+        if (lote !== undefined) producto.lote = lote || null;
+        if (fabricante !== undefined) producto.fabricante = fabricante || null;
         if (categoria_ingreso) producto.categoria_ingreso = categoria_ingreso;
         if (procedencia) producto.procedencia = procedencia;
+        if (fecha_vencimiento !== undefined) producto.fecha_vencimiento = fecha_vencimiento || null;
+        if (unidad !== undefined) producto.unidad = unidad || 'UND';
+        if (unidad_otro !== undefined) producto.unidad_otro = unidad_otro || null;
+        if (um !== undefined) producto.um = um || null;
+        if (temperatura_c !== undefined) producto.temperatura_c = temperatura_c;
+        if (cantidad_bultos !== undefined) producto.cantidad_bultos = cantidad_bultos;
+        if (cantidad_cajas !== undefined) producto.cantidad_cajas = cantidad_cajas;
+        if (cantidad_por_caja !== undefined) producto.cantidad_por_caja = cantidad_por_caja;
+        if (cantidad_fraccion !== undefined) producto.cantidad_fraccion = cantidad_fraccion;
+        if (cantidad_total !== undefined) producto.cantidad_total = cantidad_total;
+        if (observaciones !== undefined) producto.observaciones = observaciones || null;
 
         await productoRepo.save(producto);
 

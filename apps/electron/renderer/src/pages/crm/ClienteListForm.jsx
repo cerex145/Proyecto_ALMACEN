@@ -13,11 +13,19 @@ export const ClienteListForm = () => {
         persona_contacto: '',
         email: '',
         telefono: '',
-        direccion: ''
+        direccion: '',
+        distrito: '',
+        provincia: '',
+        departamento: '',
+        categoria_riesgo: 'Bajo',
+        estado: 'Activo'
     });
     const [editId, setEditId] = useState(null);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+
+    const compactHeaderClass = 'px-2 py-2 text-[10px]';
+    const compactCellClass = 'px-2 py-2 text-[10px] whitespace-normal';
 
     useEffect(() => {
         cargarClientes();
@@ -53,10 +61,24 @@ export const ClienteListForm = () => {
                 ? `http://localhost:3000/api/clientes/${editId}`
                 : 'http://localhost:3000/api/clientes';
 
+            const payload = {
+                codigo: formData.numero_ruc || formData.razon_social,
+                razon_social: formData.razon_social,
+                cuit: formData.numero_ruc,
+                direccion: formData.direccion,
+                distrito: formData.distrito,
+                provincia: formData.provincia,
+                departamento: formData.departamento,
+                categoria_riesgo: formData.categoria_riesgo,
+                estado: formData.estado,
+                telefono: formData.telefono,
+                email: formData.email
+            };
+
             const response = await fetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
             if (response.ok) {
@@ -66,7 +88,12 @@ export const ClienteListForm = () => {
                     persona_contacto: '',
                     email: '',
                     telefono: '',
-                    direccion: ''
+                    direccion: '',
+                    distrito: '',
+                    provincia: '',
+                    departamento: '',
+                    categoria_riesgo: 'Bajo',
+                    estado: 'Activo'
                 });
                 setEditId(null);
                 cargarClientes();
@@ -82,12 +109,17 @@ export const ClienteListForm = () => {
 
     const handleEdit = (cliente) => {
         setFormData({
-            numero_ruc: cliente.numero_ruc,
+            numero_ruc: cliente.cuit || cliente.codigo || '',
             razon_social: cliente.razon_social,
             persona_contacto: cliente.persona_contacto,
             email: cliente.email,
             telefono: cliente.telefono,
-            direccion: cliente.direccion
+            direccion: cliente.direccion,
+            distrito: cliente.distrito || '',
+            provincia: cliente.provincia || '',
+            departamento: cliente.departamento || '',
+            categoria_riesgo: cliente.categoria_riesgo || 'Bajo',
+            estado: cliente.estado || 'Activo'
         });
         setEditId(cliente.id);
     };
@@ -154,6 +186,51 @@ export const ClienteListForm = () => {
                         value={formData.direccion}
                         onChange={handleChange}
                     />
+                    <Input
+                        name="distrito"
+                        placeholder="Distrito"
+                        value={formData.distrito}
+                        onChange={handleChange}
+                    />
+                    <Input
+                        name="provincia"
+                        placeholder="Provincia"
+                        value={formData.provincia}
+                        onChange={handleChange}
+                    />
+                    <Input
+                        name="departamento"
+                        placeholder="Departamento"
+                        value={formData.departamento}
+                        onChange={handleChange}
+                    />
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '0.25rem', color: 'var(--secondary-color)' }}>Categoría de riesgo</label>
+                        <select
+                            name="categoria_riesgo"
+                            value={formData.categoria_riesgo}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--surface-color)' }}
+                        >
+                            <option value="Bajo">Bajo</option>
+                            <option value="Alto">Alto</option>
+                            <option value="No verificado">No verificado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '0.25rem', color: 'var(--secondary-color)' }}>Estado</label>
+                        <select
+                            name="estado"
+                            value={formData.estado}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--surface-color)' }}
+                        >
+                            <option value="Activo">Activo</option>
+                            <option value="Inactivo">Inactivo</option>
+                            <option value="Potencial">Potencial</option>
+                            <option value="Blokeado">Blokeado</option>
+                        </select>
+                    </div>
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem' }}>
                         <Button type="submit" disabled={loading}>
                             {editId ? 'Actualizar' : 'Crear'} Cliente
@@ -161,7 +238,7 @@ export const ClienteListForm = () => {
                         {editId && (
                             <Button type="button" variant="secondary" onClick={() => {
                                 setEditId(null);
-                                setFormData({ numero_ruc: '', razon_social: '', persona_contacto: '', email: '', telefono: '', direccion: '' });
+                                setFormData({ numero_ruc: '', razon_social: '', persona_contacto: '', email: '', telefono: '', direccion: '', distrito: '', provincia: '', departamento: '', categoria_riesgo: 'Bajo', estado: 'Activo' });
                             }}>
                                 Cancelar
                             </Button>
@@ -171,46 +248,51 @@ export const ClienteListForm = () => {
             </div>
 
             {/* Tabla de Clientes */}
-            <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--surface-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                 <h3 style={{ marginTop: 0 }}>Clientes Registrados</h3>
                 {loading ? (
                     <p>Cargando...</p>
                 ) : clientes.length === 0 ? (
                     <p style={{ color: 'var(--secondary-color)' }}>No hay clientes registrados</p>
                 ) : (
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableHeader>RUC</TableHeader>
-                                <TableHeader>Razón Social</TableHeader>
-                                <TableHeader>Contacto</TableHeader>
-                                <TableHeader>Email</TableHeader>
-                                <TableHeader>Teléfono</TableHeader>
-                                <TableHeader>Acciones</TableHeader>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {clientes.map(cliente => (
-                                <TableRow key={cliente.id}>
-                                    <TableCell>{cliente.numero_ruc}</TableCell>
-                                    <TableCell>{cliente.razon_social}</TableCell>
-                                    <TableCell>{cliente.persona_contacto}</TableCell>
-                                    <TableCell>{cliente.email}</TableCell>
-                                    <TableCell>{cliente.telefono}</TableCell>
-                                    <TableCell>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <Button size="sm" variant="secondary" onClick={() => handleEdit(cliente)}>
-                                                Editar
-                                            </Button>
-                                            <Button size="sm" variant="danger" onClick={() => handleDelete(cliente.id)}>
-                                                Eliminar
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                        {clientes.map(cliente => (
+                            <div
+                                key={cliente.id}
+                                style={{
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '10px',
+                                    padding: '0.75rem',
+                                    background: 'white',
+                                    boxShadow: '0 1px 4px rgba(0,0,0,0.04)'
+                                }}
+                            >
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem 1rem', fontSize: '12px' }}>
+                                    <div><strong>Código Cliente:</strong> {cliente.codigo || '-'}</div>
+                                    <div><strong>RUC:</strong> {cliente.cuit || '-'}</div>
+                                    <div><strong>Razón Social:</strong> {cliente.razon_social || '-'}</div>
+                                    <div><strong>Dirección:</strong> {cliente.direccion || '-'}</div>
+                                    <div><strong>Distrito:</strong> {cliente.distrito || '-'}</div>
+                                    <div><strong>Provincia:</strong> {cliente.provincia || '-'}</div>
+                                    <div><strong>Departamento:</strong> {cliente.departamento || '-'}</div>
+                                    <div><strong>Teléfono:</strong> {cliente.telefono || '-'}</div>
+                                    <div><strong>Email:</strong> {cliente.email || '-'}</div>
+                                    <div><strong>Contacto Principal:</strong> {cliente.persona_contacto || '-'}</div>
+                                    <div><strong>Cate. Riesgo:</strong> {cliente.categoria_riesgo || '-'}</div>
+                                    <div><strong>Fecha de Registro:</strong> {cliente.created_at ? new Date(cliente.created_at).toLocaleDateString() : '-'}</div>
+                                    <div><strong>Estado:</strong> {cliente.estado || '-'}</div>
+                                </div>
+                                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    <Button size="sm" variant="secondary" onClick={() => handleEdit(cliente)}>
+                                        Editar
+                                    </Button>
+                                    <Button size="sm" variant="danger" onClick={() => handleDelete(cliente.id)}>
+                                        Eliminar
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

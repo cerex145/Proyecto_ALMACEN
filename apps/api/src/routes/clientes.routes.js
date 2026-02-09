@@ -8,6 +8,11 @@ const ClienteSchema = {
         razon_social: { type: 'string' },
         cuit: { type: 'string' },
         direccion: { type: 'string', nullable: true },
+        distrito: { type: 'string', nullable: true },
+        provincia: { type: 'string', nullable: true },
+        departamento: { type: 'string', nullable: true },
+        categoria_riesgo: { type: 'string', enum: ['Bajo', 'Alto', 'No verificado'], nullable: true },
+        estado: { type: 'string', enum: ['Activo', 'Inactivo', 'Potencial', 'Blokeado'] },
         telefono: { type: 'string', nullable: true },
         email: { type: 'string', nullable: true },
         activo: { type: 'boolean' },
@@ -163,6 +168,11 @@ async function clienteRoutes(fastify, options) {
                     razon_social: { type: 'string' },
                     cuit: { type: 'string' },
                     direccion: { type: 'string' },
+                    distrito: { type: 'string' },
+                    provincia: { type: 'string' },
+                    departamento: { type: 'string' },
+                    categoria_riesgo: { type: 'string', enum: ['Bajo', 'Alto', 'No verificado'] },
+                    estado: { type: 'string', enum: ['Activo', 'Inactivo', 'Potencial', 'Blokeado'] },
                     telefono: { type: 'string' },
                     email: { type: 'string' }
                 }
@@ -173,7 +183,7 @@ async function clienteRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { codigo, razon_social, cuit, direccion, telefono, email } = request.body;
+        const { codigo, razon_social, cuit, direccion, distrito, provincia, departamento, categoria_riesgo, estado, telefono, email } = request.body;
 
         // Validaciones
         if (!codigo || !razon_social || !cuit) {
@@ -197,6 +207,11 @@ async function clienteRoutes(fastify, options) {
             razon_social,
             cuit,
             direccion: direccion || null,
+            distrito: distrito || null,
+            provincia: provincia || null,
+            departamento: departamento || null,
+            categoria_riesgo: categoria_riesgo || null,
+            estado: estado || 'Activo',
             telefono: telefono || null,
             email: email || null,
             activo: true
@@ -228,6 +243,11 @@ async function clienteRoutes(fastify, options) {
                     razon_social: { type: 'string' },
                     cuit: { type: 'string' },
                     direccion: { type: 'string' },
+                    distrito: { type: 'string' },
+                    provincia: { type: 'string' },
+                    departamento: { type: 'string' },
+                    categoria_riesgo: { type: 'string', enum: ['Bajo', 'Alto', 'No verificado'] },
+                    estado: { type: 'string', enum: ['Activo', 'Inactivo', 'Potencial', 'Blokeado'] },
                     telefono: { type: 'string' },
                     email: { type: 'string' },
                     activo: { type: 'boolean' }
@@ -241,7 +261,7 @@ async function clienteRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { codigo, razon_social, cuit, direccion, telefono, email, activo } = request.body;
+        const { codigo, razon_social, cuit, direccion, distrito, provincia, departamento, categoria_riesgo, estado, telefono, email, activo } = request.body;
 
         const cliente = await clienteRepo.findOneBy({ id: Number(id) });
         if (!cliente) {
@@ -271,6 +291,11 @@ async function clienteRoutes(fastify, options) {
         cliente.razon_social = razon_social;
         if (cuit !== undefined) cliente.cuit = cuit;
         cliente.direccion = direccion || null;
+        if (distrito !== undefined) cliente.distrito = distrito || null;
+        if (provincia !== undefined) cliente.provincia = provincia || null;
+        if (departamento !== undefined) cliente.departamento = departamento || null;
+        if (categoria_riesgo !== undefined) cliente.categoria_riesgo = categoria_riesgo || null;
+        if (estado !== undefined) cliente.estado = estado;
         cliente.telefono = telefono || null;
         cliente.email = email || null;
         if (activo !== undefined) cliente.activo = activo;
