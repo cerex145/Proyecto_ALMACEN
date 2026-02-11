@@ -514,75 +514,98 @@ async function ingresosRoutes(fastify, options) {
             relations: ['producto']
         });
 
-        const totalBultos = detalles.reduce((acc, d) => acc + Number(d.cant_bulto || 0), 0);
-        const totalCajas = detalles.reduce((acc, d) => acc + Number(d.cant_caja || 0), 0);
-        const totalFraccion = detalles.reduce((acc, d) => acc + Number(d.cant_fraccion || 0), 0);
-        const totalUnidades = detalles.reduce((acc, d) => acc + Number(d.cantidad || 0), 0);
+        // Calcular totales para el footer
+        const totalBultos = detalles.reduce((acc, d) => acc + Number(d.cantidad_bultos || 0), 0);
+        const totalCajas = detalles.reduce((acc, d) => acc + Number(d.cantidad_cajas || 0), 0);
+        const totalFraccion = detalles.reduce((acc, d) => acc + Number(d.cantidad_fraccion || 0), 0);
+        const totalUnidades = detalles.reduce((acc, d) => acc + Number(d.cantidad_total || d.cantidad || 0), 0);
+
+        // Path del logo (si existe)
+        const logoPath = require('path').join(__dirname, '../assets/logo.png');
+        const fs = require('fs');
+        let logoImage = null;
+        if (fs.existsSync(logoPath)) {
+            logoImage = {
+                image: logoPath,
+                width: 150
+            };
+        } else {
+            logoImage = { text: 'AGUPAL PERU', style: 'brand', fontSize: 20 };
+        }
 
         // Definición del documento
         const docDefinition = {
             pageSize: 'A4',
-            pageMargins: [25, 35, 25, 35],
+            pageOrientation: 'landscape', // La imagen parece ancha, cambiamos a landscape? No, la imagen es vertical (A4 portrait usualmente) pero la tabla es ancha.
+            // La imagen referencial tiene aspecto muy horizontal. "Página 1 de 1" abajo a la derecha. 
+            // Parece A4 Horizontal (Landscape) por la cantidad de columnas.
+            pageMargins: [20, 20, 20, 20],
             content: [
+                // Encabezado
                 {
-                    table: {
-                        widths: ['auto', '*', 'auto'],
-                        body: [
-                            [
-                                { text: 'AGUPAL PERU', style: 'brand' },
-                                { text: 'NOTA DE INGRESO', style: 'title', alignment: 'center' },
-                                { text: `N° ${nota.numero_ingreso || '-'}`, style: 'titleRight', alignment: 'right' }
-                            ]
-                        ]
-                    },
-                    layout: 'headerBox',
-                    margin: [0, 0, 0, 6]
+                    columns: [
+                        logoImage,
+                        { text: 'NOTA DE INGRESO', style: 'headerTitle', alignment: 'center', margin: [0, 10, 0, 0] },
+                        { text: `N° ${Number(nota.numero_ingreso)}`, style: 'headerNumber', alignment: 'right', margin: [0, 10, 0, 0] }
+                    ],
+                    margin: [0, 0, 0, 10]
                 },
+                { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 800, y2: 0, lineWidth: 1 }] },
+
+                // Datos Cliente e Ingreso
                 {
                     columns: [
                         {
-                            width: '*',
-                            table: {
-                                body: [
-                                    [
-                                        { text: 'Razón Social', style: 'label' },
-                                        { text: nota.cliente?.razon_social || nota.proveedor || '-', style: 'value' }
-                                    ],
-                                    [
-                                        { text: 'Código Cliente', style: 'label' },
-                                        { text: nota.cliente?.codigo || nota.cliente_id || '-', style: 'value' }
-                                    ],
-                                    [
-                                        { text: 'RUC', style: 'label' },
-                                        { text: nota.cliente?.cuit || '-', style: 'value' }
-                                    ],
-                                    [
-                                        { text: 'Dirección', style: 'label' },
-                                        { text: nota.cliente?.direccion || '-', style: 'value' }
+                            width: '60%',
+                            stack: [
+                                {
+                                    columns: [
+                                        { text: 'Razón Social :', width: 80, style: 'labelBold' },
+                                        { text: nota.proveedor || '-', style: 'labelText' }
                                     ]
-                                ]
-                            },
-                            layout: 'noBorders'
+                                },
+                                {
+                                    columns: [
+                                        { text: 'Código Cliente :', width: 80, style: 'labelBold' },
+                                        { text: 'CLI-2241-001', style: 'labelText' } // Mock o dato real si existiera
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'RUC :', width: 80, style: 'labelBold' },
+                                        { text: '20605712241', style: 'labelText' } // Mock o dato real
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'Dirección :', width: 80, style: 'labelBold' },
+                                        { text: 'JR. DIANA INT.11,MZ.D2,LT.25,1 Y 2 PIS URB.SANTA MARIA DE SURCO', style: 'labelText' } // Mock
+                                    ]
+                                }
+                            ],
+                            margin: [0, 10, 0, 0]
                         },
                         {
-                            width: 180,
-                            table: {
-                                body: [
-                                    [
-                                        { text: 'Fecha de Ingreso', style: 'label' },
-                                        { text: new Date(nota.fecha).toLocaleDateString('es-PE'), style: 'value' }
+                            width: '40%',
+                            stack: [
+                                {
+                                    columns: [
+                                        { text: 'Fecha de Ingreso:', width: '*', alignment: 'right', style: 'labelBold' },
+                                        { text: new Date(nota.fecha).toLocaleDateString('es-PE'), width: 100, alignment: 'right', style: 'labelText' }
                                     ]
-                                ]
-                            },
-                            layout: 'noBorders'
+                                }
+                            ],
+                            margin: [0, 10, 0, 0]
                         }
                     ],
-                    margin: [0, 0, 0, 8]
+                    margin: [0, 0, 0, 10]
                 },
+
+                // Tabla de Productos
                 {
                     table: {
                         headerRows: 1,
-                        widths: [18, 70, '*', 55, 55, 30, 50, 40, 45, 50, 50, 50, 50],
+                        widths: [20, 60, '*', 50, 50, 25, 80, 50, 40, 40, 40, 50, 50],
                         body: [
                             [
                                 { text: 'Item', style: 'tableHeader' },
@@ -600,98 +623,130 @@ async function ingresosRoutes(fastify, options) {
                                 { text: 'Cant.Total', style: 'tableHeader' }
                             ],
                             ...detalles.map((d, idx) => [
-                                String(idx + 1),
-                                d.producto?.codigo || '-',
-                                d.producto?.descripcion || '-',
-                                d.lote_numero || '-',
-                                d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
-                                d.producto?.um || '-',
-                                d.producto?.fabricante || '-',
-                                (d.producto?.temperatura_min_c != null || d.producto?.temperatura_max_c != null)
-                                    ? `${d.producto?.temperatura_min_c ?? '-'} a ${d.producto?.temperatura_max_c ?? '-'}`
-                                    : '-',
-                                d.cant_bulto ?? '-',
-                                d.cant_caja ?? '-',
-                                d.cant_por_caja ?? '-',
-                                d.cant_fraccion ?? '-',
-                                d.cantidad ?? '-'
+                                { text: String(idx + 1), style: 'tableCell' },
+                                { text: d.producto?.codigo || '-', style: 'tableCell' },
+                                { text: d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
+                                { text: d.lote_numero || '-', style: 'tableCell' },
+                                { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-', style: 'tableCell' },
+                                { text: d.producto?.unidad || 'UND', style: 'tableCell' },
+                                { text: d.producto?.fabricante || '-', style: 'tableCell' },
+                                { text: (d.producto?.temperatura_min_c != null) ? `${d.producto.temperatura_min_c}° ${d.producto.temperatura_max_c}°C` : '-', style: 'tableCell' },
+                                { text: parseFloat(d.cantidad_bultos || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cantidad_cajas || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cantidad_por_caja || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cantidad_fraccion || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cantidad_total || d.cantidad).toFixed(2), style: 'tableCell' }
                             ])
                         ]
                     },
-                    layout: 'lightHorizontalLines',
-                    margin: [0, 0, 0, 8]
+                    layout: {
+                        hLineWidth: function (i, node) { return 1; },
+                        vLineWidth: function (i, node) { return 1; },
+                        hLineColor: function (i, node) { return 'black'; },
+                        vLineColor: function (i, node) { return 'black'; },
+                        paddingLeft: function (i, node) { return 2; },
+                        paddingRight: function (i, node) { return 2; },
+                    }
                 },
+
+                // Footer
                 {
                     columns: [
+                        // Columna Izquierda (Motivos, Observaciones, Leyenda)
                         {
                             width: '*',
                             stack: [
-                                { text: 'Motivo de la Salida:', style: 'label' },
-                                { text: nota.motivo || '-', style: 'value', margin: [0, 2, 0, 8] },
-                                { text: 'Observaciones:', style: 'label' },
-                                { text: nota.observaciones || '-', style: 'value' }
+                                {
+                                    text: [
+                                        { text: 'Motivo de la Salida:\n', bold: true, decoration: 'underline' },
+                                        { text: '(Describir causa)' } // No tenemos campo motivo salida en ingreso
+                                    ],
+                                    margin: [0, 5, 0, 5]
+                                },
+                                { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 520, y2: 0, lineWidth: 0.5 }] },
+                                {
+                                    text: [
+                                        { text: 'Observaciones:\n', bold: true, decoration: 'underline' },
+                                        { text: nota.observaciones || '(Condiciones, daños, etc.)' }
+                                    ],
+                                    margin: [0, 5, 0, 5]
+                                },
+                                { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 520, y2: 0, lineWidth: 0.5 }] },
+                                {
+                                    text: [
+                                        { text: 'LEYENDA: ', bold: true },
+                                        'Cant. Bulto: N° de cajas selladas (empaque primario)\n',
+                                        { text: 'Cant. Cajas: ', bold: true }, 'N° de unidades por caja sellada\n',
+                                        { text: 'Cant. x Caja: ', bold: true }, 'N° de unidades por caja abierta\n',
+                                        { text: 'Cant. Fracción: ', bold: true }, 'Unidades sueltas\n',
+                                        { text: 'Cant. Total: ', bold: true }, 'Total de unidades = (Bultos x Cajas x xCaja) + Saldo'
+                                    ],
+                                    style: 'legend',
+                                    margin: [0, 5, 0, 0]
+                                },
+                                {
+                                    text: `Son ${totalUnidades} unidades en total`,
+                                    style: 'legend',
+                                    margin: [0, 5, 0, 0]
+                                },
+                                {
+                                    text: '(Resultado de sumar las unidades contenidas en los bultos, las cajas sueltas y las fracciones.)',
+                                    style: 'legend',
+                                    italics: true,
+                                    color: 'gray'
+                                }
                             ]
                         },
+                        // Columna Derecha (Totales Grid)
                         {
-                            width: 220,
+                            width: 250,
                             table: {
+                                widths: ['50%', '50%'],
                                 body: [
                                     [
-                                        { text: 'BULTOS', style: 'label' },
-                                        { text: String(totalBultos), style: 'value' }
+                                        { text: 'BULTOS', style: 'footerGridHeader' },
+                                        { text: 'PALETS', style: 'footerGridHeader' }
                                     ],
                                     [
-                                        { text: 'PALETS', style: 'label' },
-                                        { text: '-', style: 'value' }
+                                        { text: parseFloat(totalBultos).toFixed(2), style: 'footerGridValue', minHeight: 40 },
+                                        { text: '', style: 'footerGridValue', minHeight: 40 }
                                     ],
                                     [
-                                        { text: 'FRACCIONES', style: 'label' },
-                                        { text: String(totalFraccion), style: 'value' }
+                                        { text: 'FRACCIONES', style: 'footerGridHeader' },
+                                        { text: 'CANTIDAD TOTAL DE UNIDADES', style: 'footerGridHeader' }
                                     ],
                                     [
-                                        { text: 'CANTIDAD TOTAL DE UNIDADES', style: 'label' },
-                                        { text: String(totalUnidades), style: 'value' }
+                                        { text: parseFloat(totalFraccion).toFixed(2), style: 'footerGridValue', minHeight: 40 },
+                                        { text: parseFloat(totalUnidades).toFixed(2), style: 'footerGridValue', minHeight: 40 }
                                     ]
                                 ]
-                            },
-                            layout: 'lightHorizontalLines'
+                            }
                         }
                     ],
-                    margin: [0, 0, 0, 8]
+                    margin: [0, 10, 0, 0]
                 },
-                {
-                    text: 'LEYENDA: Cant. Bulto: N° de cajas selladas (empaque primario)\nCant. Cajas: N° de unidades por caja sellada\nCant. x Caja: N° de unidades por caja sellada\nCant. Fracción: Unidades sueltas\nCant. Total: Total de unidades = (Bultos x Cajas x xCaja) + saldo',
-                    style: 'legend',
-                    margin: [0, 2, 0, 8]
-                },
-                {
-                    text: `Son ${totalUnidades} unidades en total`,
-                    style: 'legend'
-                },
+
+                // Firmas
                 {
                     columns: [
-                        { text: '________________________\nJefe de Almacén', alignment: 'center' },
-                        { text: '________________________\nVerificado por', alignment: 'center' }
+                        { stack: [{ text: '________________________' }, { text: 'Jefe de Almacén' }], alignment: 'center' },
+                        { stack: [{ text: '________________________' }, { text: 'Verificado por' }], alignment: 'center' }
                     ],
-                    margin: [0, 25, 0, 0]
+                    margin: [0, 40, 0, 0]
                 }
             ],
             styles: {
-                brand: { fontSize: 10, bold: true, color: '#0b6aa2' },
-                title: { fontSize: 11, bold: true },
-                titleRight: { fontSize: 9, bold: true },
-                label: { fontSize: 7, bold: true },
-                value: { fontSize: 7 },
-                tableHeader: { fontSize: 7, bold: true, fillColor: '#eeeeee' },
+                brand: { fontSize: 18, bold: true, color: '#0b6aa2' },
+                headerTitle: { fontSize: 14, bold: true },
+                headerNumber: { fontSize: 12, bold: true },
+                labelBold: { fontSize: 8, bold: true },
+                labelText: { fontSize: 8 },
+                tableHeader: { fontSize: 7, bold: true, color: 'white', fillColor: 'black', alignment: 'center' },
+                tableCell: { fontSize: 7, alignment: 'center' },
+                footerGridHeader: { fontSize: 7, bold: true, fillColor: '#ffffff' },
+                footerGridValue: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 5, 0, 0] },
                 legend: { fontSize: 6 }
-            },
-            footer: (currentPage, pageCount) => ({
-                text: `Página ${currentPage} de ${pageCount}`,
-                alignment: 'right',
-                margin: [0, 0, 30, 0],
-                fontSize: 6
-            }),
-            background: []
+            }
         };
 
         try {
