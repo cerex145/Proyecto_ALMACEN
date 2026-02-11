@@ -57,15 +57,15 @@ async function reportesRoutes(fastify, options) {
 
         const queryBuilder = notaIngresoRepo.createQueryBuilder('nota');
 
-        if (fecha_desde) {
-            queryBuilder.where('nota.fecha >= :fecha_desde', { fecha_desde });
+        if (fecha_desde && fecha_desde.trim() !== '') {
+            queryBuilder.andWhere('nota.fecha >= :fecha_desde', { fecha_desde });
         }
 
-        if (fecha_hasta) {
+        if (fecha_hasta && fecha_hasta.trim() !== '') {
             queryBuilder.andWhere('nota.fecha <= :fecha_hasta', { fecha_hasta });
         }
 
-        if (proveedor) {
+        if (proveedor && proveedor.trim() !== '') {
             queryBuilder.andWhere('nota.proveedor LIKE :proveedor', { proveedor: `%${proveedor}%` });
         }
 
@@ -117,11 +117,11 @@ async function reportesRoutes(fastify, options) {
 
         const queryBuilder = notaSalidaRepo.createQueryBuilder('nota');
 
-        if (fecha_desde) {
-            queryBuilder.where('nota.fecha >= :fecha_desde', { fecha_desde });
+        if (fecha_desde && fecha_desde.trim() !== '') {
+            queryBuilder.andWhere('nota.fecha >= :fecha_desde', { fecha_desde });
         }
 
-        if (fecha_hasta) {
+        if (fecha_hasta && fecha_hasta.trim() !== '') {
             queryBuilder.andWhere('nota.fecha <= :fecha_hasta', { fecha_hasta });
         }
 
