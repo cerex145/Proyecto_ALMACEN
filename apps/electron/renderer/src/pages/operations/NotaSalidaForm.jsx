@@ -219,61 +219,7 @@ export const NotaSalidaForm = () => {
         setCantidadTotal(0);
     };
 
-    const onSubmit = async (data) => {
-        try {
-            const payload = {
-                cliente_id: data.cliente_id,
-                fecha: data.fecha,
-                responsable_id: data.responsable_id,
-                tipo_documento: data.tipo_documento || null,
-                numero_documento: data.numero_documento || null,
-                fecha_ingreso: data.fecha_ingreso || null,
-                motivo_salida: data.motivo_salida || null,
-                detalles: data.detalles
-            };
-            const created = await operationService.createSalida(payload);
-            setLastSalidaId(created?.id || null);
-            alert('✅ Nota de salida registrada correctamente');
-            reset();
-            setSelectedClient('');
-            setClienteRuc('');
-            setClienteCodigo('');
-            setSelectedProduct('');
-            setLotesDisponibles([]);
-            setSelectedLoteOption('');
-            setLoteManual('');
-            setFechaVencimiento('');
-            setUm('');
-            setBultos('');
-            setCajas('');
-            setUnidadesCaja('');
-            setFraccion('');
-            setCantidadTotal(0);
-        } catch (error) {
-            console.error(error);
-            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
-            alert(`❌ Error al registrar salida. ${mensaje}`);
-        }
-    };
-
-    const handleExportPdf = async () => {
-        if (!lastSalidaId) {
-            alert('Primero guarda la nota de salida para exportar PDF.');
-            return;
-        }
-        try {
-            const pdfUrl = `http://localhost:3000/api/salidas/${lastSalidaId}/pdf`;
-            const opened = window.open(pdfUrl, '_blank');
-            if (!opened) {
-                alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
-            }
-        } catch (error) {
-            console.error(error);
-            alert('Error al exportar PDF');
-        }
-    };
-
-    const handleLimpiar = () => {
+    const resetAllStates = () => {
         reset();
         setSelectedClient('');
         setClienteRuc('');
@@ -289,6 +235,54 @@ export const NotaSalidaForm = () => {
         setUnidadesCaja('');
         setFraccion('');
         setCantidadTotal(0);
+    };
+
+    const onSubmit = async (data) => {
+        try {
+            const payload = {
+                cliente_id: data.cliente_id,
+                fecha: data.fecha,
+                responsable_id: data.responsable_id,
+                tipo_documento: data.tipo_documento || null,
+                numero_documento: data.numero_documento || null,
+                fecha_ingreso: data.fecha_ingreso || null,
+                motivo_salida: data.motivo_salida || null,
+                detalles: data.detalles
+            };
+            const created = await operationService.createSalida(payload);
+            setLastSalidaId(created?.id || null);
+            alert('✅ Nota de salida registrada correctamente');
+            resetAllStates();
+        } catch (error) {
+            console.error(error);
+            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
+            alert(`❌ Error al registrar salida. ${mensaje}`);
+        }
+    };
+
+    const handleExportPdf = async () => {
+        if (!lastSalidaId) {
+            alert('Primero guarda la nota de salida para exportar PDF.');
+            return;
+        }
+        try {
+            const pdfUrl = `http://localhost:3000/api/salidas/${lastSalidaId}/pdf`;
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
+            } else {
+                const opened = window.open(pdfUrl, '_blank');
+                if (!opened) {
+                    alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al exportar PDF');
+        }
+    };
+
+    const handleLimpiar = () => {
+        resetAllStates();
         setLastSalidaId(null);
     };
 
