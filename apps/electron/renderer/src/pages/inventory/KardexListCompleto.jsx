@@ -33,14 +33,27 @@ export const KardexListCompleto = () => {
 
     const handleExportar = async () => {
         try {
-            const blob = await kardexService.exportar();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'kardex.xlsx';
-            a.click();
+            const url = 'http://localhost:3000/api/kardex/exportar';
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('download-file', {
+                    url,
+                    filename: 'kardex.xlsx'
+                });
+            } else {
+                const blob = await kardexService.exportar();
+                const urlObj = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = 'kardex.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(urlObj);
+            }
+            alert('✅ Kardex descargado correctamente');
         } catch (error) {
             console.error('Error al exportar:', error);
+            alert('❌ Error al descargar Kardex');
         }
     };
 

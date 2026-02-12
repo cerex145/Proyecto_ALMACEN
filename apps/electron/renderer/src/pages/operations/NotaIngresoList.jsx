@@ -30,14 +30,27 @@ export const NotaIngresoList = () => {
 
     const handleExportar = async () => {
         try {
-            const blob = await ingresosService.exportar();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'ingresos.xlsx';
-            a.click();
+            const url = 'http://localhost:3000/api/ingresos/exportar';
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('download-file', {
+                    url,
+                    filename: 'ingresos.xlsx'
+                });
+            } else {
+                const blob = await ingresosService.exportar();
+                const urlObj = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = 'ingresos.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(urlObj);
+            }
+            alert('✅ Ingresos descargados correctamente');
         } catch (error) {
             console.error('Error al exportar:', error);
+            alert('❌ Error al descargar ingresos');
         }
     };
 

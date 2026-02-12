@@ -57,14 +57,27 @@ export const ReportesCompleto = () => {
 
     const handleExportar = async () => {
         try {
-            const blob = await reportesService.exportar();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `reportes-${new Date().toISOString().split('T')[0]}.xlsx`;
-            a.click();
+            const url = 'http://localhost:3000/api/reportes/exportar';
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('download-file', {
+                    url,
+                    filename: `reportes-${new Date().toISOString().split('T')[0]}.xlsx`
+                });
+            } else {
+                const blob = await reportesService.exportar();
+                const urlObj = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = `reportes-${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(urlObj);
+            }
+            alert('✅ Reportes descargados correctamente');
         } catch (error) {
             console.error('Error al exportar:', error);
+            alert('❌ Error al descargar reportes');
         }
     };
 

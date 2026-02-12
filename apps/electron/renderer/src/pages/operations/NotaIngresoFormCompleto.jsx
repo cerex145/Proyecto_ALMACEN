@@ -99,14 +99,27 @@ export const NotaIngresoForm = () => {
 
     const handleDescargarPlantilla = async () => {
         try {
-            const blob = await ingresosService.descargarPlantilla();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'plantilla_ingresos.xlsx';
-            a.click();
+            const url = 'http://localhost:3000/api/ingresos/plantilla/descargar';
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('download-file', {
+                    url,
+                    filename: 'plantilla_ingresos.xlsx'
+                });
+            } else {
+                const blob = await ingresosService.descargarPlantilla();
+                const urlObj = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = 'plantilla_ingresos.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(urlObj);
+            }
+            alert('✅ Plantilla descargada correctamente');
         } catch (error) {
             console.error('Error al descargar plantilla:', error);
+            alert('❌ Error al descargar plantilla');
         }
     };
 

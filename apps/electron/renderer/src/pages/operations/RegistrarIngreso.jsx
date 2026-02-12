@@ -203,9 +203,18 @@ const RegistrarIngreso = ({ onCancel, onSuccess }) => {
         }
     };
 
-    const handleGeneratePDF = () => {
+    const handleGeneratePDF = async () => {
         if (!lastSavedId) return;
-        window.open(`http://127.0.0.1:3000/api/ingresos/${lastSavedId}/pdf`, '_blank');
+        try {
+            const url = `http://127.0.0.1:3000/api/ingresos/${lastSavedId}/pdf`;
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('open-external', url);
+            } else {
+                window.open(url, '_blank');
+            }
+        } catch (error) {
+            console.error('Error al descargar PDF:', error);
+        }
     };
 
     return (

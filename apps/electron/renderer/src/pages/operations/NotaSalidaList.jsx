@@ -39,14 +39,27 @@ export const NotaSalidaList = () => {
 
     const handleExportar = async () => {
         try {
-            const blob = await salidasService.exportar();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'salidas.xlsx';
-            a.click();
+            const url = 'http://localhost:3000/api/salidas/exportar';
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('download-file', {
+                    url,
+                    filename: 'salidas.xlsx'
+                });
+            } else {
+                const blob = await salidasService.exportar();
+                const urlObj = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = 'salidas.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(urlObj);
+            }
+            alert('✅ Salidas descargadas correctamente');
         } catch (error) {
             console.error('Error al exportar:', error);
+            alert('❌ Error al descargar salidas');
         }
     };
 

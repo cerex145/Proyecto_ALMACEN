@@ -26,8 +26,18 @@ export const ActasRecepcionFuncional = () => {
         }
     };
 
-    const handleDownloadPDF = (id) => {
-        window.open(`http://localhost:3000/api/actas-recepcion/${id}/pdf`, '_blank');
+    const handleDownloadPDF = async (id) => {
+        try {
+            const url = `http://localhost:3000/api/actas-recepcion/${id}/pdf`;
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('open-external', url);
+            } else {
+                window.open(url, '_blank');
+            }
+        } catch (error) {
+            console.error('Error al descargar PDF:', error);
+            alert('❌ Error al descargar PDF');
+        }
     };
 
     const getEstadoBadge = (estado) => {
