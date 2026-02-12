@@ -239,6 +239,29 @@ export const NotaSalidaForm = () => {
 
     const onSubmit = async (data) => {
         try {
+            // Validación robusta de detalles
+            if (!data.detalles || data.detalles.length === 0) {
+                alert('❌ Debe agregar al menos un producto a la nota');
+                return;
+            }
+
+            // Validar que cada detalle tiene datos válidos
+            for (let i = 0; i < data.detalles.length; i++) {
+                const det = data.detalles[i];
+                if (!det.producto_id || Number.isNaN(Number(det.producto_id))) {
+                    alert(`❌ Detalle ${i + 1}: Producto no válido`);
+                    return;
+                }
+                if (!det.cantidad || Number.isNaN(Number(det.cantidad))) {
+                    alert(`❌ Detalle ${i + 1}: Cantidad no es un número`);
+                    return;
+                }
+                if (Number(det.cantidad) <= 0) {
+                    alert(`❌ Detalle ${i + 1}: Cantidad debe ser mayor a 0`);
+                    return;
+                }
+            }
+
             const payload = {
                 cliente_id: data.cliente_id,
                 fecha: data.fecha,
@@ -247,15 +270,22 @@ export const NotaSalidaForm = () => {
                 numero_documento: data.numero_documento || null,
                 fecha_ingreso: data.fecha_ingreso || null,
                 motivo_salida: data.motivo_salida || null,
-                detalles: data.detalles
+                detalles: data.detalles.map(det => ({
+                    producto_id: Number(det.producto_id),
+                    lote_id: det.lote_id ? Number(det.lote_id) : null,
+                    cantidad: Number(det.cantidad),
+                    precio_unitario: det.precio_unitario ? Number(det.precio_unitario) : null
+                }))
             };
+            
+            console.log('📤 Enviando payload:', JSON.stringify(payload, null, 2));
             const created = await operationService.createSalida(payload);
             setLastSalidaId(created?.id || null);
             alert('✅ Nota de salida registrada correctamente');
             resetAllStates();
         } catch (error) {
             console.error(error);
-            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
+            const mensaje = error?.response?.data?.error || error?.message || 'Verifique los datos.';
             alert(`❌ Error al registrar salida. ${mensaje}`);
         }
     };
