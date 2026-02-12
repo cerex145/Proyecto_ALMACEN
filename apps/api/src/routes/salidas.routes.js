@@ -423,6 +423,7 @@ async function salidasRoutes(fastify, options) {
     fastify.get('/api/salidas/exportar', async (request, reply) => {
         const notas = await notaSalidaRepo
             .createQueryBuilder('nota')
+            .leftJoinAndMapOne('nota.cliente', 'clientes', 'cliente', 'cliente.id = nota.cliente_id')
             .orderBy('nota.created_at', 'DESC')
             .getMany();
 
@@ -432,7 +433,7 @@ async function salidasRoutes(fastify, options) {
         worksheet.columns = [
             { header: 'Número Salida', key: 'numero_salida', width: 15 },
             { header: 'Fecha', key: 'fecha', width: 15 },
-            { header: 'Cliente ID', key: 'cliente_id', width: 12 },
+            { header: 'Cliente', key: 'cliente', width: 30 },
             { header: 'Estado', key: 'estado', width: 20 },
             { header: 'Observaciones', key: 'observaciones', width: 40 }
         ];
@@ -441,7 +442,7 @@ async function salidasRoutes(fastify, options) {
             worksheet.addRow({
                 numero_salida: nota.numero_salida,
                 fecha: new Date(nota.fecha).toLocaleDateString('es-AR'),
-                cliente_id: nota.cliente_id,
+                cliente: nota.cliente?.razon_social || '- ',
                 estado: nota.estado,
                 observaciones: nota.observaciones
             });

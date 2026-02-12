@@ -8,6 +8,7 @@ import { Card } from '../../components/common/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 
 export const NotaSalidaForm = () => {
+    const OTHER_LOTE_OPTION = 'OTRO';
     const { register, control, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             cliente_id: '',
@@ -34,7 +35,8 @@ export const NotaSalidaForm = () => {
 
     const [selectedProduct, setSelectedProduct] = useState('');
     const [lotesDisponibles, setLotesDisponibles] = useState([]);
-    const [selectedLoteId, setSelectedLoteId] = useState('');
+    const [selectedLoteOption, setSelectedLoteOption] = useState('');
+    const [loteManual, setLoteManual] = useState('');
     const [fechaVencimiento, setFechaVencimiento] = useState('');
 
     const [um, setUm] = useState('');
@@ -44,6 +46,20 @@ export const NotaSalidaForm = () => {
     const [fraccion, setFraccion] = useState('');
     const [cantidadTotal, setCantidadTotal] = useState(0);
     const [lastSalidaId, setLastSalidaId] = useState(null);
+
+    const normalizeDateInput = (value) => {
+        if (!value) {
+            return '';
+        }
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return value;
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return '';
+        }
+        return parsed.toISOString().split('T')[0];
+    };
 
     useEffect(() => {
         loadClients();
@@ -77,7 +93,8 @@ export const NotaSalidaForm = () => {
     useEffect(() => {
         if (!selectedProduct) {
             setLotesDisponibles([]);
-            setSelectedLoteId('');
+            setSelectedLoteOption('');
+            setLoteManual('');
             setFechaVencimiento('');
             setUm('');
             return;
@@ -93,13 +110,15 @@ export const NotaSalidaForm = () => {
                     ? lotes.filter(l => Number(l.cantidad_disponible) > 0)
                     : [];
                 setLotesDisponibles(activos);
-                const first = activos[0]?.id ? String(activos[0].id) : '';
-                setSelectedLoteId(first);
-                setFechaVencimiento(activos[0]?.fecha_vencimiento || '');
+                const firstNumero = activos[0]?.numero_lote || '';
+                setSelectedLoteOption(firstNumero);
+                setLoteManual('');
+                setFechaVencimiento(normalizeDateInput(activos[0]?.fecha_vencimiento));
             } catch (error) {
                 console.error('Error cargando lotes:', error);
                 setLotesDisponibles([]);
-                setSelectedLoteId('');
+                setSelectedLoteOption('');
+                setLoteManual('');
                 setFechaVencimiento('');
             }
         };
@@ -158,21 +177,27 @@ export const NotaSalidaForm = () => {
     // loadData removed
 
     const handleAddLine = () => {
-        if (!selectedProduct || !selectedLoteId || Number(cantidadTotal) <= 0) {
+        const isOtro = selectedLoteOption === OTHER_LOTE_OPTION;
+        const loteFinal = isOtro ? loteManual : selectedLoteOption;
+        const hasLote = Boolean(loteFinal);
+        if (!selectedProduct || !hasLote || Number(cantidadTotal) <= 0) {
             alert('Complete producto, lote y cantidad total');
             return;
         }
 
         const product = products.find(p => p.id === parseInt(selectedProduct));
-        const lote = lotesDisponibles.find(l => String(l.id) === String(selectedLoteId));
+        const lote = lotesDisponibles.find(l => String(l.numero_lote) === String(selectedLoteOption));
+        const fechaFinal = normalizeDateInput(fechaVencimiento || lote?.fecha_vencimiento || '');
+        const numeroFinal = loteFinal;
+        const loteIdFinal = isOtro ? null : (lote?.id ? parseInt(lote.id) : null);
 
         append({
             producto_id: parseInt(selectedProduct),
             producto_codigo: product?.codigo || '',
             producto_nombre: product?.descripcion || '',
-            lote_id: parseInt(selectedLoteId),
-            lote_numero: lote?.numero_lote || '',
-            fecha_vencimiento: lote?.fecha_vencimiento || '',
+            lote_id: loteIdFinal,
+            lote_numero: numeroFinal,
+            fecha_vencimiento: fechaFinal,
             um: um || '',
             cant_bulto: parseFloat(bultos || 0),
             cant_caja: parseFloat(cajas || 0),
@@ -183,7 +208,8 @@ export const NotaSalidaForm = () => {
         });
 
         setSelectedProduct('');
-        setSelectedLoteId('');
+        setSelectedLoteOption('');
+        setLoteManual('');
         setFechaVencimiento('');
         setUm('');
         setBultos('');
@@ -208,7 +234,21 @@ export const NotaSalidaForm = () => {
             const created = await operationService.createSalida(payload);
             setLastSalidaId(created?.id || null);
             alert('✅ Nota de salida registrada correctamente');
-            handleLimpiar();
+            reset();
+            setSelectedClient('');
+            setClienteRuc('');
+            setClienteCodigo('');
+            setSelectedProduct('');
+            setLotesDisponibles([]);
+            setSelectedLoteOption('');
+            setLoteManual('');
+            setFechaVencimiento('');
+            setUm('');
+            setBultos('');
+            setCajas('');
+            setUnidadesCaja('');
+            setFraccion('');
+            setCantidadTotal(0);
         } catch (error) {
             console.error(error);
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
@@ -240,7 +280,8 @@ export const NotaSalidaForm = () => {
         setClienteCodigo('');
         setSelectedProduct('');
         setLotesDisponibles([]);
-        setSelectedLoteId('');
+        setSelectedLoteOption('');
+        setLoteManual('');
         setFechaVencimiento('');
         setUm('');
         setBultos('');
@@ -381,26 +422,51 @@ export const NotaSalidaForm = () => {
                         <div className="md:col-span-2">
                             <label className="label-premium">Lote</label>
                             <select
-                                value={selectedLoteId}
-                                onChange={(e) => setSelectedLoteId(e.target.value)}
+                                value={selectedLoteOption}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    setSelectedLoteOption(value);
+                                    if (value === OTHER_LOTE_OPTION) {
+                                        setLoteManual('');
+                                        setFechaVencimiento('');
+                                        return;
+                                    }
+                                    const lote = lotesDisponibles.find(l => String(l.numero_lote) === String(value));
+                                    setFechaVencimiento(normalizeDateInput(lote?.fecha_vencimiento));
+                                }}
                                 className="input-premium"
                                 disabled={!selectedProduct}
                             >
                                 <option value="">Seleccione lote...</option>
                                 {lotesDisponibles.map(lote => (
-                                    <option key={lote.id} value={lote.id}>
+                                    <option key={lote.id} value={lote.numero_lote}>
                                         {lote.numero_lote}
                                     </option>
                                 ))}
+                                <option value={OTHER_LOTE_OPTION}>OTRO</option>
                             </select>
                         </div>
+                        {selectedLoteOption === OTHER_LOTE_OPTION && (
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Agregue lote manualmente</label>
+                                <input
+                                    type="text"
+                                    className="input-premium"
+                                    value={loteManual}
+                                    onChange={(e) => setLoteManual(e.target.value)}
+                                    disabled={!selectedProduct}
+                                    placeholder="Lote..."
+                                />
+                            </div>
+                        )}
                         <div className="md:col-span-2">
                             <label className="label-premium">Vencimiento</label>
                             <input
                                 type="date"
-                                className="input-premium bg-slate-50"
-                                value={fechaVencimiento ? new Date(fechaVencimiento).toISOString().split('T')[0] : ''}
-                                readOnly
+                                className="input-premium"
+                                value={normalizeDateInput(fechaVencimiento)}
+                                onChange={(e) => setFechaVencimiento(normalizeDateInput(e.target.value))}
+                                disabled={!selectedProduct}
                             />
                         </div>
                         <div className="md:col-span-2">
