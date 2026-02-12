@@ -126,8 +126,12 @@ async function salidasRoutes(fastify, options) {
             motivo_salida
         } = request.body;
 
+        // Debug: loguear request
+        console.log('📝 POST /api/salidas body:', JSON.stringify({ cliente_id, fecha, detalles, responsable_id }, null, 2));
+
         // Validaciones detalladas
         if (!cliente_id) {
+            console.log('❌ Error: cliente_id faltando');
             return reply.status(400).send({
                 success: false,
                 error: 'Campo obligatorio: cliente_id'
@@ -135,6 +139,7 @@ async function salidasRoutes(fastify, options) {
         }
 
         if (!fecha) {
+            console.log('❌ Error: fecha faltando');
             return reply.status(400).send({
                 success: false,
                 error: 'Campo obligatorio: fecha'
@@ -142,6 +147,7 @@ async function salidasRoutes(fastify, options) {
         }
 
         if (!detalles || !Array.isArray(detalles)) {
+            console.log('❌ Error: detalles no es un array. detalles=', detalles);
             return reply.status(400).send({
                 success: false,
                 error: 'Detalles debe ser un array'
@@ -149,6 +155,7 @@ async function salidasRoutes(fastify, options) {
         }
 
         if (detalles.length === 0) {
+            console.log('❌ Error: detalles vacío');
             return reply.status(400).send({
                 success: false,
                 error: 'Debe incluir al menos un detalle de producto'
@@ -276,9 +283,10 @@ async function salidasRoutes(fastify, options) {
             });
 
         } catch (error) {
+            console.error('❌ Error en POST /api/salidas:', error);
             return reply.status(400).send({
                 success: false,
-                error: error.message
+                error: error.message || 'Error al crear nota de salida'
             });
         }
     });
