@@ -130,6 +130,30 @@ export const NotaSalidaForm = () => {
         }
     };
 
+    useEffect(() => {
+        const c = parseFloat(cajas) || 0;
+        const u = parseFloat(unidadesCaja) || 0;
+        const f = parseFloat(fraccion) || 0;
+        const total = (c * u) + f;
+        setCantidadTotal(total);
+    }, [cajas, unidadesCaja, fraccion]);
+
+    const handleNumberInput = (setter) => (event) => {
+        const raw = event.target.value;
+        if (raw === '') {
+            setter('');
+            return;
+        }
+        const cleaned = raw.replace(/[^0-9.]/g, '');
+        if (cleaned === '') {
+            setter('');
+            return;
+        }
+        const [whole, ...rest] = cleaned.split('.');
+        const normalized = rest.length > 0 ? `${whole}.${rest.join('')}` : cleaned;
+        setter(normalized);
+    };
+
     // const loadData replaced by separated functions
     // loadData removed
 
