@@ -109,11 +109,7 @@ export const ProductoList = () => {
                                                 <div><span className="font-semibold">UM:</span> {product.um || '-'}</div>
                                                 <div><span className="font-semibold">Temp. Min (°C):</span> {product.temperatura_min_c ?? '-'}</div>
                                                 <div><span className="font-semibold">Temp. Max (°C):</span> {product.temperatura_max_c ?? '-'}</div>
-                                                <div><span className="font-semibold">Bultos:</span> {product.cantidad_bultos ?? 0}</div>
-                                                <div><span className="font-semibold">Cajas:</span> {product.cantidad_cajas ?? 0}</div>
                                                 <div><span className="font-semibold">Por Caja:</span> {product.cantidad_por_caja ?? 0}</div>
-                                                <div><span className="font-semibold">Fracción:</span> {product.cantidad_fraccion ?? 0}</div>
-                                                <div><span className="font-semibold">Cantidad Total:</span> {product.cantidad_total ?? 0}</div>
                                                 <div><span className="font-semibold">Stock:</span> {product.stock_actual ?? 0}</div>
                                                 <div><span className="font-semibold">Categoría Ingreso:</span> {product.categoria_ingreso || '-'}</div>
                                                 <div className="md:col-span-2 lg:col-span-3"><span className="font-semibold">Observaciones:</span> {product.observaciones || '-'}</div>
