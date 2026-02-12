@@ -503,53 +503,257 @@ async function salidasRoutes(fastify, options) {
 
         const cliente = await clienteRepo.findOneBy({ id: nota.cliente_id });
 
+        // Calcular totales para el footer
+        const totalBultos = detalles.reduce((acc, d) => acc + Number(d.cant_bulto || 0), 0);
+        const totalCajas = detalles.reduce((acc, d) => acc + Number(d.cant_caja || 0), 0);
+        const totalFraccion = detalles.reduce((acc, d) => acc + Number(d.cant_fraccion || 0), 0);
+        const totalUnidades = detalles.reduce((acc, d) => acc + Number(d.cant_total || d.cantidad || 0), 0);
+
+        // Path del logo (si existe)
+        const logoPath = require('path').join(__dirname, '../assets/logo.png');
+        const fs = require('fs');
+        let logoImage = null;
+        if (fs.existsSync(logoPath)) {
+            logoImage = {
+                image: logoPath,
+                width: 150
+            };
+        } else {
+            logoImage = { text: 'AGUPAL PERU', style: 'brand', fontSize: 20 };
+        }
+
+        // Definición del documento
         const docDefinition = {
+            pageSize: 'A4',
+            pageOrientation: 'landscape',
+            pageMargins: [20, 20, 20, 20],
             content: [
-                { text: `NOTA DE SALIDA: ${nota.numero_salida}`, style: 'header' },
+                // Encabezado
                 {
                     columns: [
-                        { text: `Fecha: ${new Date(nota.fecha).toLocaleDateString()}`, bold: true },
-                        { text: `Cliente: ${cliente ? cliente.razon_social : 'N/A'}`, alignment: 'right' }
-                    ]
+                        logoImage,
+                        { text: 'NOTA DE SALIDA', style: 'headerTitle', alignment: 'center', margin: [0, 10, 0, 0] },
+                        { text: `N° ${Number(nota.numero_salida)}`, style: 'headerNumber', alignment: 'right', margin: [0, 10, 0, 0] }
+                    ],
+                    margin: [0, 0, 0, 10]
                 },
-                { text: '\n' },
+                { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 800, y2: 0, lineWidth: 1 }] },
+
+                // Datos Cliente y Salida
+                {
+                    columns: [
+                        {
+                            width: '60%',
+                            stack: [
+                                {
+                                    columns: [
+                                        { text: 'Razón Social :', width: 80, style: 'labelBold' },
+                                        { text: cliente?.razon_social || '-', style: 'labelText' }
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'Código Cliente :', width: 80, style: 'labelBold' },
+                                        { text: cliente?.codigo || '-', style: 'labelText' }
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'RUC :', width: 80, style: 'labelBold' },
+                                        { text: cliente?.cuit || '-', style: 'labelText' }
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'Dirección :', width: 80, style: 'labelBold' },
+                                        { text: cliente?.direccion || '-', style: 'labelText' }
+                                    ]
+                                }
+                            ],
+                            margin: [0, 10, 0, 0]
+                        },
+                        {
+                            width: '40%',
+                            stack: [
+                                {
+                                    columns: [
+                                        { text: 'Fecha de Salida:', width: '*', alignment: 'right', style: 'labelBold' },
+                                        { text: new Date(nota.fecha).toLocaleDateString('es-PE'), width: 100, alignment: 'right', style: 'labelText' }
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'Motivo:', width: '*', alignment: 'right', style: 'labelBold' },
+                                        { text: nota.motivo_salida || '-', width: 100, alignment: 'right', style: 'labelText' }
+                                    ]
+                                }
+                            ],
+                            margin: [0, 10, 0, 0]
+                        }
+                    ],
+                    margin: [0, 0, 0, 10]
+                },
+
+                // Tabla de Productos
                 {
                     table: {
                         headerRows: 1,
-                        widths: ['*', 'auto', 'auto', 'auto'],
+                        widths: [20, 60, '*', 50, 50, 25, 80, 50, 40, 40, 40, 50, 50],
                         body: [
                             [
+                                { text: 'Item', style: 'tableHeader' },
+                                { text: 'Cod.Producto', style: 'tableHeader' },
                                 { text: 'Producto', style: 'tableHeader' },
                                 { text: 'Lote', style: 'tableHeader' },
-                                { text: 'Vencimiento', style: 'tableHeader' },
-                                { text: 'Cantidad', style: 'tableHeader', alignment: 'right' }
+                                { text: 'Fecha Vcto', style: 'tableHeader' },
+                                { text: 'UM', style: 'tableHeader' },
+                                { text: 'Fabri.', style: 'tableHeader' },
+                                { text: 'Temp.', style: 'tableHeader' },
+                                { text: 'Cant.Bulto', style: 'tableHeader' },
+                                { text: 'Cant.Cajas', style: 'tableHeader' },
+                                { text: 'Cant.x Caja', style: 'tableHeader' },
+                                { text: 'Cant.Fracción', style: 'tableHeader' },
+                                { text: 'Cant.Total', style: 'tableHeader' }
                             ],
-                            ...detalles.map(d => [
-                                d.producto ? d.producto.descripcion : 'N/A',
-                                d.lote ? d.lote.numero_lote : '-',
-                                d.lote ? new Date(d.lote.fecha_vencimiento).toLocaleDateString() : '-',
-                                { text: d.cantidad, alignment: 'right' }
+                            ...detalles.map((d, idx) => [
+                                { text: String(idx + 1), style: 'tableCell' },
+                                { text: d.producto?.codigo || '-', style: 'tableCell' },
+                                { text: d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
+                                { text: (d.lote ? d.lote.numero_lote : d.lote_numero) || '-', style: 'tableCell' },
+                                { text: (d.lote ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : (d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-')), style: 'tableCell' },
+                                { text: d.producto?.unidad || 'UND', style: 'tableCell' },
+                                { text: d.producto?.fabricante || '-', style: 'tableCell' },
+                                { text: (d.producto?.temperatura_min_c != null) ? `${d.producto.temperatura_min_c}° ${d.producto.temperatura_max_c}°C` : '-', style: 'tableCell' },
+                                { text: parseFloat(d.cant_bulto || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cant_caja || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cant_por_caja || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cant_fraccion || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cant_total || d.cantidad).toFixed(2), style: 'tableCell' }
                             ])
                         ]
+                    },
+                    layout: {
+                        hLineWidth: function (i, node) { return 1; },
+                        vLineWidth: function (i, node) { return 1; },
+                        hLineColor: function (i, node) { return 'black'; },
+                        vLineColor: function (i, node) { return 'black'; },
+                        paddingLeft: function (i, node) { return 2; },
+                        paddingRight: function (i, node) { return 2; },
                     }
                 },
-                { text: '\n\n' },
+
+                // Footer
                 {
                     columns: [
-                        { text: '_______________________\nAutorizado Por', alignment: 'center' },
-                        { text: '_______________________\nRecibí Conforme', alignment: 'center' }
-                    ]
+                        // Columna Izquierda (Motivos, Observaciones, Leyenda)
+                        {
+                            width: '*',
+                            stack: [
+                                {
+                                    text: [
+                                        { text: 'Motivo de la Salida:\n', bold: true, decoration: 'underline' },
+                                        { text: nota.motivo_salida || '(Describir causa)' }
+                                    ],
+                                    margin: [0, 5, 0, 5]
+                                },
+                                { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 520, y2: 0, lineWidth: 0.5 }] },
+                                {
+                                    text: [
+                                        { text: 'Observaciones:\n', bold: true, decoration: 'underline' },
+                                        { text: nota.observaciones || '(Condiciones, daños, etc.)' }
+                                    ],
+                                    margin: [0, 5, 0, 5]
+                                },
+                                { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 520, y2: 0, lineWidth: 0.5 }] },
+                                {
+                                    text: [
+                                        { text: 'LEYENDA: ', bold: true },
+                                        'Cant. Bulto: N° de cajas selladas (empaque primario)\n',
+                                        { text: 'Cant. Cajas: ', bold: true }, 'N° de unidades por caja sellada\n',
+                                        { text: 'Cant. x Caja: ', bold: true }, 'N° de unidades por caja abierta\n',
+                                        { text: 'Cant. Fracción: ', bold: true }, 'Unidades sueltas\n',
+                                        { text: 'Cant. Total: ', bold: true }, 'Total de unidades = (Bultos x Cajas x xCaja) + Saldo'
+                                    ],
+                                    style: 'legend',
+                                    margin: [0, 5, 0, 0]
+                                },
+                                {
+                                    text: `Son ${totalUnidades} unidades en total`,
+                                    style: 'legend',
+                                    margin: [0, 5, 0, 0]
+                                },
+                                {
+                                    text: '(Resultado de sumar las unidades contenidas en los bultos, las cajas sueltas y las fracciones.)',
+                                    style: 'legend',
+                                    italics: true,
+                                    color: 'gray'
+                                }
+                            ]
+                        },
+                        // Columna Derecha (Totales Grid)
+                        {
+                            width: 250,
+                            table: {
+                                widths: ['50%', '50%'],
+                                body: [
+                                    [
+                                        { text: 'BULTOS', style: 'footerGridHeader' },
+                                        { text: 'PALETS', style: 'footerGridHeader' }
+                                    ],
+                                    [
+                                        { text: parseFloat(totalBultos).toFixed(2), style: 'footerGridValue', minHeight: 40 },
+                                        { text: '', style: 'footerGridValue', minHeight: 40 }
+                                    ],
+                                    [
+                                        { text: 'FRACCIONES', style: 'footerGridHeader' },
+                                        { text: 'CANTIDAD TOTAL DE UNIDADES', style: 'footerGridHeader' }
+                                    ],
+                                    [
+                                        { text: parseFloat(totalFraccion).toFixed(2), style: 'footerGridValue', minHeight: 40 },
+                                        { text: parseFloat(totalUnidades).toFixed(2), style: 'footerGridValue', minHeight: 40 }
+                                    ]
+                                ]
+                            }
+                        }
+                    ],
+                    margin: [0, 10, 0, 0]
+                },
+
+                // Firmas
+                {
+                    columns: [
+                        { stack: [{ text: '________________________' }, { text: 'Jefe de Almacén' }], alignment: 'center' },
+                        { stack: [{ text: '________________________' }, { text: 'Despachó' }], alignment: 'center' }
+                    ],
+                    margin: [0, 40, 0, 0]
                 }
             ],
             styles: {
-                header: { fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-                tableHeader: { bold: true, fontSize: 13, color: 'black' }
+                brand: { fontSize: 18, bold: true, color: '#0b6aa2' },
+                headerTitle: { fontSize: 14, bold: true },
+                headerNumber: { fontSize: 12, bold: true },
+                labelBold: { fontSize: 8, bold: true },
+                labelText: { fontSize: 8 },
+                tableHeader: { fontSize: 7, bold: true, color: 'white', fillColor: 'black', alignment: 'center' },
+                tableCell: { fontSize: 7, alignment: 'center' },
+                footerGridHeader: { fontSize: 7, bold: true, fillColor: '#ffffff' },
+                footerGridValue: { fontSize: 9, bold: true, alignment: 'center', margin: [0, 5, 0, 0] },
+                legend: { fontSize: 6 }
             }
         };
 
-        const buffer = await generatePDF(docDefinition);
-        reply.header('Content-Type', 'application/pdf');
-        return reply.send(buffer);
+        try {
+            const buffer = await generatePDF(docDefinition);
+            reply.header('Content-Type', 'application/pdf');
+            reply.header('Content-Disposition', `inline; filename=salida-${nota.numero_salida}.pdf`);
+            return reply.send(buffer);
+        } catch (error) {
+            console.error('Error generando PDF:', error);
+            return reply.status(500).send({
+                success: false,
+                error: 'Error al generar el PDF'
+            });
+        }
     });
 }
 
