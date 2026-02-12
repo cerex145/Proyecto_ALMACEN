@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs');
+const { MoreThan } = require('typeorm');
 const { generatePDF } = require('../services/pdf.service');
 
 async function salidasRoutes(fastify, options) {
@@ -131,35 +132,13 @@ async function salidasRoutes(fastify, options) {
 
         // Validaciones detalladas
         if (!cliente_id) {
-            console.log('❌ Error: cliente_id faltando');
-            return reply.status(400).send({
-                success: false,
-                error: 'Campo obligatorio: cliente_id'
-            });
+            return reply.status(400).send({ success: false, error: 'Campo obligatorio: cliente_id' });
         }
-
         if (!fecha) {
-            console.log('❌ Error: fecha faltando');
-            return reply.status(400).send({
-                success: false,
-                error: 'Campo obligatorio: fecha'
-            });
+            return reply.status(400).send({ success: false, error: 'Campo obligatorio: fecha' });
         }
-
-        if (!detalles || !Array.isArray(detalles)) {
-            console.log('❌ Error: detalles no es un array. detalles=', detalles);
-            return reply.status(400).send({
-                success: false,
-                error: 'Detalles debe ser un array'
-            });
-        }
-
-        if (detalles.length === 0) {
-            console.log('❌ Error: detalles vacío');
-            return reply.status(400).send({
-                success: false,
-                error: 'Debe incluir al menos un detalle de producto'
-            });
+        if (!detalles || !Array.isArray(detalles) || detalles.length === 0) {
+            return reply.status(400).send({ success: false, error: 'Detalles debe ser un array con al menos un item' });
         }
 
         try {
@@ -169,17 +148,15 @@ async function salidasRoutes(fastify, options) {
                 return reply.status(404).send({ success: false, error: 'Cliente no encontrado' });
             }
 
-            // Validar detalles
+            // Validar estructura de detalles
             for (const detalle of detalles) {
                 if (!detalle.producto_id || !detalle.cantidad || Number(detalle.cantidad) <= 0) {
-                    return reply.status(400).send({
-                        success: false,
-                        error: 'Cada detalle debe incluir producto_id y cantidad > 0'
-                    });
+                    return reply.status(400).send({ success: false, error: 'Cada detalle debe incluir producto_id y cantidad > 0' });
                 }
             }
 
-            // Validar stock por producto
+            // Validar stock GLOBAL por producto (Primera barrera)
+            const EPSILON = 0.001; // Margen para flotantes
             const totalPorProducto = new Map();
             for (const detalle of detalles) {
                 const pid = Number(detalle.producto_id);
@@ -191,30 +168,16 @@ async function salidasRoutes(fastify, options) {
                 if (!producto) {
                     throw new Error(`Producto ${pid} no encontrado`);
                 }
-                if (Number(producto.stock_actual) < Number(totalCantidad)) {
-                    throw new Error(`Stock insuficiente para ${producto.descripcion}. Disponible: ${producto.stock_actual}`);
-                }
-            }
-
-            // Validar lotes cuando se envían
-            for (const detalle of detalles) {
-                if (detalle.lote_id) {
-                    const lote = await loteRepo.findOneBy({ id: Number(detalle.lote_id) });
-                    if (!lote) {
-                        throw new Error(`Lote ${detalle.lote_id} no encontrado`);
-                    }
-                    if (Number(lote.producto_id) !== Number(detalle.producto_id)) {
-                        throw new Error(`El lote ${detalle.lote_id} no corresponde al producto ${detalle.producto_id}`);
-                    }
-                    if (Number(lote.cantidad_disponible) < Number(detalle.cantidad)) {
-                        throw new Error(`Stock insuficiente en lote ${lote.numero_lote}. Disponible: ${lote.cantidad_disponible}`);
-                    }
+                const stock = Number(producto.stock_actual);
+                // Validación con epsilon
+                if (stock + EPSILON < totalCantidad) {
+                    throw new Error(`Stock insuficiente para ${producto.descripcion}. Disponible: ${stock.toFixed(2)}, Solicitado: ${totalCantidad.toFixed(2)}`);
                 }
             }
 
             const numeroSalida = await generarNumeroSalida();
 
-            // Crear nota
+            // Crear objeto nota base
             const nota = notaSalidaRepo.create({
                 numero_salida: numeroSalida,
                 cliente_id: Number(cliente_id),
@@ -228,51 +191,121 @@ async function salidasRoutes(fastify, options) {
                 estado: 'REGISTRADA'
             });
 
-            // Iniciar transacción
+            // TRANSACCIÓN PRINCIPAL
             let notaGuardada = null;
-            await fastify.db.transaction(async (transactionalEntityManager) => {
-                notaGuardada = await transactionalEntityManager.save('NotaSalida', nota);
+            await fastify.db.transaction(async (tx) => {
+                notaGuardada = await tx.save('NotaSalida', nota);
 
                 for (const detalle of detalles) {
-                    const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
+                    const pid = Number(detalle.producto_id);
+                    const cantidadSolicitada = Number(detalle.cantidad);
+                    const precioUnitario = detalle.precio_unitario;
 
-                    let lote = null;
+                    const producto = await tx.findOne('Producto', { where: { id: pid } });
+
+                    // CASO 1: Lote específico seleccionado
                     if (detalle.lote_id) {
-                        lote = await transactionalEntityManager.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
-                        if (!lote) {
-                            throw new Error(`Lote ${detalle.lote_id} no encontrado`);
+                        const lote = await tx.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
+                        if (!lote) throw new Error(`Lote ${detalle.lote_id} no encontrado`);
+
+                        if (Number(lote.cantidad_disponible) + EPSILON < cantidadSolicitada) {
+                            throw new Error(`Stock insuficiente en lote ${lote.numero_lote}. Disponible: ${Number(lote.cantidad_disponible).toFixed(2)}`);
                         }
-                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(detalle.cantidad);
+
+                        // Actualizar Lote
+                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - cantidadSolicitada;
                         if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
-                        await transactionalEntityManager.save('Lote', lote);
+                        await tx.save('Lote', lote);
+
+                        // Crear Detalle
+                        const detalleNota = notaSalidaDetalleRepo.create({
+                            nota_salida_id: notaGuardada.id,
+                            producto_id: pid,
+                            lote_id: lote.id,
+                            cantidad: cantidadSolicitada,
+                            precio_unitario: precioUnitario
+                        });
+                        await tx.save('NotaSalidaDetalle', detalleNota);
+
+                        // Kardex
+                        const movimiento = kardexRepo.create({
+                            producto_id: pid,
+                            lote_numero: lote.numero_lote,
+                            tipo_movimiento: 'SALIDA',
+                            cantidad: cantidadSolicitada,
+                            saldo: Number(producto.stock_actual) - cantidadSolicitada, // Saldo proyectado tras esta operación (simplificado)
+                            documento_tipo: 'NOTA_SALIDA',
+                            documento_numero: numeroSalida,
+                            referencia_id: notaGuardada.id
+                        });
+                        await tx.save('Kardex', movimiento);
+
+                    }
+                    // CASO 2: Selección Automática FIFO (Sin Lote)
+                    else {
+                        // Buscar lotes con stock > 0, ordenados por vencimiento o creación
+                        const lotesDisponibles = await tx.find('Lote', {
+                            where: {
+                                producto_id: pid,
+                                cantidad_disponible: MoreThan(0.00)
+                            },
+                            order: {
+                                fecha_vencimiento: 'ASC',
+                                created_at: 'ASC'
+                            }
+                        });
+
+                        let pendiente = cantidadSolicitada;
+
+                        for (const lote of lotesDisponibles) {
+                            if (pendiente <= EPSILON) break;
+
+                            const disponible = Number(lote.cantidad_disponible);
+                            const aTomar = Math.min(disponible, pendiente);
+
+                            // Actualizar Lote
+                            lote.cantidad_disponible = disponible - aTomar;
+                            await tx.save('Lote', lote);
+
+                            // Crear Detalle (Uno por cada lote usado)
+                            const detalleNota = notaSalidaDetalleRepo.create({
+                                nota_salida_id: notaGuardada.id,
+                                producto_id: pid,
+                                lote_id: lote.id,
+                                cantidad: aTomar,
+                                precio_unitario: precioUnitario
+                            });
+                            await tx.save('NotaSalidaDetalle', detalleNota);
+
+                            // Kardex
+                            // Nota: El saldo aquí es un poco delicado en batch, pero usaremos el stock global actual menos lo acumulado
+                            const movimiento = kardexRepo.create({
+                                producto_id: pid,
+                                lote_numero: lote.numero_lote,
+                                tipo_movimiento: 'SALIDA',
+                                cantidad: aTomar,
+                                saldo: Number(producto.stock_actual) - (cantidadSolicitada - pendiente + aTomar), // Calculo approx
+                                documento_tipo: 'NOTA_SALIDA',
+                                documento_numero: numeroSalida,
+                                referencia_id: notaGuardada.id
+                            });
+                            await tx.save('Kardex', movimiento);
+
+                            pendiente -= aTomar;
+                        }
+
+                        // Verificación final de integridad
+                        if (pendiente > EPSILON) {
+                            throw new Error(`Inconsistencia: El stock global indicaba suficiente (${producto.stock_actual}), pero la suma de lotes disponibles no cubrió el pedido. Faltaron: ${pendiente.toFixed(2)}`);
+                        }
                     }
 
-                    // Crear detalle
-                    const detalleNota = notaSalidaDetalleRepo.create({
-                        nota_salida_id: notaGuardada.id,
-                        producto_id: detalle.producto_id,
-                        lote_id: detalle.lote_id || null,
-                        cantidad: detalle.cantidad,
-                        precio_unitario: detalle.precio_unitario
-                    });
-                    await transactionalEntityManager.save('NotaSalidaDetalle', detalleNota);
+                    // Actualizar Stock Global del Producto
+                    producto.stock_actual = Number(producto.stock_actual) - cantidadSolicitada;
+                    await tx.save('Producto', producto);
 
-                    // Actualizar stock del producto
-                    producto.stock_actual = Number(producto.stock_actual) - Number(detalle.cantidad);
-                    await transactionalEntityManager.save('Producto', producto);
-
-                    // Registrar en kardex
-                    const movimiento = kardexRepo.create({
-                        producto_id: detalle.producto_id,
-                        lote_numero: lote ? lote.numero_lote : null,
-                        tipo_movimiento: 'SALIDA',
-                        cantidad: detalle.cantidad,
-                        saldo: producto.stock_actual,
-                        documento_tipo: 'NOTA_SALIDA',
-                        documento_numero: numeroSalida,
-                        referencia_id: notaGuardada.id
-                    });
-                    await transactionalEntityManager.save('Kardex', movimiento);
+                    // Actualizamos el saldo del último kardex para asegurar consistencia exacta si es necesario
+                    // (Opcional, pero recomendable si queremos precisión absoluta en el campo 'saldo' del kardex)
                 }
             });
 
