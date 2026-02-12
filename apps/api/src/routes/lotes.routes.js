@@ -4,12 +4,13 @@ async function lotesRoutes(fastify, options) {
 
     // GET /api/lotes - Listar lotes
     fastify.get('/api/lotes', async (request, reply) => {
-        const { 
+        const {
             producto_id,
             busqueda,
             disponibles_solo,
             fecha_vencimiento_desde,
             fecha_vencimiento_hasta,
+            cliente_id,
             page = 1,
             limit = 50
         } = request.query;
@@ -17,8 +18,15 @@ async function lotesRoutes(fastify, options) {
         const skip = (page - 1) * limit;
         const queryBuilder = loteRepo.createQueryBuilder('lote');
 
+        // Join con NotaIngreso para filtrar por cliente
+        queryBuilder.leftJoinAndSelect('lote.notaIngreso', 'notaIngreso');
+
         if (producto_id) {
-            queryBuilder.where('lote.producto_id = :producto_id', { producto_id: Number(producto_id) });
+            queryBuilder.andWhere('lote.producto_id = :producto_id', { producto_id: Number(producto_id) });
+        }
+
+        if (cliente_id) {
+            queryBuilder.andWhere('notaIngreso.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
         }
 
         if (busqueda) {

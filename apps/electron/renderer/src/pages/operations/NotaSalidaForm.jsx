@@ -46,7 +46,9 @@ export const NotaSalidaForm = () => {
     const [lastSalidaId, setLastSalidaId] = useState(null);
 
     useEffect(() => {
-        loadData();
+        loadClients();
+        // Cargar productos iniciales (sin filtro o todos)
+        loadProducts();
     }, []);
 
     useEffect(() => {
@@ -54,6 +56,7 @@ export const NotaSalidaForm = () => {
             setClienteRuc('');
             setClienteCodigo('');
             setValue('cliente_id', '', { shouldValidate: true });
+            loadProducts(); // Cargar todos si no hay cliente
             return;
         }
         const client = clients.find(c => String(c.id) === String(selectedClient));
@@ -62,6 +65,13 @@ export const NotaSalidaForm = () => {
             setClienteCodigo(client.codigo || '');
         }
         setValue('cliente_id', selectedClient, { shouldValidate: true });
+
+        // Recargar productos filtrados por cliente
+        loadProducts(selectedClient);
+
+        // Limpiar selección de producto actual
+        setSelectedProduct('');
+        setLotesDisponibles([]);
     }, [selectedClient, clients, setValue]);
 
     useEffect(() => {
@@ -74,9 +84,11 @@ export const NotaSalidaForm = () => {
         }
         const product = products.find(p => p.id === parseInt(selectedProduct));
         setUm(product?.um || '');
+
         const loadLotes = async () => {
             try {
-                const lotes = await productService.getLotesByProduct(selectedProduct);
+                // Pasar cliente_id para filtrar lotes
+                const lotes = await productService.getLotesByProduct(selectedProduct, selectedClient);
                 const activos = Array.isArray(lotes)
                     ? lotes.filter(l => Number(l.cantidad_disponible) > 0)
                     : [];
@@ -92,35 +104,11 @@ export const NotaSalidaForm = () => {
             }
         };
         loadLotes();
-    }, [selectedProduct, products]);
+    }, [selectedProduct, products, selectedClient]);
 
-    useEffect(() => {
-        if (!selectedLoteId) {
-            setFechaVencimiento('');
-            return;
-        }
-        const lote = lotesDisponibles.find(l => String(l.id) === String(selectedLoteId));
-        setFechaVencimiento(lote?.fecha_vencimiento || '');
-    }, [selectedLoteId, lotesDisponibles]);
+    // ... (rest of useEffects)
 
-    useEffect(() => {
-        const b = parseFloat(bultos) || 0;
-        const c = parseFloat(cajas) || 0;
-        const u = parseFloat(unidadesCaja) || 0;
-        const f = parseFloat(fraccion) || 0;
-        const total = (b * c * u) + f;
-        setCantidadTotal(total);
-    }, [bultos, cajas, unidadesCaja, fraccion]);
-
-    const loadData = async () => {
-        try {
-            const productsResponse = await productService.getProducts();
-            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
-        } catch (error) {
-            console.error('Error loading products:', error);
-            alert('Error al cargar lista de Productos.');
-        }
-
+    const loadClients = async () => {
         try {
             const clientsResponse = await clientesService.listar();
             const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
@@ -130,6 +118,20 @@ export const NotaSalidaForm = () => {
             alert('Error al cargar lista de Clientes.');
         }
     };
+
+    const loadProducts = async (clienteId = null) => {
+        try {
+            const params = clienteId ? { cliente_id: clienteId } : {};
+            const productsResponse = await productService.getProducts(params);
+            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
+        } catch (error) {
+            console.error('Error loading products:', error);
+            alert('Error al cargar lista de Productos.');
+        }
+    };
+
+    // const loadData replaced by separated functions
+    // loadData removed
 
     const handleAddLine = () => {
         if (!selectedProduct || !selectedLoteId || Number(cantidadTotal) <= 0) {
@@ -391,9 +393,9 @@ export const NotaSalidaForm = () => {
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={bultos}
-                                    onChange={(e) => setBultos(e.target.value)}
+                                    onChange={handleNumberInput(setBultos)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
@@ -401,9 +403,9 @@ export const NotaSalidaForm = () => {
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={cajas}
-                                    onChange={(e) => setCajas(e.target.value)}
+                                    onChange={handleNumberInput(setCajas)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
@@ -411,9 +413,9 @@ export const NotaSalidaForm = () => {
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={unidadesCaja}
-                                    onChange={(e) => setUnidadesCaja(e.target.value)}
+                                    onChange={handleNumberInput(setUnidadesCaja)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
@@ -421,9 +423,9 @@ export const NotaSalidaForm = () => {
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
                                 <input
-                                    type="number"
+                                    type="text"
                                     value={fraccion}
-                                    onChange={(e) => setFraccion(e.target.value)}
+                                    onChange={handleNumberInput(setFraccion)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />

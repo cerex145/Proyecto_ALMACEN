@@ -102,12 +102,13 @@ async function productoRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { 
-            busqueda = '', 
+        const {
+            busqueda = '',
             activo,
             categoria_ingreso,
             lote,
-            page = 1, 
+            cliente_id,
+            page = 1,
             limit = 50,
             orderBy = 'descripcion',
             order = 'ASC'
@@ -132,6 +133,21 @@ async function productoRoutes(fastify, options) {
             queryBuilder.andWhere('producto.activo = :activo', { activo: activo === 'true' });
         }
 
+        if (cliente_id) {
+            // Filtrar productos que tengan lotes asociados a este cliente (via NotaIngreso)
+            // Subquery existe: SELECT 1 FROM lotes l JOIN notas_ingreso ni ON l.nota_ingreso_id = ni.id WHERE l.producto_id = producto.id AND ni.cliente_id = :cliente_id
+            queryBuilder.andWhere(qb => {
+                const subQuery = qb.subQuery()
+                    .select("1")
+                    .from("lotes", "l")
+                    .innerJoin("notas_ingreso", "ni", "l.nota_ingreso_id = ni.id")
+                    .where("l.producto_id = producto.id")
+                    .andWhere("ni.cliente_id = :cliente_id")
+                    .getQuery();
+                return "EXISTS " + subQuery;
+            }, { cliente_id });
+        }
+
         queryBuilder
             .orderBy(`producto.${orderBy}`, order.toUpperCase())
             .skip(skip)
@@ -145,8 +161,8 @@ async function productoRoutes(fastify, options) {
             const loteRepo = fastify.db.getRepository('Lote');
             productosConLotes = await Promise.all(
                 productos.map(async (producto) => {
-                    const lotes = await loteRepo.find({ 
-                        where: { 
+                    const lotes = await loteRepo.find({
+                        where: {
                             producto_id: producto.id,
                             numero_lote: Like(`%${lote}%`)
                         }
@@ -232,9 +248,9 @@ async function productoRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { 
-            codigo, 
-            descripcion, 
+        const {
+            codigo,
+            descripcion,
             stock_actual,
             proveedor,
             tipo_documento,
@@ -260,27 +276,27 @@ async function productoRoutes(fastify, options) {
 
         // Validaciones
         if (!codigo || !descripcion) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Código y Descripción son obligatorios' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Código y Descripción son obligatorios'
             });
         }
 
         // Verificar código único
         const existente = await productoRepo.findOneBy({ codigo });
         if (existente) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'El código ya existe' 
+            return reply.status(400).send({
+                success: false,
+                error: 'El código ya existe'
             });
         }
 
         // Validar categoría si se proporciona
         const categoriasValidas = ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'];
         if (categoria_ingreso && !categoriasValidas.includes(categoria_ingreso)) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Categoría de ingreso inválida' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Categoría de ingreso inválida'
             });
         }
 
@@ -313,10 +329,10 @@ async function productoRoutes(fastify, options) {
 
         await productoRepo.save(nuevoProducto);
 
-        return reply.status(201).send({ 
-            success: true, 
+        return reply.status(201).send({
+            success: true,
             data: nuevoProducto,
-            message: 'Producto creado exitosamente' 
+            message: 'Producto creado exitosamente'
         });
     });
 
@@ -366,9 +382,9 @@ async function productoRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { 
-            codigo, 
-            descripcion, 
+        const {
+            codigo,
+            descripcion,
             activo,
             proveedor,
             tipo_documento,
@@ -399,9 +415,9 @@ async function productoRoutes(fastify, options) {
 
         // Validaciones
         if (!descripcion) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Descripción es obligatoria' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Descripción es obligatoria'
             });
         }
 
@@ -409,9 +425,9 @@ async function productoRoutes(fastify, options) {
         if (codigo && codigo !== producto.codigo) {
             const existente = await productoRepo.findOneBy({ codigo });
             if (existente) {
-                return reply.status(400).send({ 
-                    success: false, 
-                    error: 'El código ya existe' 
+                return reply.status(400).send({
+                    success: false,
+                    error: 'El código ya existe'
                 });
             }
             producto.codigo = codigo;
@@ -504,7 +520,7 @@ async function productoRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const data = await request.file();
-        
+
         if (!data) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
@@ -554,24 +570,18 @@ async function productoRoutes(fastify, options) {
             }
         }
 
-        return { 
-            success: true, 
-            message: `Importación completada: ${insertados} insertados, ${actualizados} actualizados` 
+        return {
+            success: true,
+            message: `Importación completada: ${insertados} insertados, ${actualizados} actualizados`
         };
     });
 
     // GET /api/productos/exportar - Exportar a Excel
-    fastify.get('/api/productos/exportar', {
-        schema: {
-            response: {
-                200: { type: 'string', format: 'binary' }
-            }
-        }
-    }, async (request, reply) => {
+    fastify.get('/api/productos/exportar', async (request, reply) => {
         const { activo } = request.query;
 
         const queryBuilder = productoRepo.createQueryBuilder('producto');
-        
+
         if (activo !== undefined) {
             queryBuilder.where('producto.activo = :activo', { activo: activo === 'true' });
         }
