@@ -126,11 +126,32 @@ async function salidasRoutes(fastify, options) {
             motivo_salida
         } = request.body;
 
-        // Validaciones
-        if (!cliente_id || !fecha || !detalles || detalles.length === 0) {
+        // Validaciones detalladas
+        if (!cliente_id) {
             return reply.status(400).send({
                 success: false,
-                error: 'Cliente, fecha y detalles son obligatorios'
+                error: 'Campo obligatorio: cliente_id'
+            });
+        }
+
+        if (!fecha) {
+            return reply.status(400).send({
+                success: false,
+                error: 'Campo obligatorio: fecha'
+            });
+        }
+
+        if (!detalles || !Array.isArray(detalles)) {
+            return reply.status(400).send({
+                success: false,
+                error: 'Detalles debe ser un array'
+            });
+        }
+
+        if (detalles.length === 0) {
+            return reply.status(400).send({
+                success: false,
+                error: 'Debe incluir al menos un detalle de producto'
             });
         }
 
