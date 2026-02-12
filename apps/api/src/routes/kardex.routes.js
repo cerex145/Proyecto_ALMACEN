@@ -4,7 +4,7 @@ async function kardexRoutes(fastify, options) {
     const kardexRepo = fastify.db.getRepository('Kardex');
     const productoRepo = fastify.db.getRepository('Producto');
 
-    // GET /api/kardex - Listar movimientos
+    // GET /api/kardex - Listar movimientos (con datos del producto)
     fastify.get('/api/kardex', async (request, reply) => {
         const { 
             producto_id,
@@ -20,7 +20,15 @@ async function kardexRoutes(fastify, options) {
 
         const skip = (page - 1) * limit;
 
-        const queryBuilder = kardexRepo.createQueryBuilder('kardex');
+        // Usar query builder con JOIN explícito a la tabla productos
+        const queryBuilder = kardexRepo.createQueryBuilder('kardex')
+            .select([
+                'kardex.id', 'kardex.producto_id', 'kardex.lote_numero', 'kardex.tipo_movimiento',
+                'kardex.cantidad', 'kardex.saldo', 'kardex.documento_tipo', 'kardex.documento_numero',
+                'kardex.referencia_id', 'kardex.observaciones', 'kardex.created_at',
+                'producto.id', 'producto.codigo', 'producto.descripcion'
+            ])
+            .leftJoin('productos', 'producto', 'kardex.producto_id = producto.id');
 
         if (producto_id) {
             queryBuilder.where('kardex.producto_id = :producto_id', { producto_id: Number(producto_id) });
@@ -54,9 +62,29 @@ async function kardexRoutes(fastify, options) {
 
         const [movimientos, total] = await queryBuilder.getManyAndCount();
 
+        // Mapear resultado a estructura esperada
+        const movimientosConProducto = movimientos.map(mov => ({
+            id: mov.kardex_id,
+            producto_id: mov.kardex_producto_id,
+            lote_numero: mov.kardex_lote_numero,
+            tipo_movimiento: mov.kardex_tipo_movimiento,
+            cantidad: mov.kardex_cantidad,
+            saldo: mov.kardex_saldo,
+            documento_tipo: mov.kardex_documento_tipo,
+            documento_numero: mov.kardex_documento_numero,
+            referencia_id: mov.kardex_referencia_id,
+            observaciones: mov.kardex_observaciones,
+            created_at: mov.kardex_created_at,
+            producto: {
+                id: mov.producto_id,
+                codigo: mov.producto_codigo || 'N/A',
+                descripcion: mov.producto_descripcion || 'N/A'
+            }
+        }));
+
         return {
             success: true,
-            data: movimientos,
+            data: movimientosConProducto,
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
