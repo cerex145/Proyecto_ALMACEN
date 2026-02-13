@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
@@ -6,7 +6,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
 export const ActaRecepcionForm = () => {
-    const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
+    const { register, control, handleSubmit, reset, setValue, getValues, watch, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             fecha: new Date().toISOString().split('T')[0],
             tipo_documento: '',
@@ -61,6 +61,47 @@ export const ActaRecepcionForm = () => {
     const [selectedNotaIngresoId, setSelectedNotaIngresoId] = useState('');
     const [mostrarNotasIngreso, setMostrarNotasIngreso] = useState(false);
 
+    const selectedTipoDocumento = watch('tipo_documento');
+
+    const tipoDocumentoOptions = useMemo(() => {
+        const baseOptions = [
+            'Invoice',
+            'DUA',
+            'Factura',
+            'Guía de Remisión Remitente',
+            'Guía de Remisión Transportista',
+            'Package List'
+        ];
+        const extraOptions = new Set();
+
+        products.forEach((product) => {
+            const value = String(product?.tipo_documento || '').trim();
+            if (value) extraOptions.add(value);
+        });
+
+        const merged = [...baseOptions];
+        extraOptions.forEach((value) => {
+            if (!merged.includes(value)) merged.push(value);
+        });
+
+        return merged;
+    }, [products]);
+
+    const numeroDocumentoOptions = useMemo(() => {
+        const options = new Set();
+        const selected = String(selectedTipoDocumento || '').trim();
+
+        products.forEach((product) => {
+            const tipo = String(product?.tipo_documento || '').trim();
+            const numero = String(product?.numero_documento || '').trim();
+            if (!numero) return;
+            if (selected && tipo !== selected) return;
+            options.add(numero);
+        });
+
+        return Array.from(options);
+    }, [products, selectedTipoDocumento]);
+
     useEffect(() => {
         loadClients();
     }, []);
@@ -90,6 +131,14 @@ export const ActaRecepcionForm = () => {
             setSelectedNotaIngresoId('');
         }
     }, [selectedClient]);
+
+    useEffect(() => {
+        if (!selectedTipoDocumento) return;
+        const currentNumero = String(getValues('numero_documento') || '').trim();
+        if (currentNumero && !numeroDocumentoOptions.includes(currentNumero)) {
+            setValue('numero_documento', '');
+        }
+    }, [selectedTipoDocumento, numeroDocumentoOptions, getValues, setValue]);
 
     // Auto-fill producto
     useEffect(() => {
@@ -494,18 +543,24 @@ export const ActaRecepcionForm = () => {
                             <label className="label-premium">Tipo de Documento *</label>
                             <select {...register('tipo_documento', { required: true })} className="input-premium">
                                 <option value="">Seleccione...</option>
-                                <option value="Invoice">Invoice</option>
-                                <option value="DUA">DUA</option>
-                                <option value="Factura">Factura</option>
-                                <option value="Guía de Remisión Remitente">Guía de Remisión Remitente</option>
-                                <option value="Guía de Remisión Transportista">Guía de Remisión Transportista</option>
-                                <option value="Package List">Package List</option>
+                                {tipoDocumentoOptions.map((option) => (
+                                    <option key={option} value={option}>{option}</option>
+                                ))}
                             </select>
                             {errors.tipo_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
                             <label className="label-premium">Número de Documento *</label>
-                            <input {...register('numero_documento', { required: true })} className="input-premium" />
+                            <input
+                                {...register('numero_documento', { required: true })}
+                                className="input-premium"
+                                list="acta_numero_documento_options"
+                            />
+                            <datalist id="acta_numero_documento_options">
+                                {numeroDocumentoOptions.map((option) => (
+                                    <option key={option} value={option} />
+                                ))}
+                            </datalist>
                             {errors.numero_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
