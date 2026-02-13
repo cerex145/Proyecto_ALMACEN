@@ -128,7 +128,7 @@ async function buildApp(fastify, options) {
     await fastify.register(require('./routes/kardex.routes'));
     await fastify.register(require('./routes/lotes.routes'));
     await fastify.register(require('./routes/alertas.routes'));
-    await fastify.register(require('./routes/reportes.routes'));
+
     await fastify.register(require('./routes/usuarios.routes'));
 
     fastify.route({

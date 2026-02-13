@@ -50,7 +50,7 @@ export const NotaIngresoForm = () => {
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
     const [precio, setPrecio] = useState('');
-    
+
     // Estados para importación CSV
     const [mostrarModalImportacion, setMostrarModalImportacion] = useState(false);
     const [archivoCSV, setArchivoCSV] = useState(null);
@@ -394,7 +394,7 @@ export const NotaIngresoForm = () => {
             try {
                 const text = e.target.result;
                 const lines = text.split('\n').filter(line => line.trim());
-                
+
                 if (lines.length < 2) {
                     alert('El archivo CSV está vacío o no tiene datos');
                     return;
@@ -408,7 +408,7 @@ export const NotaIngresoForm = () => {
                 // Validar encabezados requeridos
                 const requeridos = ['codigo_producto', 'lote', 'cantidad_total'];
                 const faltantes = requeridos.filter(r => !headers.includes(r));
-                
+
                 if (faltantes.length > 0) {
                     alert(`Faltan columnas requeridas: ${faltantes.join(', ')}`);
                     setErroresImportacion([`Columnas faltantes: ${faltantes.join(', ')}`]);
@@ -419,14 +419,14 @@ export const NotaIngresoForm = () => {
                 for (let i = 1; i < lines.length; i++) {
                     const values = lines[i].split(',').map(v => v.trim());
                     const row = {};
-                    
+
                     headers.forEach((header, index) => {
                         row[header] = values[index] || '';
                     });
 
                     try {
                         // Buscar producto por código
-                        const productoEncontrado = products.find(p => 
+                        const productoEncontrado = products.find(p =>
                             p.codigo.toLowerCase() === row.codigo_producto.toLowerCase()
                         );
 
@@ -517,7 +517,7 @@ export const NotaIngresoForm = () => {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
-        
+
         link.setAttribute('href', url);
         link.setAttribute('download', 'plantilla_nota_ingreso.csv');
         link.style.visibility = 'hidden';
@@ -832,7 +832,7 @@ export const NotaIngresoForm = () => {
                                 <th className="px-6 py-4">Cant.x Caja</th>
                                 <th className="px-6 py-4">Cant.Fracción</th>
                                 <th className="px-6 py-4 text-right">Cant.Total</th>
-                                <th className="px-6 py-4 text-center">Acción</th>
+                                <th className="px-6 py-4 text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -855,9 +855,14 @@ export const NotaIngresoForm = () => {
                                         <button
                                             type="button"
                                             onClick={() => remove(index)}
-                                            className="text-red-500 hover:text-red-700 font-medium text-xs bg-red-50 px-2 py-1 rounded-lg"
+                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-colors"
+                                            title="Eliminar ítem"
                                         >
-                                            Quitar
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M3 6h18" />
+                                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                            </svg>
                                         </button>
                                     </td>
                                 </tr>
@@ -921,7 +926,7 @@ export const NotaIngresoForm = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 space-y-5 overflow-y-auto" style={{maxHeight: 'calc(85vh - 140px)'}}>
+                        <div className="p-6 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 140px)' }}>
                             {/* Instrucciones Compactas */}
                             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-lg">
                                 <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
@@ -976,7 +981,7 @@ export const NotaIngresoForm = () => {
                                 </h3>
                                 <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
                                     <pre className="text-xs font-mono text-green-400">
-{`codigo_producto,lote,cantidad_total
+                                        {`codigo_producto,lote,cantidad_total
 PROD001,LOTE-2024-001,505
 PROD002,LOTE-2024-002,500`}
                                     </pre>
@@ -1013,11 +1018,10 @@ PROD002,LOTE-2024-002,500`}
                                         className="hidden"
                                         disabled={!selectedClient}
                                     />
-                                    <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${
-                                        selectedClient 
-                                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105' 
+                                    <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${selectedClient
+                                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
                                             : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
-                                    }`}>
+                                        }`}>
                                         📂 Seleccionar Archivo
                                     </div>
                                 </label>

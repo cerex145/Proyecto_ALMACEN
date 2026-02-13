@@ -13,7 +13,7 @@ import { HistorialSalidasFuncional } from './pages/operations/HistorialSalidasFu
 import { ActasRecepcionFuncional } from './pages/operations/ActasRecepcionFuncional';
 import { KardexFuncional } from './pages/inventory/KardexFuncional';
 import { AlertasListCompleto } from './pages/Alertas/AlertasListCompleto';
-import { ReportsPage } from './pages/reports/ReportsPage';
+
 import { AjustesPage } from './pages/admin/AjustesPage';
 
 // Layouts & Components
@@ -44,7 +44,7 @@ function App() {
           {/* Control & Admin */}
           <Route path="/kardex" element={<KardexFuncional />} />
           <Route path="/alertas" element={<AlertasListCompleto />} />
-          <Route path="/reportes" element={<ReportsPage />} />
+
           <Route path="/ajustes" element={<AjustesPage />} />
 
           {/* Fallback */}

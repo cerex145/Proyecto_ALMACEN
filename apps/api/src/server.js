@@ -8,7 +8,7 @@ const fastify = require('fastify')({
 
 const buildApp = require('./app');
 
-console.log('🟢 server.js START');
+console.log('🟢 server.js START'); // DB sync disabled
 
 const start = async () => {
     try {

@@ -59,7 +59,7 @@ export const Sidebar = () => {
                 <MenuLink to="/recepcion/nueva" icon={<FileTextIcon />} label="Nueva Acta de Recepción" />
                 <MenuLink to="/recepcion/acta" icon={<HistoryIcon />} label="Historial Actas" />
                 <MenuLink to="/salidas/nuevo" icon={<ArrowUpIcon />} label="Nota de salida" />
-                <MenuLink to="/reportes" icon={<FileTextIcon />} label="Reportes" />
+
 
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-8">Auditoría</div>
                 <MenuLink to="/kardex" icon={<HistoryIcon />} label="Kardex" />
