@@ -1,4 +1,5 @@
 const ExcelJS = require('exceljs');
+const { Brackets, Like } = require('typeorm');
 
 const ProductoSchema = {
     type: 'object',
@@ -137,19 +138,26 @@ async function productoRoutes(fastify, options) {
         }
 
         if (cliente_id) {
-            // Filtrar productos que tengan lotes asociados a este cliente (via NotaIngreso)
-            // Usar proveedor (razon_social) para evitar dependencia de una columna cliente_id ausente.
-            queryBuilder.andWhere(qb => {
-                const subQuery = qb.subQuery()
-                    .select("1")
-                    .from("lotes", "l")
-                    .innerJoin("notas_ingreso", "ni", "l.nota_ingreso_id = ni.id")
-                    .innerJoin("clientes", "c", "c.razon_social = ni.proveedor")
-                    .where("l.producto_id = producto.id")
-                    .andWhere("c.id = :cliente_id")
-                    .getQuery();
-                return "EXISTS " + subQuery;
-            }, { cliente_id });
+            // Filtrar por cliente considerando productos creados en inventario (proveedor = razon_social)
+            // y como respaldo productos con lotes asociados via NotaIngreso.
+            queryBuilder.andWhere(new Brackets(qb => {
+                qb.where(
+                    'producto.proveedor = (SELECT razon_social FROM clientes WHERE id = :cliente_id)',
+                    { cliente_id }
+                );
+
+                qb.orWhere(qbInner => {
+                    const subQuery = qbInner.subQuery()
+                        .select("1")
+                        .from("lotes", "l")
+                        .innerJoin("notas_ingreso", "ni", "l.nota_ingreso_id = ni.id")
+                        .innerJoin("clientes", "c", "c.razon_social = ni.proveedor")
+                        .where("l.producto_id = producto.id")
+                        .andWhere("c.id = :cliente_id")
+                        .getQuery();
+                    return "EXISTS " + subQuery;
+                });
+            }));
         }
 
         queryBuilder

@@ -184,7 +184,14 @@ export const NotaIngresoForm = () => {
         const loteInfo = lotesDisponibles.find(l => String(l.id) === String(value));
         if (loteInfo) {
             setLote(loteInfo.numero_lote || '');
-            setVencimiento(loteInfo.fecha_vencimiento || '');
+            setVencimiento(loteInfo.fecha_vencimiento || loteInfo.producto?.fecha_vencimiento || '');
+            const productoDetalle = loteInfo.producto || products.find(p => p.id === Number(selectedProduct));
+            if (productoDetalle) {
+                setUm(productoDetalle.um || '');
+                setFabricante(productoDetalle.fabricante || '');
+                setTemperaturaMin(productoDetalle.temperatura_min_c ?? '');
+                setTemperaturaMax(productoDetalle.temperatura_max_c ?? '');
+            }
             const cantidadBase = Number(loteInfo.cantidad_disponible ?? loteInfo.cantidad_ingresada ?? 0);
             if (Number.isFinite(cantidadBase) && cantidadBase > 0) {
                 setQuantity(cantidadBase);

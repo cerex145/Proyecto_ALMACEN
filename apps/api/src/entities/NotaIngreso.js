@@ -34,10 +34,6 @@ module.exports = new EntitySchema({
             length: 100,
             nullable: true
         },
-        cliente_id: {
-            type: 'int',
-            nullable: true
-        },
         responsable_id: {
             type: 'int',
             nullable: true
@@ -61,11 +57,6 @@ module.exports = new EntitySchema({
         }
     },
     relations: {
-        cliente: {
-            type: 'many-to-one',
-            target: 'Cliente',
-            joinColumn: { name: 'cliente_id' }
-        },
         // responsable: {
         //     type: 'many-to-one',
         //     target: 'Usuario',
