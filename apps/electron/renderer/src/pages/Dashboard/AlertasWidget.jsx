@@ -15,11 +15,15 @@ export const AlertasWidget = () => {
     const loadAlerts = async () => {
         try {
             setLoading(true);
-            const response = await alertasService.listar({
-                estado: 'PROXIMO_A_VENCER',
-                limit: 5
-            });
-            setAlerts(response.data || []);
+            const [vencidosResponse, proximosResponse] = await Promise.all([
+                alertasService.listar({ estado: 'VENCIDO', limit: 5 }),
+                alertasService.listar({ estado: 'PROXIMO_A_VENCER', limit: 5 })
+            ]);
+            const vencidos = vencidosResponse.data || [];
+            const proximos = proximosResponse.data || [];
+            const combinadas = [...vencidos, ...proximos];
+            const unicas = Array.from(new Map(combinadas.map((alerta) => [alerta.id, alerta])).values());
+            setAlerts(unicas);
         } catch (error) {
             console.error('Error loading alerts:', error);
         } finally {
@@ -60,7 +64,7 @@ export const AlertasWidget = () => {
                     <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg">
                         <span className="text-4xl mb-2">✅</span>
                         <p className="text-slate-600 font-medium">Todo en orden</p>
-                        <p className="text-xs text-slate-400">No hay productos próximos a vencer.</p>
+                        <p className="text-xs text-slate-400">No hay alertas de vencimiento.</p>
                     </div>
                 ) : (
                     <Table>

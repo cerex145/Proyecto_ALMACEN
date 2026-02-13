@@ -135,7 +135,23 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // GET /api/ingresos/:id - Obtener nota con detalles
-    fastify.get('/api/ingresos/:id', async (request, reply) => {
+    fastify.get('/api/ingresos/:id', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Obtener una nota de ingreso específica con sus detalles',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: NotaIngresoResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
@@ -351,7 +367,23 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // PUT /api/ingresos/:id - Actualizar nota de ingreso
-    fastify.put('/api/ingresos/:id', async (request, reply) => {
+    fastify.put('/api/ingresos/:id', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Actualizar una nota de ingreso existente',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: NotaIngresoResponseWithMessageSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const { fecha, proveedor, tipo_documento, numero_documento, estado, observaciones } = request.body;
 
@@ -377,7 +409,23 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // POST /api/ingresos/:id/aprobar - Aprobar nota
-    fastify.post('/api/ingresos/:id/aprobar', async (request, reply) => {
+    fastify.post('/api/ingresos/:id/aprobar', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Aprobar una nota de ingreso',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: NotaIngresoResponseWithMessageSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
@@ -396,7 +444,23 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // POST /api/ingresos/importar - Importar desde Excel
-    fastify.post('/api/ingresos/importar', async (request, reply) => {
+    fastify.post('/api/ingresos/importar', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Importar notas de ingreso desde archivo Excel',
+            consumes: ['multipart/form-data'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const data = await request.file();
 
         if (!data) {
@@ -519,7 +583,15 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // GET /api/ingresos/exportar - Exportar a Excel
-    fastify.get('/api/ingresos/exportar', async (request, reply) => {
+    fastify.get('/api/ingresos/exportar', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Exportar notas de ingreso a archivo Excel',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const notas = await notaIngresoRepo
             .createQueryBuilder('nota')
             .orderBy('nota.created_at', 'DESC')
@@ -554,7 +626,15 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // GET /api/ingresos/plantilla/descargar - Descargar plantilla
-    fastify.get('/api/ingresos/plantilla/descargar', async (request, reply) => {
+    fastify.get('/api/ingresos/plantilla/descargar', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Descargar plantilla Excel para importar notas de ingreso',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Plantilla Ingreso');
 
@@ -590,7 +670,23 @@ async function ingresosRoutes(fastify, options) {
 
 
     // GET /api/ingresos/:id/pdf - Generar PDF de nota de ingreso
-    fastify.get('/api/ingresos/:id/pdf', async (request, reply) => {
+    fastify.get('/api/ingresos/:id/pdf', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Generar PDF de una nota de ingreso',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: { type: 'string', format: 'binary' },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const {
             generatePDF

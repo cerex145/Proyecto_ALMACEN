@@ -52,6 +52,7 @@ export const Dashboard = () => {
                     <QuickTile to="/ingresos/controles" icon="📥" label="Ingresos" color="emerald" />
                     <QuickTile to="/recepcion/acta" icon="📝" label="Recepción" color="teal" />
                     <QuickTile to="/salidas/controles" icon="📤" label="Salidas" color="sky" />
+                    <QuickTile to="/alertas" icon="⚠️" label="Alertas" color="rose" />
                     <QuickTile to="/kardex" icon="📊" label="Kardex" color="violet" />
                     <QuickTile to="/reportes" icon="📈" label="Reportes" color="slate" />
                     <QuickTile to="/ajustes" icon="⚙️" label="Ajustes" color="gray" />
@@ -68,6 +69,7 @@ const QuickTile = ({ to, icon, label, color }) => {
         emerald: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-100',
         teal: 'bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-100',
         sky: 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-100',
+        rose: 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-100',
         violet: 'bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-100',
         slate: 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-100',
         gray: 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-100',

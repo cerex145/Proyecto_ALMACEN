@@ -12,6 +12,7 @@ import { HistorialIngresosFuncional } from './pages/operations/HistorialIngresos
 import { HistorialSalidasFuncional } from './pages/operations/HistorialSalidasFuncional';
 import { ActasRecepcionFuncional } from './pages/operations/ActasRecepcionFuncional';
 import { KardexFuncional } from './pages/inventory/KardexFuncional';
+import { AlertasListCompleto } from './pages/Alertas/AlertasListCompleto';
 import { ReportsPage } from './pages/reports/ReportsPage';
 import { AjustesPage } from './pages/admin/AjustesPage';
 
@@ -42,6 +43,7 @@ function App() {
 
           {/* Control & Admin */}
           <Route path="/kardex" element={<KardexFuncional />} />
+          <Route path="/alertas" element={<AlertasListCompleto />} />
           <Route path="/reportes" element={<ReportsPage />} />
           <Route path="/ajustes" element={<AjustesPage />} />
 

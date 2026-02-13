@@ -145,7 +145,23 @@ async function salidasRoutes(fastify, options) {
     });
 
     // GET /api/salidas/:id - Obtener nota con detalles
-    fastify.get('/api/salidas/:id', async (request, reply) => {
+    fastify.get('/api/salidas/:id', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Obtener una nota de salida específica con sus detalles',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: NotaSalidaResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
@@ -419,7 +435,23 @@ async function salidasRoutes(fastify, options) {
     });
 
     // PUT /api/salidas/:id - Actualizar nota de salida
-    fastify.put('/api/salidas/:id', async (request, reply) => {
+    fastify.put('/api/salidas/:id', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Actualizar una nota de salida existente',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: NotaSalidaResponseWithMessageSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const { estado, observaciones } = request.body;
 
@@ -441,7 +473,23 @@ async function salidasRoutes(fastify, options) {
     });
 
     // POST /api/salidas/:id/despachar - Despachar nota
-    fastify.post('/api/salidas/:id/despachar', async (request, reply) => {
+    fastify.post('/api/salidas/:id/despachar', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Despachar una nota de salida',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: NotaSalidaResponseWithMessageSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
@@ -460,7 +508,23 @@ async function salidasRoutes(fastify, options) {
     });
 
     // POST /api/salidas/importar - Importar desde Excel
-    fastify.post('/api/salidas/importar', async (request, reply) => {
+    fastify.post('/api/salidas/importar', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Importar notas de salida desde archivo Excel',
+            consumes: ['multipart/form-data'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const data = await request.file();
 
         if (!data) {
@@ -576,7 +640,15 @@ async function salidasRoutes(fastify, options) {
     });
 
     // GET /api/salidas/exportar - Exportar a Excel
-    fastify.get('/api/salidas/exportar', async (request, reply) => {
+    fastify.get('/api/salidas/exportar', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Exportar notas de salida a archivo Excel',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const notas = await notaSalidaRepo
             .createQueryBuilder('nota')
             .leftJoinAndMapOne('nota.cliente', 'clientes', 'cliente', 'cliente.id = nota.cliente_id')
@@ -612,7 +684,15 @@ async function salidasRoutes(fastify, options) {
     });
 
     // GET /api/salidas/plantilla/descargar - Descargar plantilla
-    fastify.get('/api/salidas/plantilla/descargar', async (request, reply) => {
+    fastify.get('/api/salidas/plantilla/descargar', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Descargar plantilla Excel para importar notas de salida',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Plantilla Salida');
 
@@ -644,7 +724,23 @@ async function salidasRoutes(fastify, options) {
     });
 
     // GET /api/salidas/:id/pdf - Exportar PDF
-    fastify.get('/api/salidas/:id/pdf', async (request, reply) => {
+    fastify.get('/api/salidas/:id/pdf', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Generar PDF de una nota de salida',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: { type: 'string', format: 'binary' },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const nota = await notaSalidaRepo.findOne({
             where: { id: Number(id) }
