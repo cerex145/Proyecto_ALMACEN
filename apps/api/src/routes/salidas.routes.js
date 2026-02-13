@@ -15,6 +15,42 @@ const NotaSalidaSchema = {
     }
 };
 
+const NotaSalidaDetalleSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        nota_salida_id: { type: 'integer' },
+        producto_id: { type: 'integer' },
+        cantidad: { type: 'number' },
+        lote_id: { type: 'integer', nullable: true },
+        producto: { type: 'object', nullable: true }
+    }
+};
+
+const NotaSalidaResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: {
+            type: 'object',
+            properties: {
+                ...NotaSalidaSchema.properties,
+                detalles: { type: 'array', items: NotaSalidaDetalleSchema },
+                cliente: { type: 'object', nullable: true }
+            }
+        }
+    }
+};
+
+const NotaSalidaResponseWithMessageSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: NotaSalidaSchema,
+        message: { type: 'string' }
+    }
+};
+
 const PaginationSchema = {
     type: 'object',
     properties: {

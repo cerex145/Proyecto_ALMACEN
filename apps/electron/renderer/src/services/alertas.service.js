@@ -3,7 +3,10 @@ import api from './api';
 export const alertasService = {
     // Listar alertas de vencimiento
     listar: async (filtros = {}) => {
-        const response = await api.get('/alertas/vencimiento', { params: filtros });
+        const params = Object.fromEntries(
+            Object.entries(filtros).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+        );
+        const response = await api.get('/alertas/vencimiento', { params });
         return response.data;
     },
 

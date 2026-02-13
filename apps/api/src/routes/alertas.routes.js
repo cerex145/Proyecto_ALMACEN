@@ -15,6 +15,26 @@ const AlertaVencimientoSchema = {
     }
 };
 
+const LoteSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        producto_id: { type: 'integer' },
+        numero_lote: { type: 'string' },
+        fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+        cantidad_ingresada: { type: 'number' },
+        cantidad_disponible: { type: 'number' },
+        producto: {
+            type: 'object',
+            properties: {
+                id: { type: 'integer' },
+                codigo: { type: 'string' },
+                descripcion: { type: 'string' }
+            }
+        }
+    }
+};
+
 const PaginationSchema = {
     type: 'object',
     properties: {
@@ -294,7 +314,21 @@ async function alertasRoutes(fastify, options) {
     });
 
     // POST /api/alertas/marcar-todos-leidos - Marcar todas como leídas
-    fastify.post('/api/alertas/marcar-todos-leidos', async (request, reply) => {
+    fastify.post('/api/alertas/marcar-todos-leidos', {
+        schema: {
+            tags: ['Alertas'],
+            description: 'Marcar todas las alertas como leídas',
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         await alertaVencimientoRepo
             .createQueryBuilder()
             .update()
@@ -309,7 +343,29 @@ async function alertasRoutes(fastify, options) {
     });
 
     // DELETE /api/alertas/:id - Eliminar alerta
-    fastify.delete('/api/alertas/:id', async (request, reply) => {
+    fastify.delete('/api/alertas/:id', {
+        schema: {
+            tags: ['Alertas'],
+            description: 'Eliminar una alerta',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const result = await alertaVencimientoRepo.delete({ id: Number(id) });
@@ -325,7 +381,28 @@ async function alertasRoutes(fastify, options) {
     });
 
     // POST /api/alertas/configurar-dias - Configurar días de anticipación para alertas
-    fastify.post('/api/alertas/configurar-dias', async (request, reply) => {
+    fastify.post('/api/alertas/configurar-dias', {
+        schema: {
+            tags: ['Alertas'],
+            description: 'Configurar días de anticipación para alertas de vencimiento',
+            body: {
+                type: 'object',
+                required: ['dias'],
+                properties: {
+                    dias: { type: 'integer', minimum: 1 }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { dias } = request.body;
 
         if (!dias || dias < 1) {
@@ -345,7 +422,22 @@ async function alertasRoutes(fastify, options) {
     });
 
     // GET /api/lotes/proximos-a-vencer - Lotes próximos a vencer
-    fastify.get('/api/lotes/proximos-a-vencer', async (request, reply) => {
+    fastify.get('/api/lotes/proximos-a-vencer', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Obtener lotes próximos a vencer',
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: LoteSchema },
+                        mensaje: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const hoy = new Date();
         const fechaAlerta = new Date(hoy.getTime() + (DIAS_PREVIOS_ALERTA * 24 * 60 * 60 * 1000));
 
@@ -367,7 +459,22 @@ async function alertasRoutes(fastify, options) {
     });
 
     // GET /api/lotes/vencidos - Lotes vencidos
-    fastify.get('/api/lotes/vencidos', async (request, reply) => {
+    fastify.get('/api/lotes/vencidos', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Obtener lotes vencidos',
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: LoteSchema },
+                        mensaje: { type: 'string' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const hoy = new Date();
 
         const lotes = await loteRepo

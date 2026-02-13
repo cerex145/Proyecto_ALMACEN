@@ -16,6 +16,45 @@ const ActaRecepcionSchema = {
     }
 };
 
+const ActaRecepcionDetalleSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        acta_recepcion_id: { type: 'integer' },
+        producto_id: { type: 'integer' },
+        lote_numero: { type: 'string', nullable: true },
+        cantidad_esperada: { type: 'number' },
+        cantidad_recibida: { type: 'number' },
+        conforme: { type: 'boolean' },
+        observaciones: { type: 'string', nullable: true },
+        producto: { type: 'object', nullable: true }
+    }
+};
+
+const ActaRecepcionResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: {
+            type: 'object',
+            properties: {
+                ...ActaRecepcionSchema.properties,
+                detalles: { type: 'array', items: ActaRecepcionDetalleSchema },
+                notaIngreso: { type: 'object', nullable: true }
+            }
+        }
+    }
+};
+
+const ActaRecepcionResponseWithMessageSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: ActaRecepcionSchema,
+        message: { type: 'string' }
+    }
+};
+
 const PaginationSchema = {
     type: 'object',
     properties: {

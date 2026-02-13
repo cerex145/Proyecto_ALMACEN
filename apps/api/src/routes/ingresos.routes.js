@@ -43,6 +43,15 @@ const NotaIngresoResponseSchema = {
     }
 };
 
+const NotaIngresoResponseWithMessageSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: NotaIngresoSchema,
+        message: { type: 'string' }
+    }
+};
+
 const PaginationSchema = {
     type: 'object',
     properties: {
