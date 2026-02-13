@@ -9,6 +9,8 @@ const NotaIngresoSchema = {
         numero_ingreso: { type: 'string' },
         fecha: { type: 'string', format: 'date' },
         proveedor: { type: 'string' },
+        tipo_documento: { type: 'string', nullable: true },
+        numero_documento: { type: 'string', nullable: true },
         categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
         estado: { type: 'string' },
         observaciones: { type: 'string', nullable: true }
@@ -100,6 +102,7 @@ async function ingresosRoutes(fastify, options) {
                     fecha_desde: { type: 'string', format: 'date' },
                     fecha_hasta: { type: 'string', format: 'date' },
                     proveedor: { type: 'string' },
+                    tipo_documento: { type: 'string' },
                     numero_documento: { type: 'string' },
                     categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
                     estado: { type: 'string' },
@@ -122,6 +125,7 @@ async function ingresosRoutes(fastify, options) {
         const {
             busqueda = '',
             proveedor,
+            tipo_documento,
             numero_documento,
             estado,
             fecha_desde,
@@ -153,6 +157,10 @@ async function ingresosRoutes(fastify, options) {
 
         if (numero_documento) {
             queryBuilder.andWhere('nota.numero_documento = :numero_documento', { numero_documento });
+        }
+
+        if (tipo_documento) {
+            queryBuilder.andWhere('nota.tipo_documento = :tipo_documento', { tipo_documento });
         }
 
         if (estado) {

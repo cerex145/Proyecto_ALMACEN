@@ -15,7 +15,6 @@ export const ActaRecepcionForm = () => {
             proveedor: '',
             tipo_operacion: '',
             tipo_conteo: '',
-            condicion_temperatura: '',
             observaciones: '',
             responsable_recepcion: '',
             responsable_entrega: '',
@@ -59,54 +58,44 @@ export const ActaRecepcionForm = () => {
 
     const [lastActaId, setLastActaId] = useState(null);
 
-    // Estados para cargar nota de ingreso existente
-    const [notasIngreso, setNotasIngreso] = useState([]);
-    const [selectedNotaIngresoId, setSelectedNotaIngresoId] = useState('');
-    const [mostrarNotasIngreso, setMostrarNotasIngreso] = useState(false);
+    // Estados para documentos de notas de ingreso
+    const [notasIngresoDocs, setNotasIngresoDocs] = useState([]);
 
     const selectedTipoDocumento = watch('tipo_documento');
+    const numeroDocumentoActual = watch('numero_documento');
+
+    const [numeroDocumentoSeleccion, setNumeroDocumentoSeleccion] = useState('');
+    const [numeroDocumentoManual, setNumeroDocumentoManual] = useState('');
 
     const tipoDocumentoOptions = useMemo(() => {
-        const baseOptions = [
-            'Invoice',
-            'DUA',
-            'Factura',
-            'Guía de Remisión Remitente',
-            'Guía de Remisión Transportista',
-            'Package List'
-        ];
         const extraOptions = new Set();
 
-        products.forEach((product) => {
-            const value = String(product?.tipo_documento || '').trim();
+        notasIngresoDocs.forEach((nota) => {
+            const value = String(nota?.tipo_documento || '').trim();
             if (value) extraOptions.add(value);
         });
 
-        const merged = [...baseOptions];
-        extraOptions.forEach((value) => {
-            if (!merged.includes(value)) merged.push(value);
-        });
-
-        return merged;
-    }, [products]);
+        return Array.from(extraOptions);
+    }, [notasIngresoDocs]);
 
     const numeroDocumentoOptions = useMemo(() => {
         const options = new Set();
         const selected = String(selectedTipoDocumento || '').trim();
 
-        products.forEach((product) => {
-            const tipo = String(product?.tipo_documento || '').trim();
-            const numero = String(product?.numero_documento || '').trim();
+        notasIngresoDocs.forEach((nota) => {
+            const tipo = String(nota?.tipo_documento || '').trim();
+            const numero = String(nota?.numero_documento || '').trim();
             if (!numero) return;
             if (selected && tipo !== selected) return;
             options.add(numero);
         });
 
         return Array.from(options);
-    }, [products, selectedTipoDocumento]);
+    }, [notasIngresoDocs, selectedTipoDocumento]);
 
     useEffect(() => {
         loadClients();
+        loadNotasIngresoDocumentos();
     }, []);
 
     useEffect(() => {
@@ -127,21 +116,38 @@ export const ActaRecepcionForm = () => {
     }, [selectedProduct, selectedClient]);
 
     useEffect(() => {
-        if (selectedClient) {
-            loadNotasIngresoDisponibles();
-        } else {
-            setNotasIngreso([]);
-            setSelectedNotaIngresoId('');
-        }
-    }, [selectedClient]);
-
-    useEffect(() => {
         if (!selectedTipoDocumento) return;
         const currentNumero = String(getValues('numero_documento') || '').trim();
         if (currentNumero && !numeroDocumentoOptions.includes(currentNumero)) {
             setValue('numero_documento', '');
+            setNumeroDocumentoSeleccion('');
+            setNumeroDocumentoManual('');
         }
     }, [selectedTipoDocumento, numeroDocumentoOptions, getValues, setValue]);
+
+    useEffect(() => {
+        const currentNumero = String(numeroDocumentoActual || '').trim();
+        if (!currentNumero) {
+            if (numeroDocumentoSeleccion) setNumeroDocumentoSeleccion('');
+            if (numeroDocumentoManual) setNumeroDocumentoManual('');
+            return;
+        }
+
+        if (numeroDocumentoOptions.includes(currentNumero)) {
+            if (numeroDocumentoSeleccion !== currentNumero) {
+                setNumeroDocumentoSeleccion(currentNumero);
+            }
+            if (numeroDocumentoManual) setNumeroDocumentoManual('');
+            return;
+        }
+
+        if (numeroDocumentoSeleccion !== 'OTRO') {
+            setNumeroDocumentoSeleccion('OTRO');
+        }
+        if (numeroDocumentoManual !== currentNumero) {
+            setNumeroDocumentoManual(currentNumero);
+        }
+    }, [numeroDocumentoActual, numeroDocumentoOptions, numeroDocumentoSeleccion, numeroDocumentoManual]);
 
     // Auto-fill producto
     useEffect(() => {
@@ -212,7 +218,11 @@ export const ActaRecepcionForm = () => {
 
             try {
                 // Buscar nota de ingreso por número de documento
-                const response = await fetch(`http://127.0.0.1:3000/api/ingresos?numero_documento=${encodeURIComponent(numeroDoc)}`);
+                const tipoDoc = String(getValues('tipo_documento') || '').trim();
+                const queryParams = new URLSearchParams({ numero_documento: numeroDoc });
+                if (tipoDoc) queryParams.set('tipo_documento', tipoDoc);
+
+                const response = await fetch(`http://127.0.0.1:3000/api/ingresos?${queryParams.toString()}`);
                 if (!response.ok) return;
 
                 const result = await response.json();
@@ -221,23 +231,50 @@ export const ActaRecepcionForm = () => {
                 if (notas.length === 0) return;
 
                 // Tomar la primera nota que coincida
-                const nota = notas[0];
+                let nota = notas[0];
+                if (nota && (!nota.detalles || nota.detalles.length === 0)) {
+                    const notaResponse = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+                    if (notaResponse.ok) {
+                        const notaDetalleResult = await notaResponse.json();
+                        nota = notaDetalleResult.data || notaDetalleResult;
+                    }
+                }
 
-                // Auto-llenar cliente si no está seleccionado
-                if (!selectedClient && nota.cliente_id) {
-                    setSelectedClient(String(nota.cliente_id));
-                    const client = clients.find(c => c.id === nota.cliente_id);
-                    if (client) {
-                        setClienteRuc(client.cuit || '');
-                        setProveedorNombre(client.razon_social || '');
-                        setValue('cliente_id', String(nota.cliente_id));
-                        setValue('proveedor', client.razon_social);
+                const proveedorNota = String(nota.proveedor || '').trim();
+                if (proveedorNota) {
+                    setProveedorNombre(proveedorNota);
+                    setValue('proveedor', proveedorNota);
+
+                    const proveedorKey = proveedorNota.toLowerCase();
+                    const clientMatch = clients.find((client) => {
+                        const razon = String(client.razon_social || '').trim().toLowerCase();
+                        return razon && razon === proveedorKey;
+                    });
+
+                    if (clientMatch) {
+                        const clientId = String(clientMatch.id);
+                        if (selectedClient !== clientId) {
+                            setSelectedClient(clientId);
+                        }
+                        setClienteRuc(clientMatch.cuit || '');
+                        setProveedorNombre(clientMatch.razon_social || proveedorNota);
+                        setValue('cliente_id', clientId);
+                        setValue('proveedor', clientMatch.razon_social || proveedorNota);
+                    } else if (!selectedClient) {
+                        setClienteRuc('');
+                        setValue('cliente_id', '');
                     }
                 }
 
                 // Auto-llenar campos del documento
                 if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
+                if (nota.numero_documento) setValue('numero_documento', nota.numero_documento);
                 if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
+
+                if (nota.observaciones) {
+                    const currentObs = String(getValues('observaciones') || '').trim();
+                    if (!currentObs) setValue('observaciones', nota.observaciones);
+                }
 
                 // Limpiar productos actuales solo si hay productos en la nota
                 if (nota.detalles && nota.detalles.length > 0) {
@@ -330,76 +367,30 @@ export const ActaRecepcionForm = () => {
         }
     };
 
-    const loadNotasIngresoDisponibles = async () => {
-        if (!selectedClient) return;
+    const loadNotasIngresoDocumentos = async () => {
         try {
-            const client = clients.find(c => String(c.id) === String(selectedClient));
-            if (!client) return;
+            const limit = 200;
+            let page = 1;
+            let totalPages = 1;
+            const allNotas = [];
 
-            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
-            if (!response.ok) throw new Error('Error al cargar notas de ingreso');
+            while (page <= totalPages) {
+                const response = await fetch(`http://127.0.0.1:3000/api/ingresos?page=${page}&limit=${limit}`);
+                if (!response.ok) throw new Error('Error al cargar notas de ingreso');
 
-            const result = await response.json();
-            const notas = result.data || [];
-            setNotasIngreso(notas);
-        } catch (error) {
-            console.error('Error loading notas ingreso:', error);
-            setNotasIngreso([]);
-        }
-    };
+                const result = await response.json();
+                const notas = result.data || [];
+                const pagination = result.pagination || {};
 
-    const handleCargarNotaIngreso = async () => {
-        if (!selectedNotaIngresoId) {
-            alert('Seleccione una nota de ingreso');
-            return;
-        }
-
-        try {
-            const response = await fetch(`http://127.0.0.1:3000/api/ingresos/${selectedNotaIngresoId}`);
-            if (!response.ok) throw new Error('Error al cargar nota de ingreso');
-
-            const result = await response.json();
-            const nota = result.data || result;
-
-            // Auto-llenar campos del documento
-            if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
-            if (nota.numero_documento) setValue('numero_documento', nota.numero_documento);
-            if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
-
-            // Limpiar productos actuales
-            while (fields.length > 0) {
-                remove(0);
+                allNotas.push(...notas);
+                totalPages = Number(pagination.totalPages || 1);
+                page += 1;
             }
 
-            // Cargar todos los productos de la nota
-            if (nota.detalles && nota.detalles.length > 0) {
-                for (const detalle of nota.detalles) {
-                    append({
-                        producto_id: detalle.producto_id,
-                        producto_codigo: detalle.producto?.codigo || '',
-                        producto_nombre: detalle.producto?.descripcion || '',
-                        fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
-                        lote_numero: detalle.lote_numero || detalle.numero_lote || '',
-                        fecha_vencimiento: detalle.fecha_vencimiento,
-                        um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
-                        temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
-                        temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
-                        cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
-                        cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
-                        cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
-                        cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
-                        cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
-                        cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
-                        aspecto: 'EMB'
-                    });
-                }
-                alert(`✅ Cargados ${nota.detalles.length} productos desde la Nota de Ingreso`);
-            }
-
-            setMostrarNotasIngreso(false);
+            setNotasIngresoDocs(allNotas);
         } catch (error) {
-            console.error('Error al cargar nota:', error);
-            alert('Error al cargar nota de ingreso: ' + error.message);
+            console.error('Error loading documentos de notas ingreso:', error);
+            setNotasIngresoDocs([]);
         }
     };
 
@@ -522,7 +513,6 @@ export const ActaRecepcionForm = () => {
                 proveedor: normalizeNullable(proveedorNombre || clienteRuc),
                 tipo_operacion: normalizeNullable(data.tipo_operacion),
                 tipo_conteo: normalizeNullable(data.tipo_conteo),
-                condicion_temperatura: normalizeNullable(data.condicion_temperatura),
                 observaciones: normalizeNullable(data.observaciones),
                 responsable_recepcion: normalizeNullable(data.responsable_recepcion),
                 responsable_entrega: normalizeNullable(data.responsable_entrega),
@@ -563,6 +553,8 @@ export const ActaRecepcionForm = () => {
         setSelectedLoteId('');
         setProducts([]);
         setLotesDisponibles([]);
+        setNumeroDocumentoSeleccion('');
+        setNumeroDocumentoManual('');
         setLote('');
         setVencimiento('');
         setUm('');
@@ -631,16 +623,42 @@ export const ActaRecepcionForm = () => {
                         </div>
                         <div>
                             <label className="label-premium">Número de Documento *</label>
-                            <input
-                                {...register('numero_documento', { required: true })}
+                            <select
+                                value={numeroDocumentoSeleccion}
+                                onChange={(event) => {
+                                    const value = event.target.value;
+                                    setNumeroDocumentoSeleccion(value);
+
+                                    if (value === 'OTRO') {
+                                        setNumeroDocumentoManual('');
+                                        setValue('numero_documento', '');
+                                        return;
+                                    }
+
+                                    setNumeroDocumentoManual('');
+                                    setValue('numero_documento', value);
+                                }}
                                 className="input-premium"
-                                list="acta_numero_documento_options"
-                            />
-                            <datalist id="acta_numero_documento_options">
+                            >
+                                <option value="">Seleccione...</option>
                                 {numeroDocumentoOptions.map((option) => (
-                                    <option key={option} value={option} />
+                                    <option key={option} value={option}>{option}</option>
                                 ))}
-                            </datalist>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                            {numeroDocumentoSeleccion === 'OTRO' && (
+                                <input
+                                    value={numeroDocumentoManual}
+                                    onChange={(event) => {
+                                        const value = event.target.value;
+                                        setNumeroDocumentoManual(value);
+                                        setValue('numero_documento', value);
+                                    }}
+                                    className="input-premium mt-2"
+                                    placeholder="Ingrese numero de documento"
+                                />
+                            )}
+                            <input type="hidden" {...register('numero_documento', { required: true })} />
                             {errors.numero_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
@@ -692,61 +710,6 @@ export const ActaRecepcionForm = () => {
                     </div>
                 </Card>
 
-                {/* Cargar desde Nota de Ingreso */}
-                <Card className="p-6 bg-green-50/50 border-green-200">
-                    <div className="flex items-center justify-between mb-4 border-b pb-2">
-                        <div>
-                            <h3 className="text-lg font-semibold text-green-800">📥 Cargar desde Nota de Ingreso Existente</h3>
-                            <p className="text-xs text-green-600">Seleccione una nota de ingreso para convertirla en acta de recepción</p>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => setMostrarNotasIngreso(!mostrarNotasIngreso)}
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                            {mostrarNotasIngreso ? '🔼 Ocultar' : '🔽 Mostrar Notas'}
-                        </Button>
-                    </div>
-
-                    {mostrarNotasIngreso && (
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                <div className="md:col-span-8">
-                                    <label className="label-premium">Seleccionar Nota de Ingreso</label>
-                                    <select
-                                        value={selectedNotaIngresoId}
-                                        onChange={(e) => setSelectedNotaIngresoId(e.target.value)}
-                                        className="input-premium"
-                                        disabled={!selectedClient}
-                                    >
-                                        <option value="">Seleccione una nota...</option>
-                                        {notasIngreso.map(nota => (
-                                            <option key={nota.id} value={nota.id}>
-                                                #{nota.id} - {nota.tipo_documento} {nota.numero_documento} - {new Date(nota.fecha).toLocaleDateString('es-PE')} ({nota.detalles?.length || 0} productos)
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {!selectedClient && <p className="text-xs text-orange-600 mt-1">Primero seleccione un cliente</p>}
-                                </div>
-                                <div className="md:col-span-4 flex items-end">
-                                    <Button
-                                        type="button"
-                                        onClick={handleCargarNotaIngreso}
-                                        className="w-full bg-green-600 hover:bg-green-700 text-white"
-                                        disabled={!selectedNotaIngresoId}
-                                    >
-                                        🔄 Cargar Nota Completa
-                                    </Button>
-                                </div>
-                            </div>
-                            {notasIngreso.length === 0 && selectedClient && (
-                                <p className="text-sm text-slate-500 italic text-center py-3">No hay notas de ingreso disponibles para este cliente</p>
-                            )}
-                        </div>
-                    )}
-                </Card>
-
                 {/* Tipo de Operación y Conteo */}
                 <Card className="p-6">
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">📦 Tipo de Operación y Conteo</h3>
@@ -772,10 +735,6 @@ export const ActaRecepcionForm = () => {
                                 <option value="Conteo de ALMT por Temperatura">Conteo de ALMT por Temperatura</option>
                             </select>
                             {errors.tipo_conteo && <span className="text-xs text-red-500">Requerido</span>}
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="label-premium">Condición de Temperatura</label>
-                            <input {...register('condicion_temperatura')} className="input-premium" placeholder="Ej: 2-8°C, Ambiente" />
                         </div>
                         <div className="md:col-span-2">
                             <label className="label-premium">Responsable de Recepción (Auxiliar)</label>
