@@ -5,6 +5,34 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
     const getVariantClasses = (v) => {
         const val = String(v).toLowerCase();
 
+        if (['success', 'ok'].some(s => val.includes(s))) {
+            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        }
+
+        if (['warning', 'warn'].some(s => val.includes(s))) {
+            return 'bg-amber-100 text-amber-700 border-amber-200';
+        }
+
+        if (['danger', 'error', 'failed'].some(s => val.includes(s))) {
+            return 'bg-rose-100 text-rose-700 border-rose-200';
+        }
+
+        if (['secondary', 'neutral', 'default'].some(s => val.includes(s))) {
+            return 'bg-slate-100 text-slate-700 border-slate-200';
+        }
+
+        if (['vigente'].some(s => val.includes(s))) {
+            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        }
+
+        if (['proximo', 'a_vencer', 'proximo_a_vencer'].some(s => val.includes(s))) {
+            return 'bg-amber-100 text-amber-700 border-amber-200';
+        }
+
+        if (['vencido'].some(s => val.includes(s))) {
+            return 'bg-rose-100 text-rose-700 border-rose-200';
+        }
+
         // Success / Active
         if (['aprobado', 'activo', 'conforme', 'validado', 'normal'].some(s => val.includes(s))) {
             return 'bg-emerald-100 text-emerald-700 border-emerald-200';

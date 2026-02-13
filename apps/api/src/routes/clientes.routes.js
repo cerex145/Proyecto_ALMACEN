@@ -72,6 +72,8 @@ async function clienteRoutes(fastify, options) {
     // GET /api/clientes - Listar con filtros y paginación
     fastify.get('/api/clientes', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Listar clientes con filtros y paginación',
             querystring: {
                 type: 'object',
                 properties: {
@@ -88,10 +90,10 @@ async function clienteRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { 
-            busqueda = '', 
-            activo, 
-            page = 1, 
+        const {
+            busqueda = '',
+            activo,
+            page = 1,
             limit = 50,
             orderBy = 'razon_social',
             order = 'ASC'
@@ -134,6 +136,8 @@ async function clienteRoutes(fastify, options) {
     // GET /api/clientes/:id - Obtener un cliente
     fastify.get('/api/clientes/:id', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Obtener un cliente por ID',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -160,6 +164,8 @@ async function clienteRoutes(fastify, options) {
     // POST /api/clientes - Crear cliente
     fastify.post('/api/clientes', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Crear un nuevo cliente',
             body: {
                 type: 'object',
                 required: ['codigo', 'razon_social', 'cuit'],
@@ -187,18 +193,18 @@ async function clienteRoutes(fastify, options) {
 
         // Validaciones
         if (!codigo || !razon_social || !cuit) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Código, Razón Social y CUIT/RUC son obligatorios' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Código, Razón Social y CUIT/RUC son obligatorios'
             });
         }
 
         // Verificar código único
         const existente = await clienteRepo.findOneBy({ codigo });
         if (existente) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'El código ya existe' 
+            return reply.status(400).send({
+                success: false,
+                error: 'El código ya existe'
             });
         }
 
@@ -219,16 +225,18 @@ async function clienteRoutes(fastify, options) {
 
         await clienteRepo.save(nuevoCliente);
 
-        return reply.status(201).send({ 
-            success: true, 
+        return reply.status(201).send({
+            success: true,
             data: nuevoCliente,
-            message: 'Cliente creado exitosamente' 
+            message: 'Cliente creado exitosamente'
         });
     });
 
     // PUT /api/clientes/:id - Actualizar cliente
     fastify.put('/api/clientes/:id', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Actualizar un cliente existente',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -270,9 +278,9 @@ async function clienteRoutes(fastify, options) {
 
         // Validaciones
         if (!razon_social) {
-            return reply.status(400).send({ 
-                success: false, 
-                error: 'Razón Social es obligatoria' 
+            return reply.status(400).send({
+                success: false,
+                error: 'Razón Social es obligatoria'
             });
         }
 
@@ -280,9 +288,9 @@ async function clienteRoutes(fastify, options) {
         if (codigo && codigo !== cliente.codigo) {
             const existente = await clienteRepo.findOneBy({ codigo });
             if (existente) {
-                return reply.status(400).send({ 
-                    success: false, 
-                    error: 'El código ya existe' 
+                return reply.status(400).send({
+                    success: false,
+                    error: 'El código ya existe'
                 });
             }
             cliente.codigo = codigo;
@@ -308,6 +316,8 @@ async function clienteRoutes(fastify, options) {
     // DELETE /api/clientes/:id - Eliminar (lógico)
     fastify.delete('/api/clientes/:id', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Desactivar un cliente (eliminación lógica)',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -343,6 +353,8 @@ async function clienteRoutes(fastify, options) {
     // POST /api/clientes/importar - Importar desde Excel
     fastify.post('/api/clientes/importar', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Importar clientes desde archivo Excel',
             consumes: ['multipart/form-data'],
             body: {
                 type: 'object',
@@ -364,7 +376,7 @@ async function clienteRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const data = await request.file();
-        
+
         if (!data) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
@@ -415,15 +427,17 @@ async function clienteRoutes(fastify, options) {
             }
         }
 
-        return { 
-            success: true, 
-            message: `Importación completada: ${insertados} insertados, ${omitidos} omitidos` 
+        return {
+            success: true,
+            message: `Importación completada: ${insertados} insertados, ${omitidos} omitidos`
         };
     });
 
     // GET /api/clientes/exportar - Exportar a Excel
     fastify.get('/api/clientes/exportar', {
         schema: {
+            tags: ['Clientes'],
+            description: 'Exportar clientes a archivo Excel',
             querystring: {
                 type: 'object',
                 properties: {
@@ -438,7 +452,7 @@ async function clienteRoutes(fastify, options) {
         const { activo } = request.query;
 
         const queryBuilder = clienteRepo.createQueryBuilder('cliente');
-        
+
         if (activo !== undefined) {
             queryBuilder.where('cliente.activo = :activo', { activo: activo === 'true' });
         }

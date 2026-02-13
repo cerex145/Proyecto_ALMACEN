@@ -1,6 +1,39 @@
 const ExcelJS = require('exceljs');
 const { generatePDF } = require('../services/pdf.service');
 
+// Schemas para documentación Swagger
+const ActaRecepcionSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        numero_acta: { type: 'string' },
+        nota_ingreso_id: { type: 'integer' },
+        fecha_recepcion: { type: 'string', format: 'date' },
+        responsable_id: { type: 'integer', nullable: true },
+        estado: { type: 'string', enum: ['CONFORME', 'OBSERVADO'] },
+        observaciones: { type: 'string', nullable: true },
+        aprobado: { type: 'boolean' }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' }
+    }
+};
+
 async function actasRecepcionRoutes(fastify, options) {
     const actaRecepcionRepo = fastify.db.getRepository('ActaRecepcion');
     const actaRecepcionDetalleRepo = fastify.db.getRepository('ActaRecepcionDetalle');
@@ -22,7 +55,35 @@ async function actasRecepcionRoutes(fastify, options) {
     };
 
     // GET /api/actas-recepcion - Listar actas
-    fastify.get('/api/actas-recepcion', async (request, reply) => {
+    fastify.get('/api/actas-recepcion', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Listar actas de recepción con filtros',
+            querystring: {
+                type: 'object',
+                properties: {
+                    estado: { type: 'string', enum: ['CONFORME', 'OBSERVADO'] },
+                    aprobado: { type: 'boolean' },
+                    fecha_desde: { type: 'string', format: 'date' },
+                    fecha_hasta: { type: 'string', format: 'date' },
+                    page: { type: 'integer', minimum: 1, default: 1 },
+                    limit: { type: 'integer', minimum: 1, default: 50 },
+                    orderBy: { type: 'string', default: 'created_at' },
+                    order: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: ActaRecepcionSchema },
+                        pagination: PaginationSchema
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const {
             estado,
             aprobado,
@@ -100,7 +161,49 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // POST /api/actas-recepcion - Crear acta
-    fastify.post('/api/actas-recepcion', async (request, reply) => {
+    fastify.post('/api/actas-recepcion', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Crear una nueva acta de recepción',
+            body: {
+                type: 'object',
+                required: ['nota_ingreso_id', 'fecha_recepcion', 'detalles'],
+                properties: {
+                    nota_ingreso_id: { type: 'integer' },
+                    fecha_recepcion: { type: 'string', format: 'date' },
+                    responsable_id: { type: 'integer' },
+                    estado: { type: 'string', enum: ['CONFORME', 'OBSERVADO'] },
+                    observaciones: { type: 'string' },
+                    detalles: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['producto_id', 'cantidad_esperada', 'cantidad_recibida'],
+                            properties: {
+                                producto_id: { type: 'integer' },
+                                lote_numero: { type: 'string' },
+                                cantidad_esperada: { type: 'number' },
+                                cantidad_recibida: { type: 'number' },
+                                observaciones: { type: 'string' }
+                            }
+                        }
+                    }
+                }
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: ActaRecepcionSchema,
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const {
             nota_ingreso_id,
             fecha_recepcion,

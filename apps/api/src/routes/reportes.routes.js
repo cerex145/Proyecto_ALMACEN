@@ -1,5 +1,83 @@
 const ExcelJS = require('exceljs');
 
+// Schemas para documentación Swagger
+const LoteSchema = {
+    type: 'object',
+    properties: {
+        numero: { type: 'string' },
+        vencimiento: { type: 'string', format: 'date' },
+        cantidad: { type: 'number' }
+    }
+};
+
+const ProductoStockSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        codigo: { type: 'string' },
+        descripcion: { type: 'string' },
+        proveedor: { type: 'string', nullable: true },
+        categoria: { type: 'string', nullable: true },
+        stock_actual: { type: 'number' },
+        lotes: { type: 'array', items: LoteSchema }
+    }
+};
+
+const IngresoReporteSchema = {
+    type: 'object',
+    properties: {
+        numero_ingreso: { type: 'string' },
+        fecha: { type: 'string', format: 'date' },
+        proveedor: { type: 'string' },
+        cantidad_productos: { type: 'integer' },
+        cantidad_total_unidades: { type: 'number' },
+        monto_total: { type: 'number' },
+        estado: { type: 'string' }
+    }
+};
+
+const SalidaReporteSchema = {
+    type: 'object',
+    properties: {
+        numero_salida: { type: 'string' },
+        fecha: { type: 'string', format: 'date' },
+        cliente_codigo: { type: 'string' },
+        cliente_nombre: { type: 'string' },
+        cantidad_productos: { type: 'integer' },
+        cantidad_total_unidades: { type: 'number' },
+        monto_total: { type: 'number' },
+        estado: { type: 'string' }
+    }
+};
+
+const CategoriaReporteSchema = {
+    type: 'object',
+    properties: {
+        categoria: { type: 'string' },
+        cantidad_productos: { type: 'integer' },
+        stock_total: { type: 'number' },
+        productos: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    codigo: { type: 'string' },
+                    descripcion: { type: 'string' },
+                    stock: { type: 'number' }
+                }
+            }
+        }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' }
+    }
+};
+
 async function reportesRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
     const loteRepo = fastify.db.getRepository('Lote');
@@ -8,7 +86,28 @@ async function reportesRoutes(fastify, options) {
     const kardexRepo = fastify.db.getRepository('Kardex');
 
     // GET /api/reportes/stock-actual - Stock actual por producto y lote
-    fastify.get('/api/reportes/stock-actual', async (request, reply) => {
+    fastify.get('/api/reportes/stock-actual', {
+        schema: {
+            tags: ['Reportes'],
+            description: 'Obtener reporte de stock actual por producto, opcionalmente con detalles de lotes',
+            querystring: {
+                type: 'object',
+                properties: {
+                    incluir_lotes: { type: 'boolean', description: 'Incluir información de lotes' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: ProductoStockSchema },
+                        fecha_reporte: { type: 'string', format: 'date-time' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { incluir_lotes = false } = request.query;
 
         const productos = await productoRepo
@@ -52,7 +151,38 @@ async function reportesRoutes(fastify, options) {
     });
 
     // GET /api/reportes/ingresos - Ingresos por período
-    fastify.get('/api/reportes/ingresos', async (request, reply) => {
+    fastify.get('/api/reportes/ingresos', {
+        schema: {
+            tags: ['Reportes'],
+            description: 'Obtener reporte de ingresos filtrado por fecha y proveedor',
+            querystring: {
+                type: 'object',
+                properties: {
+                    fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio del período' },
+                    fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin del período' },
+                    proveedor: { type: 'string', description: 'Filtrar por nombre de proveedor' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: IngresoReporteSchema },
+                        totales: {
+                            type: 'object',
+                            properties: {
+                                total_ingresos: { type: 'integer' },
+                                total_unidades: { type: 'number' },
+                                monto_total: { type: 'number' }
+                            }
+                        },
+                        fecha_reporte: { type: 'string', format: 'date-time' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { fecha_desde, fecha_hasta, proveedor } = request.query;
 
         const queryBuilder = notaIngresoRepo.createQueryBuilder('nota');
@@ -112,7 +242,38 @@ async function reportesRoutes(fastify, options) {
     });
 
     // GET /api/reportes/salidas - Salidas por cliente
-    fastify.get('/api/reportes/salidas', async (request, reply) => {
+    fastify.get('/api/reportes/salidas', {
+        schema: {
+            tags: ['Reportes'],
+            description: 'Obtener reporte de salidas filtrado por fecha y cliente',
+            querystring: {
+                type: 'object',
+                properties: {
+                    fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio del período' },
+                    fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin del período' },
+                    cliente_id: { type: 'integer', description: 'ID del cliente' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: SalidaReporteSchema },
+                        totales: {
+                            type: 'object',
+                            properties: {
+                                total_salidas: { type: 'integer' },
+                                total_unidades: { type: 'number' },
+                                monto_total: { type: 'number' }
+                            }
+                        },
+                        fecha_reporte: { type: 'string', format: 'date-time' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { fecha_desde, fecha_hasta, cliente_id } = request.query;
 
         const queryBuilder = notaSalidaRepo.createQueryBuilder('nota');
@@ -174,7 +335,30 @@ async function reportesRoutes(fastify, options) {
     });
 
     // GET /api/reportes/productos-por-categoria - Productos por categoría de ingreso
-    fastify.get('/api/reportes/productos-por-categoria', async (request, reply) => {
+    fastify.get('/api/reportes/productos-por-categoria', {
+        schema: {
+            tags: ['Reportes'],
+            description: 'Obtener reporte de productos agrupados por categoría de ingreso',
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: CategoriaReporteSchema },
+                        totales: {
+                            type: 'object',
+                            properties: {
+                                total_categorias: { type: 'integer' },
+                                total_productos: { type: 'integer' },
+                                stock_total: { type: 'number' }
+                            }
+                        },
+                        fecha_reporte: { type: 'string', format: 'date-time' }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const categorias = ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'];
 
         const reporte = await Promise.all(
@@ -213,7 +397,26 @@ async function reportesRoutes(fastify, options) {
     });
 
     // GET /api/reportes/exportar - Exportar reporte completo
-    fastify.get('/api/reportes/exportar', async (request, reply) => {
+    fastify.get('/api/reportes/exportar', {
+        schema: {
+            tags: ['Reportes'],
+            description: 'Exportar reporte completo en formato Excel',
+            querystring: {
+                type: 'object',
+                properties: {
+                    tipo: { type: 'string', enum: ['completo'], default: 'completo', description: 'Tipo de reporte' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'Archivo Excel con el reporte'
+                },
+                500: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { tipo = 'completo' } = request.query;
 
         const safeDate = (value) => {
@@ -297,7 +500,26 @@ async function reportesRoutes(fastify, options) {
     // GET /api/reportes/exportar/pdf - Exportar reporte PDF
     const { generatePDF } = require('../services/pdf.service');
 
-    fastify.get('/api/reportes/exportar/pdf', async (request, reply) => {
+    fastify.get('/api/reportes/exportar/pdf', {
+        schema: {
+            tags: ['Reportes'],
+            description: 'Exportar reporte completo en formato PDF',
+            querystring: {
+                type: 'object',
+                properties: {
+                    tipo: { type: 'string', enum: ['completo'], default: 'completo', description: 'Tipo de reporte' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'Archivo PDF con el reporte'
+                },
+                500: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { tipo = 'completo' } = request.query;
 
         // Fetch Data

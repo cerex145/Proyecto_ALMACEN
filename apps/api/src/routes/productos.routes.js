@@ -84,6 +84,8 @@ async function productoRoutes(fastify, options) {
     // GET /api/productos - Listar con filtros y paginación
     fastify.get('/api/productos', {
         schema: {
+            tags: ['Productos'],
+            description: 'Listar productos con filtros y paginación',
             querystring: {
                 type: 'object',
                 properties: {
@@ -187,6 +189,8 @@ async function productoRoutes(fastify, options) {
     // GET /api/productos/:id - Obtener un producto
     fastify.get('/api/productos/:id', {
         schema: {
+            tags: ['Productos'],
+            description: 'Obtener un producto por ID',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -213,6 +217,8 @@ async function productoRoutes(fastify, options) {
     // POST /api/productos - Crear producto
     fastify.post('/api/productos', {
         schema: {
+            tags: ['Productos'],
+            description: 'Crear un nuevo producto',
             body: {
                 type: 'object',
                 required: ['codigo', 'descripcion'],
@@ -339,6 +345,8 @@ async function productoRoutes(fastify, options) {
     // PUT /api/productos/:id - Actualizar producto
     fastify.put('/api/productos/:id', {
         schema: {
+            tags: ['Productos'],
+            description: 'Actualizar un producto existente',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -464,6 +472,8 @@ async function productoRoutes(fastify, options) {
     // DELETE /api/productos/:id - Eliminar (lógico)
     fastify.delete('/api/productos/:id', {
         schema: {
+            tags: ['Productos'],
+            description: 'Desactivar un producto (eliminación lógica)',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -499,6 +509,8 @@ async function productoRoutes(fastify, options) {
     // POST /api/productos/importar - Importar desde Excel
     fastify.post('/api/productos/importar', {
         schema: {
+            tags: ['Productos'],
+            description: 'Importar productos desde archivo Excel',
             consumes: ['multipart/form-data'],
             body: {
                 type: 'object',
@@ -577,7 +589,21 @@ async function productoRoutes(fastify, options) {
     });
 
     // GET /api/productos/exportar - Exportar a Excel
-    fastify.get('/api/productos/exportar', async (request, reply) => {
+    fastify.get('/api/productos/exportar', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Exportar productos a archivo Excel',
+            querystring: {
+                type: 'object',
+                properties: {
+                    activo: { type: 'string', enum: ['true', 'false'] }
+                }
+            },
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const { activo } = request.query;
 
         const queryBuilder = productoRepo.createQueryBuilder('producto');

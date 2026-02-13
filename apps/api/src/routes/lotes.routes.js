@@ -1,9 +1,77 @@
+// Schemas para documentación Swagger
+const LoteSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        producto_id: { type: 'integer' },
+        numero_lote: { type: 'string' },
+        fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+        cantidad_ingresada: { type: 'number' },
+        cantidad_disponible: { type: 'number' },
+        nota_ingreso_id: { type: 'integer', nullable: true },
+        producto: {
+            type: 'object',
+            properties: {
+                id: { type: 'integer' },
+                codigo: { type: 'string' },
+                descripcion: { type: 'string' }
+            }
+        }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' }
+    }
+};
+
 async function lotesRoutes(fastify, options) {
     const loteRepo = fastify.db.getRepository('Lote');
     const productoRepo = fastify.db.getRepository('Producto');
 
     // GET /api/lotes - Listar lotes
-    fastify.get('/api/lotes', async (request, reply) => {
+    fastify.get('/api/lotes', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Listar lotes con filtros y paginación',
+            querystring: {
+                type: 'object',
+                properties: {
+                    producto_id: { type: 'integer', description: 'Filtrar por ID de producto' },
+                    busqueda: { type: 'string', description: 'Buscar por número de lote' },
+                    disponibles_solo: { type: 'boolean', description: 'Solo lotes con stock disponible' },
+                    fecha_vencimiento_desde: { type: 'string', format: 'date' },
+                    fecha_vencimiento_hasta: { type: 'string', format: 'date' },
+                    cliente_id: { type: 'integer', description: 'Filtrar por cliente de la nota de ingreso' },
+                    page: { type: 'integer', minimum: 1, default: 1 },
+                    limit: { type: 'integer', minimum: 1, default: 50 }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: LoteSchema },
+                        pagination: PaginationSchema
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const {
             producto_id,
             busqueda,
@@ -66,7 +134,29 @@ async function lotesRoutes(fastify, options) {
     });
 
     // GET /api/lotes/:id - Obtener lote
-    fastify.get('/api/lotes/:id', async (request, reply) => {
+    fastify.get('/api/lotes/:id', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Obtener detalles de un lote específico',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: LoteSchema
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const lote = await loteRepo.findOne({
@@ -85,7 +175,35 @@ async function lotesRoutes(fastify, options) {
     });
 
     // POST /api/lotes - Crear lote
-    fastify.post('/api/lotes', async (request, reply) => {
+    fastify.post('/api/lotes', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Crear un nuevo lote de producto',
+            body: {
+                type: 'object',
+                required: ['producto_id', 'numero_lote', 'cantidad_ingresada'],
+                properties: {
+                    producto_id: { type: 'integer' },
+                    numero_lote: { type: 'string' },
+                    fecha_vencimiento: { type: 'string', format: 'date' },
+                    cantidad_ingresada: { type: 'number', minimum: 0 },
+                    nota_ingreso_id: { type: 'integer' }
+                }
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: LoteSchema,
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const {
             producto_id,
             numero_lote,
@@ -135,7 +253,37 @@ async function lotesRoutes(fastify, options) {
     });
 
     // PUT /api/lotes/:id - Actualizar lote
-    fastify.put('/api/lotes/:id', async (request, reply) => {
+    fastify.put('/api/lotes/:id', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Actualizar información de un lote',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    fecha_vencimiento: { type: 'string', format: 'date' },
+                    cantidad_disponible: { type: 'number', minimum: 0 }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: LoteSchema,
+                        message: { type: 'string' }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const { fecha_vencimiento, cantidad_disponible } = request.body;
 
@@ -157,7 +305,29 @@ async function lotesRoutes(fastify, options) {
     });
 
     // DELETE /api/lotes/:id - Eliminar lote (lógico)
-    fastify.delete('/api/lotes/:id', async (request, reply) => {
+    fastify.delete('/api/lotes/:id', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Desactivar un lote (borrado lógico)',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const lote = await loteRepo.findOneBy({ id: Number(id) });
@@ -175,7 +345,28 @@ async function lotesRoutes(fastify, options) {
     });
 
     // GET /api/lotes/producto/:producto_id - Lotes de un producto
-    fastify.get('/api/lotes/producto/:producto_id', async (request, reply) => {
+    fastify.get('/api/lotes/producto/:producto_id', {
+        schema: {
+            tags: ['Lotes'],
+            description: 'Obtener todos los lotes de un producto específico',
+            params: {
+                type: 'object',
+                required: ['producto_id'],
+                properties: {
+                    producto_id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: LoteSchema }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { producto_id } = request.params;
 
         const lotes = await loteRepo.find({

@@ -30,7 +30,7 @@ export const AlertasListCompleto = () => {
     const cargarResumen = async () => {
         try {
             const response = await alertasService.resumen();
-            setResumen(response.data);
+            setResumen(response.resumen || null);
         } catch (error) {
             console.error('Error al cargar resumen:', error);
         }
@@ -68,11 +68,30 @@ export const AlertasListCompleto = () => {
 
     const getEstadoBadge = (estado) => {
         const colores = {
-            'VIGENTE': 'success',
-            'PROXIMO_A_VENCER': 'warning',
-            'VENCIDO': 'danger'
+            VIGENTE: 'success',
+            PROXIMO_A_VENCER: 'warning',
+            VENCIDO: 'danger'
         };
         return <Badge variant={colores[estado] || 'secondary'}>{estado}</Badge>;
+    };
+
+    const formatCantidad = (valor) => {
+        const numero = Number(valor);
+        if (!Number.isFinite(numero)) {
+            return 'N/A';
+        }
+        return numero.toLocaleString();
+    };
+
+    const formatFecha = (valor) => {
+        if (!valor) {
+            return 'N/A';
+        }
+        const fecha = new Date(valor);
+        if (Number.isNaN(fecha.getTime())) {
+            return 'N/A';
+        }
+        return fecha.toLocaleDateString();
     };
 
     return (
@@ -82,43 +101,51 @@ export const AlertasListCompleto = () => {
             </div>
 
             {resumen && (
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '15px',
-                    marginBottom: '20px'
-                }}>
-                    <div style={{
-                        padding: '15px',
-                        backgroundColor: '#f8f9fa',
-                        borderRadius: '4px',
-                        borderLeft: '4px solid #28a745'
-                    }}>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        gap: '15px',
+                        marginBottom: '20px'
+                    }}
+                >
+                    <div
+                        style={{
+                            padding: '15px',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '4px',
+                            borderLeft: '4px solid #28a745'
+                        }}
+                    >
                         <div style={{ fontSize: '0.9em', color: '#666' }}>Vigentes</div>
                         <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#28a745' }}>
-                            {resumen.vigentes_count || 0}
+                            {resumen.total_vigentes || 0}
                         </div>
                     </div>
-                    <div style={{
-                        padding: '15px',
-                        backgroundColor: '#f8f9fa',
-                        borderRadius: '4px',
-                        borderLeft: '4px solid #ffc107'
-                    }}>
-                        <div style={{ fontSize: '0.9em', color: '#666' }}>Próximos a vencer</div>
+                    <div
+                        style={{
+                            padding: '15px',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '4px',
+                            borderLeft: '4px solid #ffc107'
+                        }}
+                    >
+                        <div style={{ fontSize: '0.9em', color: '#666' }}>Proximos a vencer</div>
                         <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#ffc107' }}>
-                            {resumen.proximos_count || 0}
+                            {resumen.total_proximos_a_vencer || 0}
                         </div>
                     </div>
-                    <div style={{
-                        padding: '15px',
-                        backgroundColor: '#f8f9fa',
-                        borderRadius: '4px',
-                        borderLeft: '4px solid #dc3545'
-                    }}>
+                    <div
+                        style={{
+                            padding: '15px',
+                            backgroundColor: '#f8f9fa',
+                            borderRadius: '4px',
+                            borderLeft: '4px solid #dc3545'
+                        }}
+                    >
                         <div style={{ fontSize: '0.9em', color: '#666' }}>Vencidos</div>
                         <div style={{ fontSize: '2em', fontWeight: 'bold', color: '#dc3545' }}>
-                            {resumen.vencidos_count || 0}
+                            {resumen.total_vencidos || 0}
                         </div>
                     </div>
                 </div>
@@ -132,12 +159,12 @@ export const AlertasListCompleto = () => {
                 >
                     <option value="">Todos</option>
                     <option value="VIGENTE">Vigentes</option>
-                    <option value="PROXIMO_A_VENCER">Próximos a Vencer</option>
+                    <option value="PROXIMO_A_VENCER">Proximos a Vencer</option>
                     <option value="VENCIDO">Vencidos</option>
                 </select>
                 <Button onClick={cargarAlertas}>Actualizar</Button>
                 <Button onClick={handleMarcarTodasLeidas} variant="secondary">
-                    Marcar Todo como Leído
+                    Marcar Todo como Leido
                 </Button>
             </div>
 
@@ -149,40 +176,48 @@ export const AlertasListCompleto = () => {
                         <TableRow>
                             <TableHeader>Lote</TableHeader>
                             <TableHeader>Producto</TableHeader>
+                            <TableHeader>Stock</TableHeader>
                             <TableHeader>Vencimiento</TableHeader>
-                            <TableHeader>Días Faltantes</TableHeader>
-                            <TableHeader>Estado</TableHeader>
-                            <TableHeader>Leída</TableHeader>
+                            <TableHeader>Dias Faltantes</TableHeader>
+                            <TableHeader>Prioridad</TableHeader>
+                            <TableHeader>Leida</TableHeader>
                             <TableHeader>Acciones</TableHeader>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {alertas.length > 0 ? (
                             alertas.map((alerta) => (
-                                <TableRow key={alerta.id} style={{
-                                    backgroundColor: alerta.leida ? '#f5f5f5' : '#fffbea'
-                                }}>
-                                    <TableCell>{alerta.lote?.numero_lote || alerta.lote_numero || 'N/A'}</TableCell>
+                                <TableRow
+                                    key={alerta.id}
+                                    style={{
+                                        backgroundColor: alerta.leida ? '#f5f5f5' : '#fffbea'
+                                    }}
+                                >
+                                    <TableCell>{alerta.lote?.numero_lote || alerta.lote_numero || alerta.lote_id || 'N/A'}</TableCell>
                                     <TableCell>
                                         {alerta.producto?.descripcion || alerta.producto?.codigo || alerta.producto_id || 'N/A'}
                                     </TableCell>
-                                    <TableCell>{new Date(alerta.fecha_vencimiento || alerta.lote?.fecha_vencimiento).toLocaleDateString()}</TableCell>
+                                    <TableCell>
+                                        {formatCantidad(
+                                            alerta.lote?.cantidad_disponible ??
+                                                alerta.producto?.stock_actual ??
+                                                alerta.lote?.cantidad_ingresada
+                                        )}
+                                    </TableCell>
+                                    <TableCell>{formatFecha(alerta.fecha_vencimiento || alerta.lote?.fecha_vencimiento)}</TableCell>
                                     <TableCell style={{ fontWeight: 'bold' }}>
-                                        {alerta.dias_faltantes}
+                                        {Number.isFinite(alerta.dias_faltantes) ? alerta.dias_faltantes : 'N/A'}
                                     </TableCell>
                                     <TableCell>{getEstadoBadge(alerta.estado)}</TableCell>
                                     <TableCell>
                                         <Badge variant={alerta.leida ? 'success' : 'warning'}>
-                                            {alerta.leida ? 'Sí' : 'No'}
+                                            {alerta.leida ? 'Si' : 'No'}
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
                                         {!alerta.leida && (
-                                            <Button
-                                                size="sm"
-                                                onClick={() => handleMarcarLeida(alerta.id)}
-                                            >
-                                                Marcar Leída
+                                            <Button size="sm" onClick={() => handleMarcarLeida(alerta.id)}>
+                                                Marcar Leida
                                             </Button>
                                         )}
                                         <Button
@@ -197,7 +232,7 @@ export const AlertasListCompleto = () => {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan="7" style={{ textAlign: 'center' }}>
+                                <TableCell colSpan="8" style={{ textAlign: 'center' }}>
                                     No hay alertas
                                 </TableCell>
                             </TableRow>

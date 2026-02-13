@@ -1,6 +1,38 @@
 const ExcelJS = require('exceljs');
 const { Like } = require('typeorm');
 
+// Schemas para documentación Swagger
+const NotaIngresoSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        numero_ingreso: { type: 'string' },
+        fecha: { type: 'string', format: 'date' },
+        proveedor: { type: 'string' },
+        categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
+        estado: { type: 'string' },
+        observaciones: { type: 'string', nullable: true }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' }
+    }
+};
+
 async function ingresosRoutes(fastify, options) {
     const notaIngresoRepo = fastify.db.getRepository('NotaIngreso');
     const notaIngresoDetalleRepo = fastify.db.getRepository('NotaIngresoDetalle');
@@ -21,7 +53,34 @@ async function ingresosRoutes(fastify, options) {
     };
 
     // GET /api/ingresos - Listar notas de ingreso
-    fastify.get('/api/ingresos', async (request, reply) => {
+    fastify.get('/api/ingresos', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Listar notas de ingreso con filtros y paginación',
+            querystring: {
+                type: 'object',
+                properties: {
+                    fecha_desde: { type: 'string', format: 'date' },
+                    fecha_hasta: { type: 'string', format: 'date' },
+                    proveedor: { type: 'string' },
+                    categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
+                    estado: { type: 'string' },
+                    page: { type: 'integer', minimum: 1, default: 1 },
+                    limit: { type: 'integer', minimum: 1, default: 50 }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: NotaIngresoSchema },
+                        pagination: PaginationSchema
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const {
             busqueda = '',
             estado,
@@ -99,7 +158,47 @@ async function ingresosRoutes(fastify, options) {
     });
 
     // POST /api/ingresos - Crear nota de ingreso
-    fastify.post('/api/ingresos', async (request, reply) => {
+    fastify.post('/api/ingresos', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Crear una nueva nota de ingreso con sus detalles',
+            body: {
+                type: 'object',
+                required: ['fecha', 'proveedor', 'categoria', 'detalles'],
+                properties: {
+                    fecha: { type: 'string', format: 'date' },
+                    proveedor: { type: 'string' },
+                    categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
+                    observaciones: { type: 'string' },
+                    detalles: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['producto_id', 'cantidad', 'precio_unitario'],
+                            properties: {
+                                producto_id: { type: 'integer' },
+                                cantidad: { type: 'number', minimum: 0 },
+                                precio_unitario: { type: 'number', minimum: 0 },
+                                lote_numero: { type: 'string' },
+                                fecha_vencimiento: { type: 'string', format: 'date' }
+                            }
+                        }
+                    }
+                }
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: NotaIngresoSchema,
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const {
             fecha,
             proveedor,

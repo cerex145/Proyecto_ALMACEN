@@ -2,6 +2,37 @@ const ExcelJS = require('exceljs');
 const { MoreThan } = require('typeorm');
 const { generatePDF } = require('../services/pdf.service');
 
+// Schemas para documentación Swagger
+const NotaSalidaSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        numero_salida: { type: 'string' },
+        fecha: { type: 'string', format: 'date' },
+        cliente_id: { type: 'integer', nullable: true },
+        estado: { type: 'string' },
+        observaciones: { type: 'string', nullable: true }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' }
+    }
+};
+
 async function salidasRoutes(fastify, options) {
     const notaSalidaRepo = fastify.db.getRepository('NotaSalida');
     const notaSalidaDetalleRepo = fastify.db.getRepository('NotaSalidaDetalle');
@@ -23,7 +54,33 @@ async function salidasRoutes(fastify, options) {
     };
 
     // GET /api/salidas - Listar notas de salida
-    fastify.get('/api/salidas', async (request, reply) => {
+    fastify.get('/api/salidas', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Listar notas de salida con filtros y paginación',
+            querystring: {
+                type: 'object',
+                properties: {
+                    fecha_desde: { type: 'string', format: 'date' },
+                    fecha_hasta: { type: 'string', format: 'date' },
+                    cliente_id: { type: 'integer' },
+                    estado: { type: 'string' },
+                    page: { type: 'integer', minimum: 1, default: 1 },
+                    limit: { type: 'integer', minimum: 1, default: 50 }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: NotaSalidaSchema },
+                        pagination: PaginationSchema
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const {
             busqueda = '',
             numero_salida,
@@ -114,7 +171,44 @@ async function salidasRoutes(fastify, options) {
     });
 
     // POST /api/salidas - Crear nota de salida
-    fastify.post('/api/salidas', async (request, reply) => {
+    fastify.post('/api/salidas', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Crear una nueva nota de salida con sus detalles',
+            body: {
+                type: 'object',
+                required: ['fecha', 'detalles'],
+                properties: {
+                    cliente_id: { type: 'integer' },
+                    fecha: { type: 'string', format: 'date' },
+                    observaciones: { type: 'string' },
+                    detalles: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['producto_id', 'cantidad'],
+                            properties: {
+                                producto_id: { type: 'integer' },
+                                cantidad: { type: 'number', minimum: 0 },
+                                lote_id: { type: 'integer' }
+                            }
+                        }
+                    }
+                }
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: NotaSalidaSchema,
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const {
             cliente_id,
             fecha,

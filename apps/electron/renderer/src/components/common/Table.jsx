@@ -22,8 +22,8 @@ export const TableBody = ({ children }) => (
     </tbody>
 );
 
-export const TableRow = ({ children }) => (
-    <tr className="hover:bg-slate-50/80 transition-colors duration-150">
+export const TableRow = ({ children, className = '', ...props }) => (
+    <tr className={`hover:bg-slate-50/80 transition-colors duration-150 ${className}`} {...props}>
         {children}
     </tr>
 );
@@ -34,8 +34,8 @@ export const TableHeader = ({ children, className = '' }) => (
     </th>
 );
 
-export const TableCell = ({ children, colSpan, className = '' }) => (
-    <td className={`px-6 py-4 whitespace-nowrap ${className}`} colSpan={colSpan}>
+export const TableCell = ({ children, colSpan, className = '', ...props }) => (
+    <td className={`px-6 py-4 whitespace-nowrap ${className}`} colSpan={colSpan} {...props}>
         {children}
     </td>
 );

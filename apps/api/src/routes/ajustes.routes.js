@@ -66,6 +66,8 @@ async function ajustesRoutes(fastify, options) {
     // GET /api/ajustes - Listar ajustes con filtros y paginación
     fastify.get('/api/ajustes', {
         schema: {
+            tags: ['Ajustes de Stock'],
+            description: 'Listar ajustes de stock con filtros y paginación',
             querystring: {
                 type: 'object',
                 properties: {
@@ -138,6 +140,8 @@ async function ajustesRoutes(fastify, options) {
     // GET /api/ajustes/:id - Obtener un ajuste
     fastify.get('/api/ajustes/:id', {
         schema: {
+            tags: ['Ajustes de Stock'],
+            description: 'Obtener un ajuste de stock por ID',
             params: {
                 type: 'object',
                 required: ['id'],
@@ -168,6 +172,8 @@ async function ajustesRoutes(fastify, options) {
     // POST /api/ajustes - Crear ajuste de stock
     fastify.post('/api/ajustes', {
         schema: {
+            tags: ['Ajustes de Stock'],
+            description: 'Crear un nuevo ajuste de stock (positivo o negativo)',
             body: {
                 type: 'object',
                 required: ['producto_id', 'tipo', 'cantidad', 'motivo'],
@@ -264,6 +270,8 @@ async function ajustesRoutes(fastify, options) {
     // GET /api/ajustes/reportes/por-producto - Reporte de ajustes por producto
     fastify.get('/api/ajustes/reportes/por-producto', {
         schema: {
+            tags: ['Ajustes de Stock'],
+            description: 'Reporte de ajustes agrupados por producto',
             querystring: {
                 type: 'object',
                 properties: {
@@ -316,6 +324,8 @@ async function ajustesRoutes(fastify, options) {
     // GET /api/ajustes/reportes/por-tipo - Reporte de ajustes por tipo
     fastify.get('/api/ajustes/reportes/por-tipo', {
         schema: {
+            tags: ['Ajustes de Stock'],
+            description: 'Reporte de ajustes agrupados por tipo (positivo/negativo)',
             querystring: {
                 type: 'object',
                 properties: {

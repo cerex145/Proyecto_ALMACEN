@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { kardexService } from '../../services/kardex.service';
+import { alertasService } from '../../services/alertas.service';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/common/Card';
@@ -15,8 +15,11 @@ export const AlertasWidget = () => {
     const loadAlerts = async () => {
         try {
             setLoading(true);
-            const data = await kardexService.getAlerts();
-            setAlerts(data);
+            const response = await alertasService.listar({
+                estado: 'PROXIMO_A_VENCER',
+                limit: 5
+            });
+            setAlerts(response.data || []);
         } catch (error) {
             console.error('Error loading alerts:', error);
         } finally {
@@ -24,13 +27,24 @@ export const AlertasWidget = () => {
         }
     };
 
-    const getPriorityBadge = (priority) => {
-        switch (priority) {
-            case 'critica': return <Badge variant="anulado">Crítica</Badge>;
-            case 'alta': return <Badge variant="observado">Alta</Badge>;
-            case 'media': return <Badge variant="pendiente">Media</Badge>;
-            default: return <Badge variant="secondary">{priority}</Badge>;
+    const getEstadoBadge = (estado) => {
+        const colores = {
+            VIGENTE: 'success',
+            PROXIMO_A_VENCER: 'warning',
+            VENCIDO: 'danger'
+        };
+        return <Badge variant={colores[estado] || 'secondary'}>{estado}</Badge>;
+    };
+
+    const formatFecha = (valor) => {
+        if (!valor) {
+            return 'N/A';
         }
+        const fecha = new Date(valor);
+        if (Number.isNaN(fecha.getTime())) {
+            return 'N/A';
+        }
+        return fecha.toLocaleDateString();
     };
 
     return (
@@ -61,14 +75,18 @@ export const AlertasWidget = () => {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {alerts.map(a => (
-                                <TableRow key={a.id}>
-                                    <TableCell className="font-medium text-slate-700">{a.descripcion}</TableCell>
-                                    <TableCell>{a.numero_lote}</TableCell>
-                                    <TableCell>{new Date(a.fecha_vencimiento).toLocaleDateString()}</TableCell>
-                                    <TableCell>{a.stock_lote}</TableCell>
-                                    <TableCell className="text-rose-600 font-bold">{a.dias_restantes}</TableCell>
-                                    <TableCell>{getPriorityBadge(a.prioridad)}</TableCell>
+                            {alerts.map((alerta) => (
+                                <TableRow key={alerta.id}>
+                                    <TableCell className="font-medium text-slate-700">
+                                        {alerta.producto?.descripcion || alerta.producto?.codigo || alerta.producto_id || 'N/A'}
+                                    </TableCell>
+                                    <TableCell>{alerta.lote?.numero_lote || alerta.lote_numero || alerta.lote_id || 'N/A'}</TableCell>
+                                    <TableCell>{formatFecha(alerta.fecha_vencimiento || alerta.lote?.fecha_vencimiento)}</TableCell>
+                                    <TableCell>{alerta.lote?.cantidad_disponible ?? alerta.producto?.stock_actual ?? 'N/A'}</TableCell>
+                                    <TableCell className="text-rose-600 font-bold">
+                                        {Number.isFinite(alerta.dias_faltantes) ? alerta.dias_faltantes : 'N/A'}
+                                    </TableCell>
+                                    <TableCell>{getEstadoBadge(alerta.estado)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

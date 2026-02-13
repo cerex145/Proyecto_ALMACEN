@@ -1,11 +1,84 @@
 const ExcelJS = require('exceljs');
 
+// Schemas para documentación Swagger
+const KardexMovimientoSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        producto_id: { type: 'integer' },
+        lote_numero: { type: 'string', nullable: true },
+        tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE', 'AJUSTE_POR_RECEPCION'] },
+        cantidad: { type: 'number' },
+        saldo: { type: 'number' },
+        documento_tipo: { type: 'string' },
+        documento_numero: { type: 'string' },
+        referencia_id: { type: 'integer', nullable: true },
+        observaciones: { type: 'string', nullable: true },
+        created_at: { type: 'string', format: 'date-time' },
+        producto: {
+            type: 'object',
+            properties: {
+                id: { type: 'integer' },
+                codigo: { type: 'string' },
+                descripcion: { type: 'string' }
+            }
+        }
+    }
+};
+
+const PaginationSchema = {
+    type: 'object',
+    properties: {
+        page: { type: 'integer' },
+        limit: { type: 'integer' },
+        total: { type: 'integer' },
+        totalPages: { type: 'integer' }
+    }
+};
+
+const ErrorResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        error: { type: 'string' }
+    }
+};
+
 async function kardexRoutes(fastify, options) {
     const kardexRepo = fastify.db.getRepository('Kardex');
     const productoRepo = fastify.db.getRepository('Producto');
 
     // GET /api/kardex - Listar movimientos (con datos del producto)
-    fastify.get('/api/kardex', async (request, reply) => {
+    fastify.get('/api/kardex', {
+        schema: {
+            tags: ['Kardex'],
+            description: 'Listar movimientos de kardex con filtros y paginación',
+            querystring: {
+                type: 'object',
+                properties: {
+                    producto_id: { type: 'integer', description: 'Filtrar por ID de producto' },
+                    lote_id: { type: 'string', description: 'Filtrar por número de lote' },
+                    tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE'], description: 'Tipo de movimiento' },
+                    fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio' },
+                    fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin' },
+                    page: { type: 'integer', minimum: 1, default: 1 },
+                    limit: { type: 'integer', minimum: 1, default: 100 },
+                    orderBy: { type: 'string', default: 'created_at' },
+                    order: { type: 'string', enum: ['ASC', 'DESC'], default: 'DESC' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: { type: 'array', items: KardexMovimientoSchema },
+                        pagination: PaginationSchema
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
         const {
             producto_id,
             lote_id,
@@ -22,7 +95,7 @@ async function kardexRoutes(fastify, options) {
 
         // Query raw SQL para asegurar que trae los datos del producto
         const connection = kardexRepo.manager.connection;
-        
+
         let sql = `
             SELECT 
                 k.id, k.producto_id, k.lote_numero, k.tipo_movimiento,
@@ -110,7 +183,35 @@ async function kardexRoutes(fastify, options) {
     });
 
     // GET /api/kardex/producto/:id - Kardex por producto
-    fastify.get('/api/kardex/producto/:id', async (request, reply) => {
+    fastify.get('/api/kardex/producto/:id', {
+        schema: {
+            tags: ['Kardex'],
+            description: 'Obtener todos los movimientos de kardex de un producto específico',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer', description: 'ID del producto' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: {
+                            type: 'object',
+                            properties: {
+                                producto: { type: 'object' },
+                                movimientos: { type: 'array', items: KardexMovimientoSchema }
+                            }
+                        }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const producto = await productoRepo.findOneBy({ id: Number(id) });
@@ -134,7 +235,25 @@ async function kardexRoutes(fastify, options) {
     });
 
     // GET /api/kardex/exportar - Exportar a Excel
-    fastify.get('/api/kardex/exportar', async (request, reply) => {
+    fastify.get('/api/kardex/exportar', {
+        schema: {
+            tags: ['Kardex'],
+            description: 'Exportar movimientos de kardex a Excel',
+            querystring: {
+                type: 'object',
+                properties: {
+                    producto_id: { type: 'integer', description: 'Filtrar por ID de producto' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'Archivo Excel con movimientos de kardex'
+                }
+            }
+        }
+    }, async (request, reply) => {
         const { producto_id } = request.query;
 
         let queryBuilder = kardexRepo.createQueryBuilder('kardex');
