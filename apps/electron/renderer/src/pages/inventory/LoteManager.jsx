@@ -18,7 +18,25 @@ export const LoteManager = ({ productId, onClose }) => {
         try {
             setLoading(true);
             const data = await productService.getLotesByProduct(productId);
-            setLotes(data);
+            if (Array.isArray(data) && data.length > 0) {
+                setLotes(data);
+                return;
+            }
+
+            const producto = await productService.getProductById(productId);
+            if (producto?.lote) {
+                setLotes([
+                    {
+                        id: `producto-${productId}`,
+                        numero_lote: producto.lote,
+                        fecha_vencimiento: producto.fecha_vencimiento || null,
+                        cantidad_disponible: producto.stock_actual ?? 0,
+                        cantidad_ingresada: producto.cantidad_total ?? 0
+                    }
+                ]);
+            } else {
+                setLotes([]);
+            }
         } catch (error) {
             console.error('Error loading lotes:', error);
         } finally {
@@ -59,6 +77,8 @@ export const LoteManager = ({ productId, onClose }) => {
                     <TableBody>
                         {lotes.map(lote => {
                             const expiring = isExpiringSoon(lote.fecha_vencimiento);
+                            const stockLote = lote.cantidad_disponible ?? lote.stock_lote ?? lote.cantidad_ingresada ?? 0;
+                            const stockValue = Number(stockLote) || 0;
                             return (
                                 <TableRow key={lote.id}>
                                     <TableCell>
@@ -73,10 +93,10 @@ export const LoteManager = ({ productId, onClose }) => {
                                             {expiring && ' ⚠️'}
                                         </span>
                                     </TableCell>
-                                    <TableCell>{lote.stock_lote}</TableCell>
+                                    <TableCell>{stockValue}</TableCell>
                                     <TableCell>
-                                        <Badge variant={lote.stock_lote > 0 ? 'activo' : 'inactivo'}>
-                                            {lote.stock_lote > 0 ? 'Activo' : 'Agotado'}
+                                        <Badge variant={stockValue > 0 ? 'activo' : 'inactivo'}>
+                                            {stockValue > 0 ? 'Activo' : 'Agotado'}
                                         </Badge>
                                     </TableCell>
                                 </TableRow>

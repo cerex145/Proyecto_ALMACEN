@@ -51,6 +51,18 @@ export const AlertasWidget = () => {
         return fecha.toLocaleDateString();
     };
 
+    const getNombreProducto = (alerta) => {
+        return (
+            alerta.producto_nombre ||
+            alerta.producto?.descripcion ||
+            alerta.lote?.producto?.descripcion ||
+            alerta.producto_codigo ||
+            alerta.producto?.codigo ||
+            alerta.lote?.producto?.codigo ||
+            'N/A'
+        );
+    };
+
     return (
         <Card className="h-full border-l-4 border-l-rose-500">
             <CardHeader className="mb-4">
@@ -82,7 +94,7 @@ export const AlertasWidget = () => {
                             {alerts.map((alerta) => (
                                 <TableRow key={alerta.id}>
                                     <TableCell className="font-medium text-slate-700">
-                                        {alerta.producto?.descripcion || alerta.producto?.codigo || alerta.producto_id || 'N/A'}
+                                        {getNombreProducto(alerta)}
                                     </TableCell>
                                     <TableCell>{alerta.lote?.numero_lote || alerta.lote_numero || alerta.lote_id || 'N/A'}</TableCell>
                                     <TableCell>{formatFecha(alerta.fecha_vencimiento || alerta.lote?.fecha_vencimiento)}</TableCell>

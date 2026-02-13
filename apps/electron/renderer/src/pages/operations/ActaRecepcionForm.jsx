@@ -23,7 +23,7 @@ export const ActaRecepcionForm = () => {
         }
     });
 
-    const { fields, append, remove, update } = useFieldArray({
+    const { fields, append, remove, replace } = useFieldArray({
         control,
         name: 'detalles'
     });
@@ -278,31 +278,26 @@ export const ActaRecepcionForm = () => {
 
                 // Limpiar productos actuales solo si hay productos en la nota
                 if (nota.detalles && nota.detalles.length > 0) {
-                    while (fields.length > 0) {
-                        remove(0);
-                    }
+                    const detallesNota = nota.detalles.map((detalle) => ({
+                        producto_id: detalle.producto_id,
+                        producto_codigo: detalle.producto?.codigo || '',
+                        producto_nombre: detalle.producto?.descripcion || '',
+                        fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                        lote_numero: detalle.lote_numero || detalle.numero_lote || '',
+                        fecha_vencimiento: detalle.fecha_vencimiento,
+                        um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                        temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                        temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                        cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
+                        cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
+                        cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
+                        cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
+                        cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
+                        cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
+                        aspecto: 'EMB'
+                    }));
 
-                    // Cargar todos los productos de la nota
-                    for (const detalle of nota.detalles) {
-                        append({
-                            producto_id: detalle.producto_id,
-                            producto_codigo: detalle.producto?.codigo || '',
-                            producto_nombre: detalle.producto?.descripcion || '',
-                            fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
-                            lote_numero: detalle.lote_numero || detalle.numero_lote || '',
-                            fecha_vencimiento: detalle.fecha_vencimiento,
-                            um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
-                            temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
-                            temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
-                            cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
-                            cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
-                            cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
-                            cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
-                            cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
-                            cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
-                            aspecto: 'EMB'
-                        });
-                    }
+                    replace(detallesNota);
                 }
             } catch (error) {
                 console.error('Error al buscar nota de ingreso:', error);

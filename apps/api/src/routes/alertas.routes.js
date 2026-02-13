@@ -1,3 +1,5 @@
+const { In } = require('typeorm');
+
 // Schemas para documentación Swagger
 const AlertaVencimientoSchema = {
     type: 'object',
@@ -5,6 +7,8 @@ const AlertaVencimientoSchema = {
         id: { type: 'integer' },
         lote_id: { type: 'integer' },
         producto_id: { type: 'integer' },
+        producto_nombre: { type: 'string', nullable: true },
+        producto_codigo: { type: 'string', nullable: true },
         lote_numero: { type: 'string' },
         fecha_vencimiento: { type: 'string', format: 'date' },
         estado: { type: 'string', enum: ['VIGENTE', 'PROXIMO_A_VENCER', 'VENCIDO'] },
@@ -117,6 +121,35 @@ async function alertasRoutes(fastify, options) {
         }
     };
 
+    const enriquecerAlertas = async (alertas) => {
+        const idsFaltantes = Array.from(
+            new Set(
+                alertas
+                    .filter((alerta) => !alerta.producto && !alerta.lote?.producto && alerta.producto_id)
+                    .map((alerta) => alerta.producto_id)
+            )
+        );
+
+        const productos = idsFaltantes.length > 0
+            ? await productoRepo.findBy({ id: In(idsFaltantes) })
+            : [];
+        const productosPorId = new Map(productos.map((producto) => [producto.id, producto]));
+
+        return alertas.map((alerta) => {
+            const producto =
+                alerta.producto ||
+                alerta.lote?.producto ||
+                productosPorId.get(alerta.producto_id) ||
+                null;
+
+            return {
+                ...alerta,
+                producto_nombre: producto?.descripcion || null,
+                producto_codigo: producto?.codigo || null
+            };
+        });
+    };
+
     // GET /api/alertas/vencimiento - Obtener alertas
     fastify.get('/api/alertas/vencimiento', {
         schema: {
@@ -174,12 +207,14 @@ async function alertasRoutes(fastify, options) {
 
         queryBuilder
             .leftJoinAndSelect('alerta.lote', 'lote')
+            .leftJoinAndSelect('lote.producto', 'loteProducto')
             .leftJoinAndSelect('alerta.producto', 'producto')
             .orderBy('alerta.dias_faltantes', 'ASC')
             .skip(skip)
             .take(limit);
 
         const [alertas, total] = await queryBuilder.getManyAndCount();
+        const alertasEnriquecidas = await enriquecerAlertas(alertas);
 
         // Contar alertas por estado
         const alertasVencidas = await alertaVencimientoRepo.countBy({ estado: 'VENCIDO', leida: false });
@@ -187,7 +222,7 @@ async function alertasRoutes(fastify, options) {
 
         return {
             success: true,
-            data: alertas,
+            data: alertasEnriquecidas,
             resumen: {
                 vencidos: alertasVencidas,
                 proximos_a_vencer: alertasProximas,
@@ -242,6 +277,7 @@ async function alertasRoutes(fastify, options) {
                 leida: false
             })
             .leftJoinAndSelect('alerta.lote', 'lote')
+            .leftJoinAndSelect('lote.producto', 'loteProducto')
             .leftJoinAndSelect('alerta.producto', 'producto')
             .orderBy('alerta.dias_faltantes', 'ASC')
             .limit(5)
@@ -255,6 +291,7 @@ async function alertasRoutes(fastify, options) {
                 leida: false
             })
             .leftJoinAndSelect('alerta.lote', 'lote')
+            .leftJoinAndSelect('lote.producto', 'loteProducto')
             .leftJoinAndSelect('alerta.producto', 'producto')
             .orderBy('alerta.dias_faltantes', 'DESC')
             .limit(5)

@@ -94,6 +94,18 @@ export const AlertasListCompleto = () => {
         return fecha.toLocaleDateString();
     };
 
+    const getNombreProducto = (alerta) => {
+        return (
+            alerta.producto_nombre ||
+            alerta.producto?.descripcion ||
+            alerta.lote?.producto?.descripcion ||
+            alerta.producto_codigo ||
+            alerta.producto?.codigo ||
+            alerta.lote?.producto?.codigo ||
+            'N/A'
+        );
+    };
+
     return (
         <div style={{ padding: '20px' }}>
             <div style={{ marginBottom: '20px' }}>
@@ -195,7 +207,7 @@ export const AlertasListCompleto = () => {
                                 >
                                     <TableCell>{alerta.lote?.numero_lote || alerta.lote_numero || alerta.lote_id || 'N/A'}</TableCell>
                                     <TableCell>
-                                        {alerta.producto?.descripcion || alerta.producto?.codigo || alerta.producto_id || 'N/A'}
+                                        {getNombreProducto(alerta)}
                                     </TableCell>
                                     <TableCell>
                                         {formatCantidad(
