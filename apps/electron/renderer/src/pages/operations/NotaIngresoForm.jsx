@@ -86,6 +86,12 @@ export const NotaIngresoForm = () => {
         setTemperaturaMax(product?.temperatura_max_c ?? '');
         setLote(product?.lote || '');
         setVencimiento(product?.fecha_vencimiento || '');
+        setBultos(product?.cantidad_bultos ?? '');
+        setCajas(product?.cantidad_cajas ?? '');
+        setUnidadesCaja(product?.cantidad_por_caja ?? '');
+        setFraccion(product?.cantidad_fraccion ?? '');
+        setQuantityManual(false);
+        setQuantity(Number(product?.cantidad_total ?? 0));
     }, [selectedProduct, products]);
 
     useEffect(() => {
@@ -191,11 +197,19 @@ export const NotaIngresoForm = () => {
                 setFabricante(productoDetalle.fabricante || '');
                 setTemperaturaMin(productoDetalle.temperatura_min_c ?? '');
                 setTemperaturaMax(productoDetalle.temperatura_max_c ?? '');
+                setBultos(productoDetalle.cantidad_bultos ?? '');
+                setCajas(productoDetalle.cantidad_cajas ?? '');
+                setUnidadesCaja(productoDetalle.cantidad_por_caja ?? '');
+                setFraccion(productoDetalle.cantidad_fraccion ?? '');
             }
-            const cantidadBase = Number(loteInfo.cantidad_disponible ?? loteInfo.cantidad_ingresada ?? 0);
-            if (Number.isFinite(cantidadBase) && cantidadBase > 0) {
+            const cantidadProducto = Number(productoDetalle?.cantidad_total ?? 0);
+            const cantidadLote = Number(loteInfo.cantidad_disponible ?? loteInfo.cantidad_ingresada ?? 0);
+            const cantidadBase = Number.isFinite(cantidadProducto) && cantidadProducto > 0
+                ? cantidadProducto
+                : cantidadLote;
+            if (Number.isFinite(cantidadBase) && cantidadBase >= 0) {
                 setQuantity(cantidadBase);
-                setQuantityManual(true);
+                setQuantityManual(false);
             }
         }
     };
