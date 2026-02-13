@@ -15,6 +15,34 @@ const NotaIngresoSchema = {
     }
 };
 
+const NotaIngresoDetalleSchema = {
+    type: 'object',
+    properties: {
+        id: { type: 'integer' },
+        nota_ingreso_id: { type: 'integer' },
+        producto_id: { type: 'integer' },
+        cantidad: { type: 'number' },
+        precio_unitario: { type: 'number' },
+        lote_numero: { type: 'string', nullable: true },
+        fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+        producto: { type: 'object', nullable: true }
+    }
+};
+
+const NotaIngresoResponseSchema = {
+    type: 'object',
+    properties: {
+        success: { type: 'boolean' },
+        data: {
+            type: 'object',
+            properties: {
+                ...NotaIngresoSchema.properties,
+                detalles: { type: 'array', items: NotaIngresoDetalleSchema }
+            }
+        }
+    }
+};
+
 const PaginationSchema = {
     type: 'object',
     properties: {

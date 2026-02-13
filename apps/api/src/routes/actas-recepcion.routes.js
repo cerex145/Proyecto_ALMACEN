@@ -135,7 +135,23 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // GET /api/actas-recepcion/:id - Obtener acta con detalles
-    fastify.get('/api/actas-recepcion/:id', async (request, reply) => {
+    fastify.get('/api/actas-recepcion/:id', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Obtener un acta de recepción específica con sus detalles',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: ActaRecepcionResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const acta = await actaRecepcionRepo.findOneBy({ id: Number(id) });
@@ -287,7 +303,23 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // PUT /api/actas-recepcion/:id - Actualizar acta
-    fastify.put('/api/actas-recepcion/:id', async (request, reply) => {
+    fastify.put('/api/actas-recepcion/:id', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Actualizar un acta de recepción existente',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: ActaRecepcionResponseWithMessageSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
         const { estado, observaciones } = request.body;
 
@@ -309,7 +341,23 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // POST /api/actas-recepcion/:id/aprobar - Aprobar acta
-    fastify.post('/api/actas-recepcion/:id/aprobar', async (request, reply) => {
+    fastify.post('/api/actas-recepcion/:id/aprobar', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Aprobar un acta de recepción',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: ActaRecepcionResponseWithMessageSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const acta = await actaRecepcionRepo.findOneBy({ id: Number(id) });
@@ -374,7 +422,23 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // POST /api/actas-recepcion/importar - Importar desde Excel
-    fastify.post('/api/actas-recepcion/importar', async (request, reply) => {
+    fastify.post('/api/actas-recepcion/importar', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Importar actas de recepción desde archivo Excel',
+            consumes: ['multipart/form-data'],
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const data = await request.file();
 
         if (!data) {
@@ -475,7 +539,15 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // GET /api/actas-recepcion/exportar - Exportar a Excel
-    fastify.get('/api/actas-recepcion/exportar', async (request, reply) => {
+    fastify.get('/api/actas-recepcion/exportar', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Exportar actas de recepción a archivo Excel',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const actas = await actaRecepcionRepo
             .createQueryBuilder('acta')
             .leftJoinAndSelect('acta.notaIngreso', 'notaIngreso')
@@ -513,7 +585,15 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // GET /api/actas-recepcion/plantilla/descargar - Descargar plantilla
-    fastify.get('/api/actas-recepcion/plantilla/descargar', async (request, reply) => {
+    fastify.get('/api/actas-recepcion/plantilla/descargar', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Descargar plantilla Excel para importar actas de recepción',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Plantilla Acta');
 
@@ -547,7 +627,23 @@ async function actasRecepcionRoutes(fastify, options) {
     });
 
     // GET /api/actas-recepcion/:id/pdf - Exportar PDF
-    fastify.get('/api/actas-recepcion/:id/pdf', async (request, reply) => {
+    fastify.get('/api/actas-recepcion/:id/pdf', {
+        schema: {
+            tags: ['Actas de Recepción'],
+            description: 'Generar PDF de un acta de recepción',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: { type: 'string', format: 'binary' },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
         const { id } = request.params;
 
         const acta = await actaRecepcionRepo.findOne({
