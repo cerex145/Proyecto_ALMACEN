@@ -217,23 +217,30 @@ async function ingresosRoutes(fastify, options) {
             description: 'Crear una nueva nota de ingreso con sus detalles',
             body: {
                 type: 'object',
-                required: ['fecha', 'proveedor', 'categoria', 'detalles'],
+                required: ['fecha', 'proveedor', 'detalles'],
                 properties: {
                     fecha: { type: 'string', format: 'date' },
                     proveedor: { type: 'string' },
-                    categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
+                    tipo_documento: { type: 'string' },
+                    numero_documento: { type: 'string' },
+                    responsable_id: { type: 'integer' },
                     observaciones: { type: 'string' },
                     detalles: {
                         type: 'array',
                         items: {
                             type: 'object',
-                            required: ['producto_id', 'cantidad', 'precio_unitario'],
+                            required: ['producto_id', 'cantidad'],
                             properties: {
                                 producto_id: { type: 'integer' },
                                 cantidad: { type: 'number', minimum: 0 },
                                 precio_unitario: { type: 'number', minimum: 0 },
                                 lote_numero: { type: 'string' },
-                                fecha_vencimiento: { type: 'string', format: 'date' }
+                                fecha_vencimiento: { type: 'string', format: 'date' },
+                                cantidad_bultos: { type: 'number' },
+                                cantidad_cajas: { type: 'number' },
+                                cantidad_por_caja: { type: 'number' },
+                                cantidad_fraccion: { type: 'number' },
+                                cantidad_total: { type: 'number' }
                             }
                         }
                     }
@@ -341,7 +348,12 @@ async function ingresosRoutes(fastify, options) {
                         lote_numero: detalle.lote_numero,
                         fecha_vencimiento: detalle.fecha_vencimiento,
                         cantidad: detalle.cantidad,
-                        precio_unitario: detalle.precio_unitario
+                        precio_unitario: detalle.precio_unitario || 0,
+                        cantidad_bultos: detalle.cantidad_bultos || 0,
+                        cantidad_cajas: detalle.cantidad_cajas || 0,
+                        cantidad_por_caja: detalle.cantidad_por_caja || 0,
+                        cantidad_fraccion: detalle.cantidad_fraccion || 0,
+                        cantidad_total: detalle.cantidad_total || detalle.cantidad
                     });
                     await transactionalEntityManager.save('NotaIngresoDetalle', detalleNota);
 
