@@ -22,7 +22,7 @@ export const NotaSalidaForm = () => {
         }
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, update } = useFieldArray({
         control,
         name: 'detalles'
     });
@@ -32,6 +32,11 @@ export const NotaSalidaForm = () => {
     const [selectedClient, setSelectedClient] = useState('');
     const [clienteRuc, setClienteRuc] = useState('');
     const [clienteCodigo, setClienteCodigo] = useState('');
+
+    // Estados para notas de ingreso
+    const [notasIngreso, setNotasIngreso] = useState([]);
+    const [mostrarNotasIngreso, setMostrarNotasIngreso] = useState(false);
+    const [selectedProductosFromNota, setSelectedProductosFromNota] = useState({});
 
     const [selectedProduct, setSelectedProduct] = useState('');
     const [lotesDisponibles, setLotesDisponibles] = useState([]);
@@ -84,6 +89,9 @@ export const NotaSalidaForm = () => {
 
         // Recargar productos filtrados por cliente
         loadProducts(selectedClient);
+
+        // Cargar notas de ingreso del cliente
+        loadNotasIngreso(selectedClient);
 
         // Limpiar selección de producto actual
         setSelectedProduct('');
@@ -149,6 +157,41 @@ export const NotaSalidaForm = () => {
         }
     };
 
+    const loadNotasIngreso = async (clienteId) => {
+        if (!clienteId) {
+            setNotasIngreso([]);
+            return;
+        }
+        try {
+            const client = clients.find(c => String(c.id) === String(clienteId));
+            if (!client) return;
+
+            // Buscar las notas de ingreso del cliente por proveedor (razon_social)
+            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
+            const result = await response.json();
+            const notas = result.data || [];
+
+            // Cargar detalles de cada nota
+            const notasConDetalles = await Promise.all(
+                notas.map(async (nota) => {
+                    try {
+                        const detRes = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+                        const detJson = await detRes.json();
+                        return { ...nota, detalles: detJson?.data?.detalles || [] };
+                    } catch (err) {
+                        console.error('Error al cargar detalles:', err);
+                        return { ...nota, detalles: [] };
+                    }
+                })
+            );
+
+            setNotasIngreso(notasConDetalles);
+        } catch (error) {
+            console.error('Error loading notas de ingreso:', error);
+            setNotasIngreso([]);
+        }
+    };
+
     useEffect(() => {
         const c = parseFloat(cajas) || 0;
         const u = parseFloat(unidadesCaja) || 0;
@@ -175,6 +218,85 @@ export const NotaSalidaForm = () => {
 
     // const loadData replaced by separated functions
     // loadData removed
+
+    const handleSelectTodaNota = (notaId) => {
+        const nota = notasIngreso.find(n => n.id === notaId);
+        if (!nota || !nota.detalles || nota.detalles.length === 0) {
+            alert('Esta nota no tiene productos');
+            return;
+        }
+
+        // Agregar todos los productos de la nota
+        nota.detalles.forEach(detalle => {
+            if (detalle.producto_id) {
+                handleAgregarProductoDesdeNota(notaId, detalle);
+            }
+        });
+
+        alert(`✅ Se agregaron ${nota.detalles.length} productos de la nota de ingreso`);
+    };
+
+    const handleAgregarProductoDesdeNota = (notaId, detalle) => {
+        const key = `${notaId}-${detalle.id}`;
+        
+        // Verificar si ya existe este producto con el mismo lote
+        const existingIndex = fields.findIndex(
+            f => Number(f.producto_id) === Number(detalle.producto_id) && 
+                 f.lote_numero === detalle.lote_numero
+        );
+
+        if (existingIndex >= 0) {
+            // Actualizar cantidad si ya existe
+            const existing = fields[existingIndex];
+            update(existingIndex, {
+                ...existing,
+                cantidad: Number(existing.cantidad || 0) + Number(detalle.cantidad_total || detalle.cantidad || 0),
+                cant_total: Number(existing.cant_total || existing.cantidad || 0) + Number(detalle.cantidad_total || detalle.cantidad || 0),
+                cant_bulto: Number(existing.cant_bulto || 0) + Number(detalle.cantidad_bultos || 0),
+                cant_caja: Number(existing.cant_caja || 0) + Number(detalle.cantidad_cajas || 0),
+                cant_por_caja: Number(detalle.cantidad_por_caja || existing.cant_por_caja || 0),
+                cant_fraccion: Number(existing.cant_fraccion || 0) + Number(detalle.cantidad_fraccion || 0)
+            });
+        } else {
+            // Agregar nuevo producto
+            append({
+                producto_id: Number(detalle.producto_id),
+                producto_codigo: detalle.producto?.codigo || '',
+                producto_nombre: detalle.producto?.descripcion || '',
+                lote_id: null,
+                lote_numero: detalle.lote_numero || '',
+                fecha_vencimiento: detalle.fecha_vencimiento || '',
+                um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                cant_bulto: Number(detalle.cantidad_bultos || 0),
+                cant_caja: Number(detalle.cantidad_cajas || 0),
+                cant_por_caja: Number(detalle.cantidad_por_caja || 0),
+                cant_fraccion: Number(detalle.cantidad_fraccion || 0),
+                cant_total: Number(detalle.cantidad_total || detalle.cantidad || 0),
+                cantidad: Number(detalle.cantidad_total || detalle.cantidad || 0)
+            });
+        }
+    };
+
+    const handleToggleProductoFromNota = (notaId, detalle) => {
+        const key = `${notaId}-${detalle.id}`;
+        const isSelected = selectedProductosFromNota[key];
+
+        if (isSelected) {
+            // Deseleccionar
+            setSelectedProductosFromNota(prev => {
+                const newSelected = { ...prev };
+                delete newSelected[key];
+                return newSelected;
+            });
+        } else {
+            // Seleccionar y agregar
+            setSelectedProductosFromNota(prev => ({ ...prev, [key]: true }));
+            handleAgregarProductoDesdeNota(notaId, detalle);
+        }
+    };
 
     const handleAddLine = () => {
         const isOtro = selectedLoteOption === OTHER_LOTE_OPTION;
@@ -364,6 +486,101 @@ export const NotaSalidaForm = () => {
                     </div>
                 </Card>
 
+                {/* Sección de Notas de Ingreso */}
+                {selectedClient && (
+                    <Card className="p-6 bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold text-purple-800">📦 Notas de Ingreso del Cliente</h3>
+                            <Button
+                                type="button"
+                                onClick={() => setMostrarNotasIngreso(!mostrarNotasIngreso)}
+                                variant="secondary"
+                                className="text-sm"
+                            >
+                                {mostrarNotasIngreso ? '▼ Ocultar' : '▶ Mostrar'}
+                            </Button>
+                        </div>
+
+                        {mostrarNotasIngreso && (
+                            <div className="space-y-4">
+                                {notasIngreso.length === 0 ? (
+                                    <div className="text-center py-8 text-slate-500">
+                                        No hay notas de ingreso para este cliente
+                                    </div>
+                                ) : (
+                                    notasIngreso.map(nota => (
+                                        <Card key={nota.id} className="p-4 bg-white border-purple-200">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div>
+                                                    <h4 className="font-bold text-slate-700">
+                                                        Nota: {nota.numero_ingreso} - Fecha: {new Date(nota.fecha).toLocaleDateString('es-PE')}
+                                                    </h4>
+                                                    <p className="text-xs text-slate-500">
+                                                        {nota.detalles?.length || 0} productos
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    onClick={() => handleSelectTodaNota(nota.id)}
+                                                    className="bg-purple-600 hover:bg-purple-700 text-white text-sm"
+                                                >
+                                                    ✓ Seleccionar Todo
+                                                </Button>
+                                            </div>
+
+                                            {nota.detalles && nota.detalles.length > 0 && (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-xs">
+                                                        <thead className="bg-slate-50">
+                                                            <tr>
+                                                                <th className="px-2 py-2 text-left">Sel.</th>
+                                                                <th className="px-2 py-2 text-left">Código</th>
+                                                                <th className="px-2 py-2 text-left">Producto</th>
+                                                                <th className="px-2 py-2 text-left">Lote</th>
+                                                                <th className="px-2 py-2 text-left">Vencimiento</th>
+                                                                <th className="px-2 py-2 text-left">UM</th>
+                                                                <th className="px-2 py-2 text-right">Cantidad</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y">
+                                                            {nota.detalles.map(detalle => {
+                                                                const key = `${nota.id}-${detalle.id}`;
+                                                                const isSelected = selectedProductosFromNota[key];
+                                                                return (
+                                                                    <tr key={detalle.id} className={isSelected ? 'bg-purple-50' : 'hover:bg-slate-50'}>
+                                                                        <td className="px-2 py-2">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={isSelected || false}
+                                                                                onChange={() => handleToggleProductoFromNota(nota.id, detalle)}
+                                                                                className="w-4 h-4 text-purple-600 rounded"
+                                                                            />
+                                                                        </td>
+                                                                        <td className="px-2 py-2 font-mono">{detalle.producto?.codigo || '-'}</td>
+                                                                        <td className="px-2 py-2 font-medium">{detalle.producto?.descripcion || '-'}</td>
+                                                                        <td className="px-2 py-2">{detalle.lote_numero || '-'}</td>
+                                                                        <td className="px-2 py-2">
+                                                                            {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
+                                                                        </td>
+                                                                        <td className="px-2 py-2">{detalle.um || detalle.producto?.um || '-'}</td>
+                                                                        <td className="px-2 py-2 text-right font-semibold text-blue-600">
+                                                                            {detalle.cantidad_total || detalle.cantidad || 0}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </Card>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </Card>
+                )}
+
                 <Card className="p-6">
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos del Documento</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -414,17 +631,23 @@ export const NotaSalidaForm = () => {
 
                 <Card className="p-6 bg-blue-50/50 border-blue-100">
                     <div className="flex flex-wrap gap-2 justify-end mb-4">
-                        <Button type="button" onClick={handleAddLine} variant="primary">
-                            Ingresar
+                        <Button type="button" onClick={handleAddLine} variant="primary" className="bg-green-600 hover:bg-green-700">
+                            ➕ Agregar Producto
                         </Button>
-                        <Button type="button" variant="secondary" onClick={() => fields.length > 0 && remove(fields.length - 1)}>
-                            Eliminar
+                        <Button 
+                            type="button" 
+                            onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                            className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                            disabled={fields.length === 0}
+                            title="Eliminar el último producto agregado"
+                        >
+                            ➖ Quitar Último
                         </Button>
                         <Button type="button" variant="secondary" onClick={handleLimpiar}>
-                            Limpiar
+                            🗑️ Limpiar Todo
                         </Button>
                         <Button type="button" variant="secondary" onClick={handleExportPdf}>
-                            PDF
+                            📄 PDF
                         </Button>
                     </div>
 
@@ -550,9 +773,17 @@ export const NotaSalidaForm = () => {
                             </div>
                         </div>
 
-                        <div className="md:col-span-12 flex justify-end">
-                            <Button type="button" onClick={handleAddLine} variant="primary" className="w-full md:w-auto">
-                                + Agregar Item
+                        <div className="md:col-span-12 flex justify-end gap-3">
+                            <Button 
+                                type="button" 
+                                onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                                className="bg-red-600 hover:bg-red-700 text-white font-bold w-full md:w-auto"
+                                disabled={fields.length === 0}
+                            >
+                                ➖ Quitar Último Producto
+                            </Button>
+                            <Button type="button" onClick={handleAddLine} variant="primary" className="bg-green-600 hover:bg-green-700 w-full md:w-auto">
+                                ➕ Agregar Producto
                             </Button>
                         </div>
                     </div>
@@ -594,9 +825,10 @@ export const NotaSalidaForm = () => {
                                         <button
                                             type="button"
                                             onClick={() => remove(index)}
-                                            className="text-red-500 hover:text-red-700 font-medium text-xs bg-red-50 px-2 py-1 rounded-lg"
+                                            className="bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition-all hover:shadow-md text-sm flex items-center gap-1 mx-auto"
+                                            title="Eliminar este producto de la lista"
                                         >
-                                            Quitar
+                                            <span className="text-lg">×</span> Quitar
                                         </button>
                                     </td>
                                 </tr>
@@ -615,17 +847,25 @@ export const NotaSalidaForm = () => {
                 <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
                     <Button
                         type="button"
+                        onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                        disabled={fields.length === 0}
+                    >
+                        ➖ Quitar Último Producto
+                    </Button>
+                    <Button
+                        type="button"
                         variant="secondary"
                         onClick={handleLimpiar}
                     >
-                        Limpiar
+                        🗑️ Limpiar Todo
                     </Button>
                     <Button
                         type="button"
                         variant="secondary"
                         onClick={handleExportPdf}
                     >
-                        Exportar a PDF
+                        📄 Exportar a PDF
                     </Button>
                     <Button
                         type="submit"
@@ -634,7 +874,7 @@ export const NotaSalidaForm = () => {
                         size="lg"
                         className="btn-gradient-primary shadow-lg shadow-blue-500/30"
                     >
-                        Ingresar
+                        💾 Guardar Nota de Salida
                     </Button>
                 </div>
             </form>

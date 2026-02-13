@@ -1,200 +1,898 @@
 import React, { useState, useEffect } from 'react';
-import { actasService } from '../../services/actas.service';
-import { ingresosService } from '../../services/ingresos.service';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { productService } from '../../services/product.service';
+import { clientesService } from '../../services/clientes.service';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
 export const ActaRecepcionForm = () => {
-    const [ingresos, setIngresos] = useState([]);
-    const [ingresoSeleccionado, setIngresoSeleccionado] = useState(null);
-    const [detalles, setDetalles] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [mensaje, setMensaje] = useState(null);
+    const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
+        defaultValues: {
+            fecha: new Date().toISOString().split('T')[0],
+            tipo_documento: '',
+            numero_documento: '',
+            cliente_id: '',
+            proveedor: '',
+            tipo_operacion: '',
+            tipo_conteo: '',
+            condicion_temperatura: '',
+            observaciones: '',
+            detalles: []
+        }
+    });
+
+    const { fields, append, remove, update } = useFieldArray({
+        control,
+        name: 'detalles'
+    });
+
+    const [clients, setClients] = useState([]);
+    const [selectedClient, setSelectedClient] = useState('');
+    const [clienteRuc, setClienteRuc] = useState('');
+    const [proveedorNombre, setProveedorNombre] = useState('');
+
+    const [products, setProducts] = useState([]);
+    const [selectedProduct, setSelectedProduct] = useState('');
+    const [showAllProducts, setShowAllProducts] = useState(false);
+    
+    const [lotesDisponibles, setLotesDisponibles] = useState([]);
+    const [selectedLoteId, setSelectedLoteId] = useState('');
+    
+    // Estados del formulario de producto
+    const [lote, setLote] = useState('');
+    const [vencimiento, setVencimiento] = useState('');
+    const [um, setUm] = useState('');
+    const [fabricante, setFabricante] = useState('');
+    const [temperaturaMin, setTemperaturaMin] = useState('');
+    const [temperaturaMax, setTemperaturaMax] = useState('');
+    const [cantidadSolicitada, setCantidadSolicitada] = useState('');
+    const [cantidadRecibida, setCantidadRecibida] = useState('');
+    const [aspecto, setAspecto] = useState('EMB');
+    
+    const [bultos, setBultos] = useState('');
+    const [cajas, setCajas] = useState('');
+    const [unidadesCaja, setUnidadesCaja] = useState('');
+    const [fraccion, setFraccion] = useState('');
+
+    const [lastActaId, setLastActaId] = useState(null);
+    
+    // Estados para cargar nota de ingreso existente
+    const [notasIngreso, setNotasIngreso] = useState([]);
+    const [selectedNotaIngresoId, setSelectedNotaIngresoId] = useState('');
+    const [mostrarNotasIngreso, setMostrarNotasIngreso] = useState(false);
 
     useEffect(() => {
-        cargarIngresosPendientes();
+        loadClients();
     }, []);
 
-    const cargarIngresosPendientes = async () => {
+    useEffect(() => {
+        if (selectedClient) {
+            const filters = showAllProducts ? {} : { cliente_id: selectedClient };
+            loadProducts(filters);
+        } else {
+            setProducts([]);
+        }
+    }, [selectedClient, showAllProducts]);
+
+    useEffect(() => {
+        if (selectedClient && selectedProduct) {
+            loadLotes();
+        } else {
+            setLotesDisponibles([]);
+        }
+    }, [selectedProduct, selectedClient]);
+
+    useEffect(() => {
+        if (selectedClient) {
+            loadNotasIngresoDisponibles();
+        } else {
+            setNotasIngreso([]);
+            setSelectedNotaIngresoId('');
+        }
+    }, [selectedClient]);
+
+    // Auto-fill producto
+    useEffect(() => {
+        if (!selectedProduct) {
+            setUm('');
+            setFabricante('');
+            setTemperaturaMin('');
+            setTemperaturaMax('');
+            setLote('');
+            setVencimiento('');
+            setBultos('');
+            setCajas('');
+            setUnidadesCaja('');
+            setFraccion('');
+            setCantidadSolicitada('');
+            setCantidadRecibida('');
+            return;
+        }
+
+        const product = products.find(p => p.id === parseInt(selectedProduct));
+        if (product) {
+            setUm(product.um || product.unidad || '');
+            setFabricante(product.fabricante || '');
+            setTemperaturaMin(product.temperatura_min_c || '');
+            setTemperaturaMax(product.temperatura_max_c || '');
+            setBultos(product.cantidad_bultos || '');
+            setCajas(product.cantidad_cajas || '');
+            setUnidadesCaja(product.cantidad_por_caja || '');
+            setFraccion(product.cantidad_fraccion || '');
+            
+            const currentTipoDoc = getValues('tipo_documento');
+            if (product.tipo_documento && !currentTipoDoc) {
+                setValue('tipo_documento', product.tipo_documento);
+            }
+            const currentNumDoc = getValues('numero_documento');
+            if (product.numero_documento && !currentNumDoc) {
+                setValue('numero_documento', product.numero_documento);
+            }
+        }
+    }, [selectedProduct, products]);
+
+    // Auto-fill lote
+    useEffect(() => {
+        if (!selectedLoteId || selectedLoteId === 'OTRO') return;
+        
+        const loteData = lotesDisponibles.find(l => l.id === parseInt(selectedLoteId));
+        if (!loteData) return;
+
+        setLote(loteData.numero_lote || '');
+        setVencimiento(loteData.fecha_vencimiento || '');
+        setCantidadSolicitada(loteData.cantidad_disponible || '');
+        setCantidadRecibida(loteData.cantidad_disponible || '');
+        
+        if (loteData.producto) {
+            setUm(loteData.producto.um || loteData.producto.unidad || um);
+            setFabricante(loteData.producto.fabricante || fabricante);
+            setTemperaturaMin(loteData.producto.temperatura_min_c || temperaturaMin);
+            setTemperaturaMax(loteData.producto.temperatura_max_c || temperaturaMax);
+        }
+    }, [selectedLoteId, lotesDisponibles]);
+
+    // Auto-cálculo de cantidad recibida
+    useEffect(() => {
+        const c = parseFloat(cajas) || 0;
+        const u = parseFloat(unidadesCaja) || 0;
+        const f = parseFloat(fraccion) || 0;
+        const total = (c * u) + f;
+        
+        if (total > 0) {
+            setCantidadRecibida(total.toString());
+        }
+    }, [cajas, unidadesCaja, fraccion]);
+
+    const loadClients = async () => {
         try {
-            // FIX: Load REGISTRADA instead of APROBADA. 
-            // The flow is: Ingreso (Registrada) -> Acta (Confirms it) -> Ingreso (Recibida)
-            const response = await ingresosService.listar({ estado: 'REGISTRADA' });
-            setIngresos(response.data || []);
+            const clientsResponse = await clientesService.listar();
+            const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
+            setClients(clientsArray);
         } catch (error) {
-            console.error('Error al cargar ingresos:', error);
+            console.error('Error loading clients:', error);
+            alert('Error al cargar lista de Clientes.');
         }
     };
 
-    const handleSelectIngreso = async (ingresoId) => {
-        if (!ingresoId) {
-            setIngresoSeleccionado(null);
-            setDetalles([]);
+    const loadProducts = async (filters = {}) => {
+        try {
+            const productsResponse = await productService.getProducts(filters);
+            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
+        } catch (error) {
+            console.error('Error loading products:', error);
+            setProducts([]);
+        }
+    };
+
+    const loadLotes = async () => {
+        try {
+            const filters = { producto_id: selectedProduct };
+            if (selectedClient && !showAllProducts) {
+                filters.cliente_id = selectedClient;
+            }
+            const lotes = await productService.getLotes(filters);
+            const lotesArray = Array.isArray(lotes) ? lotes : [];
+            setLotesDisponibles(lotesArray);
+            
+            // Auto-seleccionar primer lote
+            if (lotesArray.length > 0) {
+                setSelectedLoteId(lotesArray[0].id);
+            }
+        } catch (error) {
+            console.error('Error loading lotes:', error);
+            setLotesDisponibles([]);
+        }
+    };
+
+    const loadNotasIngresoDisponibles = async () => {
+        if (!selectedClient) return;
+        try {
+            const client = clients.find(c => String(c.id) === String(selectedClient));
+            if (!client) return;
+            
+            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
+            if (!response.ok) throw new Error('Error al cargar notas de ingreso');
+            
+            const result = await response.json();
+            const notas = result.data || [];
+            setNotasIngreso(notas);
+        } catch (error) {
+            console.error('Error loading notas ingreso:', error);
+            setNotasIngreso([]);
+        }
+    };
+
+    const handleCargarNotaIngreso = async () => {
+        if (!selectedNotaIngresoId) {
+            alert('Seleccione una nota de ingreso');
             return;
         }
 
         try {
-            const response = await ingresosService.obtener(ingresoId);
-            setIngresoSeleccionado(response.data);
+            const response = await fetch(`http://127.0.0.1:3000/api/ingresos/${selectedNotaIngresoId}`);
+            if (!response.ok) throw new Error('Error al cargar nota de ingreso');
+            
+            const result = await response.json();
+            const nota = result.data || result;
 
-            // Map details for verification
-            const detallesMapeados = (response.data.detalles || []).map((d, idx) => ({
-                ...d,
-                cantidad_esperada: d.cantidad,
-                cantidad_recibida: d.cantidad, // Default to same quantity
-                diferencia: 0,
-                id: `detalle-${idx}` // Temp ID for UI key
-            }));
-            setDetalles(detallesMapeados);
+            // Auto-llenar campos del documento
+            if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
+            if (nota.numero_documento) setValue('numero_documento', nota.numero_documento);
+            if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
+
+            // Limpiar productos actuales
+            while (fields.length > 0) {
+                remove(0);
+            }
+
+            // Cargar todos los productos de la nota
+            if (nota.detalles && nota.detalles.length > 0) {
+                for (const detalle of nota.detalles) {
+                    append({
+                        producto_id: detalle.producto_id,
+                        producto_codigo: detalle.producto?.codigo || '',
+                        producto_nombre: detalle.producto?.descripcion || '',
+                        fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                        lote_numero: detalle.numero_lote,
+                        fecha_vencimiento: detalle.fecha_vencimiento,
+                        um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                        temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                        temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                        cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
+                        cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
+                        cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
+                        cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
+                        cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
+                        cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
+                        aspecto: 'EMB'
+                    });
+                }
+                alert(`✅ Cargados ${nota.detalles.length} productos desde la Nota de Ingreso`);
+            }
+
+            setMostrarNotasIngreso(false);
         } catch (error) {
-            console.error('Error al cargar ingreso:', error);
+            console.error('Error al cargar nota:', error);
+            alert('Error al cargar nota de ingreso: ' + error.message);
         }
     };
 
-    const handleCantidadRecibida = (index, valor) => {
-        const nuevosDetalles = [...detalles];
-        const val = valor === '' ? 0 : parseFloat(valor);
-        nuevosDetalles[index].cantidad_recibida = val;
-        nuevosDetalles[index].diferencia = val - nuevosDetalles[index].cantidad_esperada;
-        setDetalles(nuevosDetalles);
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!ingresoSeleccionado || detalles.length === 0) {
-            setMensaje({ type: 'error', text: 'Por favor completa todos los campos' });
+    const handleAddProducto = () => {
+        if (!selectedProduct) {
+            alert('Seleccione un producto');
+            return;
+        }
+        if (!lote) {
+            alert('Ingrese un lote');
+            return;
+        }
+        if (!cantidadSolicitada || parseFloat(cantidadSolicitada) <= 0) {
+            alert('Ingrese una cantidad solicitada válida');
+            return;
+        }
+        if (!cantidadRecibida || parseFloat(cantidadRecibida) < 0) {
+            alert('Ingrese una cantidad recibida válida');
             return;
         }
 
+        const product = products.find(p => p.id === parseInt(selectedProduct));
+        
+        append({
+            producto_id: parseInt(selectedProduct),
+            producto_codigo: product?.codigo || '',
+            producto_nombre: product?.descripcion || '',
+            fabricante: fabricante || '',
+            lote_numero: lote,
+            fecha_vencimiento: vencimiento,
+            um: um || '',
+            temperatura_min: temperaturaMin || '',
+            temperatura_max: temperaturaMax || '',
+            cantidad_solicitada: parseFloat(cantidadSolicitada),
+            cantidad_recibida: parseFloat(cantidadRecibida),
+            cantidad_bultos: parseFloat(bultos || 0),
+            cantidad_cajas: parseFloat(cajas || 0),
+            cantidad_por_caja: parseFloat(unidadesCaja || 0),
+            cantidad_fraccion: parseFloat(fraccion || 0),
+            aspecto: aspecto
+        });
+
+        // Limpiar campos
+        setSelectedProduct('');
+        setSelectedLoteId('');
+        setLote('');
+        setVencimiento('');
+        setUm('');
+        setFabricante('');
+        setTemperaturaMin('');
+        setTemperaturaMax('');
+        setBultos('');
+        setCajas('');
+        setUnidadesCaja('');
+        setFraccion('');
+        setCantidadSolicitada('');
+        setCantidadRecibida('');
+        setAspecto('EMB');
+    };
+
+    const onSubmit = async (data) => {
         try {
-            setLoading(true);
-            const data = {
-                nota_ingreso_id: ingresoSeleccionado.id,
-                fecha_recepcion: new Date().toISOString().split('T')[0],
-                detalles: detalles.map(d => ({
-                    producto_id: d.producto_id,
-                    lote_numero: d.lote_numero,
-                    cantidad_esperada: d.cantidad_esperada,
-                    cantidad_recibida: d.cantidad_recibida,
-                    observaciones: d.diferencia !== 0 ? 'Diferencia detectada' : 'Conforme'
-                }))
+            if (!selectedClient) {
+                alert('Seleccione un cliente');
+                return;
+            }
+            if (!data.detalles || data.detalles.length === 0) {
+                alert('Agregue al menos un producto');
+                return;
+            }
+
+            const payload = {
+                fecha: data.fecha,
+                tipo_documento: data.tipo_documento,
+                numero_documento: data.numero_documento,
+                cliente_id: selectedClient,
+                proveedor: proveedorNombre || clienteRuc,
+                tipo_operacion: data.tipo_operacion,
+                tipo_conteo: data.tipo_conteo,
+                condicion_temperatura: data.condicion_temperatura,
+                observaciones: data.observaciones,
+                detalles: data.detalles
             };
 
-            await actasService.crear(data);
-            setMensaje({ type: 'success', text: 'Acta de recepción creada exitosamente. Stock actualizado.' });
+            console.log('Payload a enviar:', payload);
+            
+            // Aquí se conectaría con el backend
+            const response = await fetch('http://127.0.0.1:3000/api/actas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-            // Cleanup
-            setIngresoSeleccionado(null);
-            setDetalles([]);
-            cargarIngresosPendientes(); // Refresh list
+            if (!response.ok) {
+                throw new Error('Error al crear acta');
+            }
 
+            const result = await response.json();
+            setLastActaId(result.data?.id || null);
+            
+            alert('✅ Acta de Recepción creada exitosamente');
+            handleLimpiar();
         } catch (error) {
-            setMensaje({ type: 'error', text: 'Error al crear acta: ' + error.message });
             console.error(error);
-        } finally {
-            setLoading(false);
+            alert('❌ Error al crear acta: ' + (error.message || 'Verifique los datos'));
+        }
+    };
+
+    const handleLimpiar = () => {
+        reset();
+        setSelectedClient('');
+        setClienteRuc('');
+        setProveedorNombre('');
+        setSelectedProduct('');
+        setSelectedLoteId('');
+        setProducts([]);
+        setLotesDisponibles([]);
+        setLote('');
+        setVencimiento('');
+        setUm('');
+        setFabricante('');
+        setTemperaturaMin('');
+        setTemperaturaMax('');
+        setBultos('');
+        setCajas('');
+        setUnidadesCaja('');
+        setFraccion('');
+        setCantidadSolicitada('');
+        setCantidadRecibida('');
+        setAspecto('EMB');
+    };
+
+    const handleExportPdf = async () => {
+        if (!lastActaId) {
+            alert('Primero guarde el acta para exportar a PDF');
+            return;
+        }
+        try {
+            const pdfUrl = `http://localhost:3000/api/actas/${lastActaId}/pdf`;
+            window.open(pdfUrl, '_blank');
+        } catch (error) {
+            console.error(error);
+            alert('Error al exportar PDF');
         }
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-7xl mx-auto space-y-6 p-6">
             <div>
-                <h2 className="text-2xl font-bold text-slate-800">Control de Recepción (Calidad)</h2>
-                <p className="text-slate-500">Verificación física contra Notas de Ingreso registradas</p>
+                <h1 className="text-3xl font-bold text-slate-800">📋 Acta de Recepción</h1>
+                <p className="text-slate-500">Control de calidad y verificación de mercadería recibida</p>
             </div>
 
-            {mensaje && (
-                <div className={`p-4 rounded-xl text-sm font-medium animate-fade-in ${mensaje.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'
-                    }`}>
-                    {mensaje.text}
-                </div>
-            )}
-
-            <Card className="p-6">
-                <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Aviso informativo */}
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                <div className="flex items-start gap-3">
+                    <div className="text-blue-600 text-2xl">ℹ️</div>
                     <div>
-                        <label className="label-premium">Seleccionar Ingreso Pendiente</label>
-                        <select
-                            onChange={(e) => handleSelectIngreso(e.target.value)}
-                            className="input-premium"
-                        >
-                            <option value="">-- Seleccione una Nota de Ingreso --</option>
-                            {ingresos.map(ingreso => (
-                                <option key={ingreso.id} value={ingreso.id}>
-                                    {ingreso.numero_ingreso} — {ingreso.proveedor} ({new Date(ingreso.fecha).toLocaleDateString()})
-                                </option>
-                            ))}
-                        </select>
-                        {ingresos.length === 0 && (
-                            <p className="text-xs text-amber-600 mt-2 font-medium">⚠️ No hay ingresos pendientes de recepción.</p>
-                        )}
+                        <h3 className="font-bold text-blue-900 text-lg mb-1">Importante: Este documento NO modifica el inventario</h3>
+                        <p className="text-blue-800 text-sm leading-relaxed">
+                            Las <strong>Actas de Recepción</strong> son documentos de control de calidad que verifican la mercadería recibida.
+                            <br />
+                            <strong>No generan aumentos ni disminuciones en el stock del almacén.</strong> Solo se utilizan para documentar el proceso de inspección y recepción.
+                        </p>
                     </div>
+                </div>
+            </div>
 
-                    {ingresoSeleccionado && detalles.length > 0 && (
-                        <div className="animate-fade-in">
-                            <h3 className="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-                                <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xs">02</span>
-                                Verificar Cantidades
-                            </h3>
-
-                            <div className="rounded-xl border border-slate-200 overflow-hidden">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
-                                        <tr>
-                                            <th className="px-6 py-4">Producto</th>
-                                            <th className="px-6 py-4">Lote</th>
-                                            <th className="px-6 py-4 text-center">Esperado</th>
-                                            <th className="px-6 py-4 text-center w-32">Recibido (Real)</th>
-                                            <th className="px-6 py-4 text-center">Estado</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 bg-white">
-                                        {detalles.map((detalle, idx) => (
-                                            <tr key={idx} className="hover:bg-slate-50/50">
-                                                <td className="px-6 py-3 font-medium text-slate-700">
-                                                    {detalle.producto?.descripcion || `ID: ${detalle.producto_id}`}
-                                                </td>
-                                                <td className="px-6 py-3 text-slate-500 font-mono text-xs">{detalle.lote_numero}</td>
-                                                <td className="px-6 py-3 text-center text-slate-600">{detalle.cantidad_esperada}</td>
-                                                <td className="px-6 py-3">
-                                                    <input
-                                                        type="number"
-                                                        value={detalle.cantidad_recibida}
-                                                        onChange={(e) => handleCantidadRecibida(idx, e.target.value)}
-                                                        className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-center font-bold text-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                                                    />
-                                                </td>
-                                                <td className="px-6 py-3 text-center">
-                                                    {detalle.diferencia === 0 ? (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                            Conforme
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                                            {detalle.diferencia > 0 ? `+${detalle.diferencia} Sobrante` : `${detalle.diferencia} Faltante`}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                {/* Información del Documento */}
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">📄 Información del Documento</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="label-premium">Tipo de Documento *</label>
+                            <select {...register('tipo_documento', { required: true })} className="input-premium">
+                                <option value="">Seleccione...</option>
+                                <option value="Invoice">Invoice</option>
+                                <option value="DUA">DUA</option>
+                                <option value="Factura">Factura</option>
+                                <option value="Guía de Remisión Remitente">Guía de Remisión Remitente</option>
+                                <option value="Guía de Remisión Transportista">Guía de Remisión Transportista</option>
+                                <option value="Package List">Package List</option>
+                            </select>
+                            {errors.tipo_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
-                    )}
+                        <div>
+                            <label className="label-premium">Número de Documento *</label>
+                            <input {...register('numero_documento', { required: true })} className="input-premium" />
+                            {errors.numero_documento && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div>
+                            <label className="label-premium">Fecha *</label>
+                            <input {...register('fecha', { required: true })} type="date" className="input-premium" />
+                            {errors.fecha && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                    </div>
+                </Card>
 
-                    <div className="pt-4 border-t border-slate-100 flex justify-end">
+                {/* Cliente y Proveedor */}
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">👥 Cliente y Proveedor</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="label-premium">Cliente *</label>
+                            <select
+                                value={selectedClient}
+                                onChange={(e) => {
+                                    const clientId = e.target.value;
+                                    setSelectedClient(clientId);
+                                    const client = clients.find(c => String(c.id) === String(clientId));
+                                    if (client) {
+                                        setClienteRuc(client.cuit || '');
+                                        setProveedorNombre(client.razon_social || '');
+                                        setValue('cliente_id', clientId);
+                                        setValue('proveedor', client.razon_social);
+                                    }
+                                }}
+                                className="input-premium"
+                            >
+                                <option value="">Seleccione cliente...</option>
+                                {clients.map(client => (
+                                    <option key={client.id} value={client.id}>
+                                        {client.codigo} - {client.razon_social}
+                                    </option>
+                                ))}
+                            </select>
+                            {!selectedClient && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div>
+                            <label className="label-premium">RUC/CUIT</label>
+                            <input value={clienteRuc} readOnly className="input-premium bg-slate-50" />
+                        </div>
+                        <div>
+                            <label className="label-premium">Proveedor</label>
+                            <input value={proveedorNombre} readOnly className="input-premium bg-slate-50" />
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Cargar desde Nota de Ingreso */}
+                <Card className="p-6 bg-green-50/50 border-green-200">
+                    <div className="flex items-center justify-between mb-4 border-b pb-2">
+                        <div>
+                            <h3 className="text-lg font-semibold text-green-800">📥 Cargar desde Nota de Ingreso Existente</h3>
+                            <p className="text-xs text-green-600">Seleccione una nota de ingreso para convertirla en acta de recepción</p>
+                        </div>
                         <Button
-                            type="submit"
-                            disabled={loading || !ingresoSeleccionado}
-                            size="lg"
-                            className="btn-gradient-primary shadow-lg shadow-blue-500/30"
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setMostrarNotasIngreso(!mostrarNotasIngreso)}
+                            className="bg-green-600 hover:bg-green-700 text-white"
                         >
-                            {loading ? 'Procesando...' : 'Confirmar Recepción y Actualizar Stock'}
+                            {mostrarNotasIngreso ? '🔼 Ocultar' : '🔽 Mostrar Notas'}
                         </Button>
                     </div>
-                </form>
-            </Card>
+
+                    {mostrarNotasIngreso && (
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                <div className="md:col-span-8">
+                                    <label className="label-premium">Seleccionar Nota de Ingreso</label>
+                                    <select
+                                        value={selectedNotaIngresoId}
+                                        onChange={(e) => setSelectedNotaIngresoId(e.target.value)}
+                                        className="input-premium"
+                                        disabled={!selectedClient}
+                                    >
+                                        <option value="">Seleccione una nota...</option>
+                                        {notasIngreso.map(nota => (
+                                            <option key={nota.id} value={nota.id}>
+                                                #{nota.id} - {nota.tipo_documento} {nota.numero_documento} - {new Date(nota.fecha).toLocaleDateString('es-PE')} ({nota.detalles?.length || 0} productos)
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {!selectedClient && <p className="text-xs text-orange-600 mt-1">Primero seleccione un cliente</p>}
+                                </div>
+                                <div className="md:col-span-4 flex items-end">
+                                    <Button
+                                        type="button"
+                                        onClick={handleCargarNotaIngreso}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                                        disabled={!selectedNotaIngresoId}
+                                    >
+                                        🔄 Cargar Nota Completa
+                                    </Button>
+                                </div>
+                            </div>
+                            {notasIngreso.length === 0 && selectedClient && (
+                                <p className="text-sm text-slate-500 italic text-center py-3">No hay notas de ingreso disponibles para este cliente</p>
+                            )}
+                        </div>
+                    )}
+                </Card>
+
+                {/* Tipo de Operación y Conteo */}
+                <Card className="p-6">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">📦 Tipo de Operación y Conteo</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="label-premium">Tipo de Operación *</label>
+                            <select {...register('tipo_operacion', { required: true })} className="input-premium">
+                                <option value="">Seleccione...</option>
+                                <option value="Importación">Importación</option>
+                                <option value="Compra Local">Compra Local</option>
+                                <option value="Traslado">Traslado</option>
+                                <option value="Devolución">Devolución</option>
+                            </select>
+                            {errors.tipo_operacion && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div>
+                            <label className="label-premium">Tipo de Conteo *</label>
+                            <select {...register('tipo_conteo', { required: true })} className="input-premium">
+                                <option value="">Seleccione...</option>
+                                <option value="Conteo al 100%">Conteo al 100%</option>
+                                <option value="Conteo por Muestreo">Conteo por Muestreo</option>
+                                <option value="Conteo sin Apertura de Caja">Conteo sin Apertura de Caja</option>
+                                <option value="Conteo de ALMT por Temperatura">Conteo de ALMT por Temperatura</option>
+                            </select>
+                            {errors.tipo_conteo && <span className="text-xs text-red-500">Requerido</span>}
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Condición de Temperatura</label>
+                            <input {...register('condicion_temperatura')} className="input-premium" placeholder="Ej: 2-8°C, Ambiente" />
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Detalle de Productos */}
+                <Card className="p-6 bg-blue-50/50 border-blue-100">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-4">📦 Detalle de Productos</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end mb-6">
+                        <div className="md:col-span-2">
+                            <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                                <input
+                                    type="checkbox"
+                                    checked={showAllProducts}
+                                    onChange={(e) => setShowAllProducts(e.target.checked)}
+                                    className="rounded"
+                                />
+                                Mostrar todos
+                            </label>
+                        </div>
+                        <div className="md:col-span-5">
+                            <label className="label-premium">Producto</label>
+                            <select
+                                value={selectedProduct}
+                                onChange={(e) => setSelectedProduct(e.target.value)}
+                                className="input-premium"
+                                disabled={!selectedClient}
+                            >
+                                <option value="">Seleccione producto...</option>
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="md:col-span-3">
+                            <label className="label-premium">Lote Disponible</label>
+                            <select
+                                value={selectedLoteId}
+                                onChange={(e) => setSelectedLoteId(e.target.value)}
+                                className="input-premium"
+                                disabled={!selectedProduct}
+                            >
+                                <option value="">Seleccione lote...</option>
+                                {lotesDisponibles.map(lote => (
+                                    <option key={lote.id} value={lote.id}>
+                                        {lote.numero_lote} (Disp: {lote.cantidad_disponible})
+                                    </option>
+                                ))}
+                                <option value="OTRO">Otro (manual)</option>
+                            </select>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Lote/Serie</label>
+                            <input
+                                type="text"
+                                value={lote}
+                                onChange={(e) => setLote(e.target.value)}
+                                className="input-premium"
+                            />
+                        </div>
+                        
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Vencimiento</label>
+                            <input
+                                type="date"
+                                value={vencimiento}
+                                onChange={(e) => setVencimiento(e.target.value)}
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">UM</label>
+                            <input
+                                type="text"
+                                value={um}
+                                onChange={(e) => setUm(e.target.value)}
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-3">
+                            <label className="label-premium">Fabricante</label>
+                            <input
+                                type="text"
+                                value={fabricante}
+                                onChange={(e) => setFabricante(e.target.value)}
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Temp Min °C</label>
+                            <input
+                                type="text"
+                                value={temperaturaMin}
+                                onChange={(e) => setTemperaturaMin(e.target.value)}
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Temp Max °C</label>
+                            <input
+                                type="text"
+                                value={temperaturaMax}
+                                onChange={(e) => setTemperaturaMax(e.target.value)}
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-1">
+                            <label className="label-premium">Aspecto</label>
+                            <select
+                                value={aspecto}
+                                onChange={(e) => setAspecto(e.target.value)}
+                                className="input-premium"
+                            >
+                                <option value="EMB">EMB</option>
+                                <option value="ENB">ENB</option>
+                            </select>
+                        </div>
+
+                        {/* Cantidades */}
+                        <div className="md:col-span-6 grid grid-cols-2 gap-2 p-3 bg-white rounded-lg border-2 border-blue-300">
+                            <div>
+                                <label className="text-xs font-bold text-slate-600">Bultos</label>
+                                <input
+                                    type="number"
+                                    value={bultos}
+                                    onChange={(e) => setBultos(e.target.value)}
+                                    className="input-premium h-9"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-600">Cajas</label>
+                                <input
+                                    type="number"
+                                    value={cajas}
+                                    onChange={(e) => setCajas(e.target.value)}
+                                    className="input-premium h-9"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-600">Und/Caja</label>
+                                <input
+                                    type="number"
+                                    value={unidadesCaja}
+                                    onChange={(e) => setUnidadesCaja(e.target.value)}
+                                    className="input-premium h-9"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-600">Fracción</label>
+                                <input
+                                    type="number"
+                                    value={fraccion}
+                                    onChange={(e) => setFraccion(e.target.value)}
+                                    className="input-premium h-9"
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="md:col-span-3 grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="label-premium text-orange-600">Cant. Solicitada</label>
+                                <input
+                                    type="number"
+                                    value={cantidadSolicitada}
+                                    onChange={(e) => setCantidadSolicitada(e.target.value)}
+                                    className="input-premium border-orange-300"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium text-green-600">Cant. Recibida</label>
+                                <input
+                                    type="number"
+                                    value={cantidadRecibida}
+                                    onChange={(e) => setCantidadRecibida(e.target.value)}
+                                    className="input-premium border-green-300 font-bold"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="md:col-span-12 flex justify-end gap-3">
+                            <Button
+                                type="button"
+                                onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                disabled={fields.length === 0}
+                            >
+                                ➖ Quitar Último
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleAddProducto}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                                ➕ Agregar Producto
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Tabla de productos agregados */}
+                    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
+                                <tr>
+                                    <th className="px-4 py-3">#</th>
+                                    <th className="px-4 py-3">Código</th>
+                                    <th className="px-4 py-3">Producto</th>
+                                    <th className="px-4 py-3">Fabricante</th>
+                                    <th className="px-4 py-3">Lote</th>
+                                    <th className="px-4 py-3">Vencimiento</th>
+                                    <th className="px-4 py-3">UM</th>
+                                    <th className="px-4 py-3 text-right">Solicitada</th>
+                                    <th className="px-4 py-3 text-right">Recibida</th>
+                                    <th className="px-4 py-3 text-center">Aspecto</th>
+                                    <th className="px-4 py-3 text-center">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {fields.map((field, index) => (
+                                    <tr key={field.id} className="hover:bg-slate-50/50">
+                                        <td className="px-4 py-3 font-bold text-slate-500">{index + 1}</td>
+                                        <td className="px-4 py-3 font-mono text-xs">{field.producto_codigo}</td>
+                                        <td className="px-4 py-3 font-medium">{field.producto_nombre}</td>
+                                        <td className="px-4 py-3 text-xs">{field.fabricante || '-'}</td>
+                                        <td className="px-4 py-3">{field.lote_numero}</td>
+                                        <td className="px-4 py-3 text-xs">
+                                            {field.fecha_vencimiento ? new Date(field.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
+                                        </td>
+                                        <td className="px-4 py-3">{field.um}</td>
+                                        <td className="px-4 py-3 text-right text-orange-600 font-semibold">{field.cantidad_solicitada}</td>
+                                        <td className="px-4 py-3 text-right text-green-600 font-bold">{field.cantidad_recibida}</td>
+                                        <td className="px-4 py-3 text-center">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${field.aspecto === 'EMB' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {field.aspecto}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => remove(index)}
+                                                className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-bold"
+                                            >
+                                                × Quitar
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {fields.length === 0 && (
+                                    <tr>
+                                        <td colSpan={11} className="px-6 py-8 text-center text-slate-400 italic">
+                                            No hay productos agregados al acta
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+
+                {/* Observaciones */}
+                <Card className="p-6">
+                    <label className="label-premium">Observaciones</label>
+                    <textarea
+                        {...register('observaciones')}
+                        className="input-premium min-h-[100px]"
+                        placeholder="Observaciones generales del acta de recepción..."
+                    />
+                </Card>
+
+                {/* Botones de acción */}
+                <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleLimpiar}
+                    >
+                        🗑️ Limpiar Todo
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={handleExportPdf}
+                    >
+                        📄 Exportar a PDF
+                    </Button>
+                    <Button
+                        type="submit"
+                        isLoading={isSubmitting}
+                        disabled={fields.length === 0}
+                        size="lg"
+                        className="btn-gradient-primary shadow-lg shadow-blue-500/30"
+                    >
+                        💾 Guardar Acta de Recepción
+                    </Button>
+                </div>
+            </form>
         </div>
     );
 };

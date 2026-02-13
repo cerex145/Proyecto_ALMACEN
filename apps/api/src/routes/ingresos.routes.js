@@ -120,6 +120,7 @@ async function ingresosRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             busqueda = '',
+            proveedor,
             estado,
             fecha_desde,
             fecha_hasta,
@@ -138,6 +139,14 @@ async function ingresosRoutes(fastify, options) {
                 '(nota.numero_ingreso LIKE :busqueda OR nota.proveedor LIKE :busqueda)',
                 { busqueda: `%${busqueda}%` }
             );
+        }
+
+        if (proveedor) {
+            if (busqueda) {
+                queryBuilder.andWhere('nota.proveedor = :proveedor', { proveedor });
+            } else {
+                queryBuilder.where('nota.proveedor = :proveedor', { proveedor });
+            }
         }
 
         if (estado) {
