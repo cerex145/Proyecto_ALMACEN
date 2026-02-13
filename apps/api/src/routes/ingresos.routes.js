@@ -100,6 +100,7 @@ async function ingresosRoutes(fastify, options) {
                     fecha_desde: { type: 'string', format: 'date' },
                     fecha_hasta: { type: 'string', format: 'date' },
                     proveedor: { type: 'string' },
+                    numero_documento: { type: 'string' },
                     categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
                     estado: { type: 'string' },
                     page: { type: 'integer', minimum: 1, default: 1 },
@@ -121,6 +122,7 @@ async function ingresosRoutes(fastify, options) {
         const {
             busqueda = '',
             proveedor,
+            numero_documento,
             estado,
             fecha_desde,
             fecha_hasta,
@@ -149,6 +151,10 @@ async function ingresosRoutes(fastify, options) {
             }
         }
 
+        if (numero_documento) {
+            queryBuilder.andWhere('nota.numero_documento = :numero_documento', { numero_documento });
+        }
+
         if (estado) {
             queryBuilder.andWhere('nota.estado = :estado', { estado });
         }
@@ -159,6 +165,13 @@ async function ingresosRoutes(fastify, options) {
 
         if (fecha_hasta) {
             queryBuilder.andWhere('nota.fecha <= :fecha_hasta', { fecha_hasta });
+        }
+
+        // Si se busca por numero_documento, incluir detalles y productos
+        if (numero_documento) {
+            queryBuilder
+                .leftJoinAndSelect('nota.detalles', 'detalles')
+                .leftJoinAndSelect('detalles.producto', 'producto');
         }
 
         queryBuilder

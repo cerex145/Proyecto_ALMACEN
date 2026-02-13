@@ -34,10 +34,10 @@ export const ActaRecepcionForm = () => {
     const [products, setProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState('');
     const [showAllProducts, setShowAllProducts] = useState(false);
-    
+
     const [lotesDisponibles, setLotesDisponibles] = useState([]);
     const [selectedLoteId, setSelectedLoteId] = useState('');
-    
+
     // Estados del formulario de producto
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
@@ -48,14 +48,14 @@ export const ActaRecepcionForm = () => {
     const [cantidadSolicitada, setCantidadSolicitada] = useState('');
     const [cantidadRecibida, setCantidadRecibida] = useState('');
     const [aspecto, setAspecto] = useState('EMB');
-    
+
     const [bultos, setBultos] = useState('');
     const [cajas, setCajas] = useState('');
     const [unidadesCaja, setUnidadesCaja] = useState('');
     const [fraccion, setFraccion] = useState('');
 
     const [lastActaId, setLastActaId] = useState(null);
-    
+
     // Estados para cargar nota de ingreso existente
     const [notasIngreso, setNotasIngreso] = useState([]);
     const [selectedNotaIngresoId, setSelectedNotaIngresoId] = useState('');
@@ -168,7 +168,7 @@ export const ActaRecepcionForm = () => {
             setCajas(product.cantidad_cajas || '');
             setUnidadesCaja(product.cantidad_por_caja || '');
             setFraccion(product.cantidad_fraccion || '');
-            
+
             const currentTipoDoc = getValues('tipo_documento');
             if (product.tipo_documento && !currentTipoDoc) {
                 setValue('tipo_documento', product.tipo_documento);
@@ -183,7 +183,7 @@ export const ActaRecepcionForm = () => {
     // Auto-fill lote
     useEffect(() => {
         if (!selectedLoteId || selectedLoteId === 'OTRO') return;
-        
+
         const loteData = lotesDisponibles.find(l => l.id === parseInt(selectedLoteId));
         if (!loteData) return;
 
@@ -191,7 +191,7 @@ export const ActaRecepcionForm = () => {
         setVencimiento(loteData.fecha_vencimiento || '');
         setCantidadSolicitada(loteData.cantidad_disponible || '');
         setCantidadRecibida(loteData.cantidad_disponible || '');
-        
+
         if (loteData.producto) {
             setUm(loteData.producto.um || loteData.producto.unidad || um);
             setFabricante(loteData.producto.fabricante || fabricante);
@@ -200,13 +200,87 @@ export const ActaRecepcionForm = () => {
         }
     }, [selectedLoteId, lotesDisponibles]);
 
+    // Auto-cargar Nota de Ingreso cuando se ingresa el número de documento
+    const numeroDocumento = watch('numero_documento');
+    useEffect(() => {
+        const buscarYCargarNotaIngreso = async () => {
+            const numeroDoc = String(numeroDocumento || '').trim();
+            if (!numeroDoc) return;
+
+            try {
+                // Buscar nota de ingreso por número de documento
+                const response = await fetch(`http://127.0.0.1:3000/api/ingresos?numero_documento=${encodeURIComponent(numeroDoc)}`);
+                if (!response.ok) return;
+
+                const result = await response.json();
+                const notas = result.data || [];
+
+                if (notas.length === 0) return;
+
+                // Tomar la primera nota que coincida
+                const nota = notas[0];
+
+                // Auto-llenar cliente si no está seleccionado
+                if (!selectedClient && nota.cliente_id) {
+                    setSelectedClient(String(nota.cliente_id));
+                    const client = clients.find(c => c.id === nota.cliente_id);
+                    if (client) {
+                        setClienteRuc(client.cuit || '');
+                        setProveedorNombre(client.razon_social || '');
+                        setValue('cliente_id', String(nota.cliente_id));
+                        setValue('proveedor', client.razon_social);
+                    }
+                }
+
+                // Auto-llenar campos del documento
+                if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
+                if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
+
+                // Limpiar productos actuales solo si hay productos en la nota
+                if (nota.detalles && nota.detalles.length > 0) {
+                    while (fields.length > 0) {
+                        remove(0);
+                    }
+
+                    // Cargar todos los productos de la nota
+                    for (const detalle of nota.detalles) {
+                        append({
+                            producto_id: detalle.producto_id,
+                            producto_codigo: detalle.producto?.codigo || '',
+                            producto_nombre: detalle.producto?.descripcion || '',
+                            fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                            lote_numero: detalle.lote_numero || detalle.numero_lote || '',
+                            fecha_vencimiento: detalle.fecha_vencimiento,
+                            um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                            temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                            temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                            cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
+                            cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
+                            cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
+                            cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
+                            cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
+                            cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
+                            aspecto: 'EMB'
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error al buscar nota de ingreso:', error);
+            }
+        };
+
+        // Debounce para evitar múltiples llamadas
+        const timeoutId = setTimeout(buscarYCargarNotaIngreso, 500);
+        return () => clearTimeout(timeoutId);
+    }, [numeroDocumento, clients, selectedClient]);
+
     // Auto-cálculo de cantidad recibida
     useEffect(() => {
         const c = parseFloat(cajas) || 0;
         const u = parseFloat(unidadesCaja) || 0;
         const f = parseFloat(fraccion) || 0;
         const total = (c * u) + f;
-        
+
         if (total > 0) {
             setCantidadRecibida(total.toString());
         }
@@ -242,7 +316,7 @@ export const ActaRecepcionForm = () => {
             const lotes = await productService.getLotes(filters);
             const lotesArray = Array.isArray(lotes) ? lotes : [];
             setLotesDisponibles(lotesArray);
-            
+
             // Auto-seleccionar primer lote
             if (lotesArray.length > 0) {
                 setSelectedLoteId(lotesArray[0].id);
@@ -258,10 +332,10 @@ export const ActaRecepcionForm = () => {
         try {
             const client = clients.find(c => String(c.id) === String(selectedClient));
             if (!client) return;
-            
+
             const response = await fetch(`http://127.0.0.1:3000/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
             if (!response.ok) throw new Error('Error al cargar notas de ingreso');
-            
+
             const result = await response.json();
             const notas = result.data || [];
             setNotasIngreso(notas);
@@ -280,7 +354,7 @@ export const ActaRecepcionForm = () => {
         try {
             const response = await fetch(`http://127.0.0.1:3000/api/ingresos/${selectedNotaIngresoId}`);
             if (!response.ok) throw new Error('Error al cargar nota de ingreso');
-            
+
             const result = await response.json();
             const nota = result.data || result;
 
@@ -345,7 +419,7 @@ export const ActaRecepcionForm = () => {
         }
 
         const product = products.find(p => p.id === parseInt(selectedProduct));
-        
+
         append({
             producto_id: parseInt(selectedProduct),
             producto_codigo: product?.codigo || '',
@@ -451,7 +525,7 @@ export const ActaRecepcionForm = () => {
             };
 
             console.log('Payload a enviar:', payload);
-            
+
             // Aquí se conectaría con el backend
             const response = await fetch('http://127.0.0.1:3000/api/actas', {
                 method: 'POST',
@@ -465,7 +539,7 @@ export const ActaRecepcionForm = () => {
 
             const result = await response.json();
             setLastActaId(result.data?.id || null);
-            
+
             alert('✅ Acta de Recepción creada exitosamente');
             handleLimpiar();
         } catch (error) {
@@ -703,7 +777,7 @@ export const ActaRecepcionForm = () => {
                 {/* Detalle de Productos */}
                 <Card className="p-6 bg-blue-50/50 border-blue-100">
                     <h3 className="text-lg font-semibold text-blue-800 mb-4">📦 Detalle de Productos</h3>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end mb-6">
                         <div className="md:col-span-2">
                             <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
@@ -756,7 +830,7 @@ export const ActaRecepcionForm = () => {
                                 className="input-premium"
                             />
                         </div>
-                        
+
                         <div className="md:col-span-2">
                             <label className="label-premium">Vencimiento</label>
                             <input
@@ -853,7 +927,7 @@ export const ActaRecepcionForm = () => {
                                 />
                             </div>
                         </div>
-                        
+
                         <div className="md:col-span-3 grid grid-cols-2 gap-2">
                             <div>
                                 <label className="label-premium text-orange-600">Cant. Solicitada</label>
