@@ -56,7 +56,8 @@ export const Sidebar = () => {
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-8">Operaciones</div>
                 <MenuLink to="/ingresos/nuevo" icon={<ArrowDownIcon />} label="Nota de ingreso" />
                 <MenuLink to="/ingresos/historial" icon={<HistoryIcon />} label="Historial de ingresos" />
-                <MenuLink to="/recepcion/acta" icon={<FileTextIcon />} label="Actas Recepción" />
+                <MenuLink to="/recepcion/nueva" icon={<FileTextIcon />} label="Nueva Acta de Recepción" />
+                <MenuLink to="/recepcion/acta" icon={<HistoryIcon />} label="Historial Actas" />
                 <MenuLink to="/salidas/nuevo" icon={<ArrowUpIcon />} label="Nota de salida" />
                 <MenuLink to="/reportes" icon={<FileTextIcon />} label="Reportes" />
 
