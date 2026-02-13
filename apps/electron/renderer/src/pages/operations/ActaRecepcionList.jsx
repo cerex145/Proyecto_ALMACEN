@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { actasService } from '../../services/actas.service';
-import { ingresosService } from '../../services/ingresos.service';
 import { Button } from '../../components/common/Button';
-import { Input } from '../../components/common/Input';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Badge } from '../../components/common/Badge';
 
 export const ActaRecepcionList = () => {
     const [actas, setActas] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [filtros, setFiltros] = useState({ estado: '', page: 1 });
+    const [filtros, setFiltros] = useState({ page: 1 });
 
     useEffect(() => {
         cargarActas();
@@ -38,17 +36,6 @@ export const ActaRecepcionList = () => {
         }
     };
 
-    const getEstadoBadge = (estado) => {
-        const estadoNormalizado = (estado || '').toLowerCase();
-        const colores = {
-            registrada: 'primary',
-            confirmada: 'success',
-            rechazada: 'danger',
-            activa: 'primary'
-        };
-        return <Badge variant={colores[estadoNormalizado] || 'secondary'}>{estado || 'Sin estado'}</Badge>;
-    };
-
     return (
         <div style={{ padding: '20px' }}>
             <div style={{ marginBottom: '20px' }}>
@@ -56,16 +43,6 @@ export const ActaRecepcionList = () => {
             </div>
 
             <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <select
-                    value={filtros.estado}
-                    onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}
-                    style={{ padding: '8px', borderRadius: '4px' }}
-                >
-                    <option value="">Todos los estados</option>
-                    <option value="REGISTRADA">Registrada</option>
-                    <option value="APROBADA">Aprobada</option>
-                    <option value="RECHAZADA">Rechazada</option>
-                </select>
                 <Button onClick={cargarActas}>Actualizar</Button>
             </div>
 
@@ -80,7 +57,6 @@ export const ActaRecepcionList = () => {
                             <TableHeader>Documento</TableHeader>
                             <TableHeader>Fecha</TableHeader>
                             <TableHeader>Cantidad Detalles</TableHeader>
-                            <TableHeader>Estado</TableHeader>
                             <TableHeader>Acciones</TableHeader>
                         </TableRow>
                     </TableHead>
@@ -96,7 +72,6 @@ export const ActaRecepcionList = () => {
                                     </TableCell>
                                     <TableCell>{new Date(acta.fecha).toLocaleDateString()}</TableCell>
                                     <TableCell>{acta.detalles?.length || 0}</TableCell>
-                                    <TableCell>{getEstadoBadge(acta.estado)}</TableCell>
                                     <TableCell>
                                         {(acta.estado || '').toLowerCase() === 'registrada' && (
                                             <Button

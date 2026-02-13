@@ -27,6 +27,8 @@ export const NotaSalidaForm = () => {
         name: 'detalles'
     });
 
+    const [selectedDetalleIds, setSelectedDetalleIds] = useState({});
+
     const [products, setProducts] = useState([]);
     const [clients, setClients] = useState([]);
     const [selectedClient, setSelectedClient] = useState('');
@@ -362,6 +364,43 @@ export const NotaSalidaForm = () => {
         setCantidadTotal(0);
     };
 
+    const handleToggleDetalle = (id) => {
+        setSelectedDetalleIds((prev) => ({
+            ...prev,
+            [id]: !prev[id]
+        }));
+    };
+
+    const handleRemoveSelected = () => {
+        const indices = fields.reduce((acc, field, index) => {
+            if (selectedDetalleIds[field.id]) {
+                acc.push(index);
+            }
+            return acc;
+        }, []);
+
+        if (indices.length === 0) {
+            alert('Seleccione al menos un producto para quitar.');
+            return;
+        }
+
+        remove(indices);
+        setSelectedDetalleIds({});
+    };
+
+    const handleRemoveSingle = (index) => {
+        const currentId = fields[index]?.id;
+        remove(index);
+        if (!currentId) {
+            return;
+        }
+        setSelectedDetalleIds((prev) => {
+            const next = { ...prev };
+            delete next[currentId];
+            return next;
+        });
+    };
+
     const resetAllStates = () => {
         reset();
         setSelectedClient('');
@@ -378,6 +417,7 @@ export const NotaSalidaForm = () => {
         setUnidadesCaja('');
         setFraccion('');
         setCantidadTotal(0);
+        setSelectedDetalleIds({});
     };
 
     const onSubmit = async (data) => {
@@ -664,12 +704,12 @@ export const NotaSalidaForm = () => {
                         </Button>
                         <Button 
                             type="button" 
-                            onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                            onClick={handleRemoveSelected}
                             className="bg-red-600 hover:bg-red-700 text-white font-bold"
                             disabled={fields.length === 0}
-                            title="Eliminar el último producto agregado"
+                            title="Quitar productos seleccionados"
                         >
-                            ➖ Quitar Último
+                            ➖ Quitar seleccionados
                         </Button>
                         <Button type="button" variant="secondary" onClick={handleLimpiar}>
                             🗑️ Limpiar Todo
@@ -804,11 +844,11 @@ export const NotaSalidaForm = () => {
                         <div className="md:col-span-12 flex justify-end gap-3">
                             <Button 
                                 type="button" 
-                                onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                                onClick={handleRemoveSelected}
                                 className="bg-red-600 hover:bg-red-700 text-white font-bold w-full md:w-auto"
                                 disabled={fields.length === 0}
                             >
-                                ➖ Quitar Último Producto
+                                ➖ Quitar seleccionados
                             </Button>
                             <Button type="button" onClick={handleAddLine} variant="primary" className="bg-green-600 hover:bg-green-700 w-full md:w-auto">
                                 ➕ Agregar Producto
@@ -821,6 +861,7 @@ export const NotaSalidaForm = () => {
                     <table className="w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
                             <tr>
+                                <th className="px-6 py-4 text-center">Sel</th>
                                 <th className="px-6 py-4">Cod.Producto</th>
                                 <th className="px-6 py-4">Producto</th>
                                 <th className="px-6 py-4">Lote</th>
@@ -837,6 +878,13 @@ export const NotaSalidaForm = () => {
                         <tbody className="divide-y divide-slate-100">
                             {fields.map((field, index) => (
                                 <tr key={field.id} className="hover:bg-slate-50/50">
+                                    <td className="px-6 py-3 text-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(selectedDetalleIds[field.id])}
+                                            onChange={() => handleToggleDetalle(field.id)}
+                                        />
+                                    </td>
                                     <td className="px-6 py-3 font-mono text-xs">{field.producto_codigo || '-'}</td>
                                     <td className="px-6 py-3 font-medium text-slate-700">{field.producto_nombre}</td>
                                     <td className="px-6 py-3">{field.lote_numero}</td>
@@ -877,7 +925,7 @@ export const NotaSalidaForm = () => {
                                     <td className="px-6 py-3 text-center">
                                         <button
                                             type="button"
-                                            onClick={() => remove(index)}
+                                            onClick={() => handleRemoveSingle(index)}
                                             className="bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition-all hover:shadow-md text-sm flex items-center gap-1 mx-auto"
                                             title="Eliminar este producto de la lista"
                                         >
@@ -888,7 +936,7 @@ export const NotaSalidaForm = () => {
                             ))}
                             {fields.length === 0 && (
                                 <tr>
-                                    <td colSpan={11} className="px-6 py-8 text-center text-slate-400 italic">
+                                    <td colSpan={12} className="px-6 py-8 text-center text-slate-400 italic">
                                         No hay productos agregados a la nota.
                                     </td>
                                 </tr>
@@ -897,14 +945,25 @@ export const NotaSalidaForm = () => {
                     </table>
                 </div>
 
-                <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
+                <div className="flex justify-end pt-3">
                     <Button
                         type="button"
-                        onClick={() => fields.length > 0 && remove(fields.length - 1)}
+                        onClick={handleRemoveSelected}
                         className="bg-red-600 hover:bg-red-700 text-white font-bold"
                         disabled={fields.length === 0}
                     >
-                        ➖ Quitar Último Producto
+                        ➖ Quitar seleccionados
+                    </Button>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
+                    <Button
+                        type="button"
+                        onClick={handleRemoveSelected}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold"
+                        disabled={fields.length === 0}
+                    >
+                        ➖ Quitar seleccionados
                     </Button>
                     <Button
                         type="button"

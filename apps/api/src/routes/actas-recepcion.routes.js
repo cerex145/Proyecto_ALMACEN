@@ -287,6 +287,8 @@ module.exports = async function (fastify, opts) {
                 });
             }
 
+            const JEFA_ALMACEN = 'JANETH T. NARVAEZ HUAMANI';
+
             // Determinar checkboxes según tipo_documento
             const tipoDoc = (acta.tipo_documento || '').toLowerCase();
             const checkPackingList = tipoDoc.includes('packing') || tipoDoc.includes('package');
@@ -607,7 +609,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'NOMBRE:', width: 50, style: 'labelSmall' },
-                                            { text: acta.jefe_almacen || '', width: '*', style: 'firmaNombre' }
+                                            { text: JEFA_ALMACEN, width: '*', style: 'firmaNombre' }
                                         ]
                                     }
                                 ],

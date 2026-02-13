@@ -44,14 +44,16 @@ export const KardexFuncional = () => {
                 const resumen = resumenMap.get(key);
                 
                 // Acumular ingresos y salidas
+                const cantidad = Number(mov.cantidad) || 0;
                 if (mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION') {
-                    resumen.total_ingreso += Number(mov.cantidad) || 0;
+                    resumen.total_ingreso += cantidad;
                 } else if (mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO') {
-                    resumen.total_salida += Number(mov.cantidad) || 0;
+                    resumen.total_salida += cantidad;
                 }
-                
-                // El saldo final es el último registrado para ese lote
-                resumen.stock = Number(mov.saldo) || 0;
+            });
+
+            resumenMap.forEach((resumen) => {
+                resumen.stock = resumen.total_ingreso - resumen.total_salida;
             });
 
             // Convertir Map a Array y ordenar

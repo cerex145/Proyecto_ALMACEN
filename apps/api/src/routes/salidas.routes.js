@@ -1010,7 +1010,14 @@ async function salidasRoutes(fastify, options) {
                 // Firmas
                 {
                     columns: [
-                        { stack: [{ text: '________________________' }, { text: 'Jefe de Almacén' }], alignment: 'center' },
+                        {
+                            stack: [
+                                { text: '________________________' },
+                                { text: 'JANETH T. NARVAEZ HUAMANI', style: 'labelText' },
+                                { text: 'Jefe de Almacén' }
+                            ],
+                            alignment: 'center'
+                        },
                         { stack: [{ text: '________________________' }, { text: 'Despachó' }], alignment: 'center' }
                     ],
                     margin: [0, 40, 0, 0]

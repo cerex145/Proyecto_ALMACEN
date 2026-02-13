@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
-import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
@@ -37,22 +36,6 @@ export const ActasRecepcionFuncional = () => {
         } catch (error) {
             console.error('Error al descargar PDF:', error);
             alert('❌ Error al descargar PDF');
-        }
-    };
-
-    const getEstadoBadge = (estado) => {
-        const estadoNormalizado = (estado || '').toLowerCase();
-        switch (estadoNormalizado) {
-            case 'registrada':
-                return <Badge variant="registrado">Registrada</Badge>;
-            case 'confirmada':
-                return <Badge variant="observado">Confirmada</Badge>;
-            case 'rechazada':
-                return <Badge variant="anulado">Rechazada</Badge>;
-            case 'activa':
-                return <Badge variant="registrado">Activa</Badge>;
-            default:
-                return <Badge variant="secondary">{estado || 'Sin estado'}</Badge>;
         }
     };
 
@@ -93,10 +76,6 @@ export const ActasRecepcionFuncional = () => {
                             </p>
                         </div>
                         <div className="space-y-3">
-                            <p className="flex justify-between border-b border-slate-200 pb-2">
-                                <span className="font-semibold text-slate-600">Estado:</span>
-                                {getEstadoBadge(selectedActa.estado)}
-                            </p>
                             <p className="flex justify-between border-b border-slate-200 pb-2">
                                 <span className="font-semibold text-slate-600">Total Items:</span>
                                 <span className="font-bold text-slate-800">{selectedActa.detalles?.length || 0}</span>
@@ -182,7 +161,6 @@ export const ActasRecepcionFuncional = () => {
                                 <TableHeader>Cliente</TableHeader>
                                 <TableHeader>Documento</TableHeader>
                                 <TableHeader>Fecha</TableHeader>
-                                <TableHeader>Estado</TableHeader>
                                 <TableHeader>Items</TableHeader>
                                 <TableHeader>Acción</TableHeader>
                             </TableRow>
@@ -197,7 +175,6 @@ export const ActasRecepcionFuncional = () => {
                                         {acta.numero_documento ? ` - ${acta.numero_documento}` : ''}
                                     </TableCell>
                                     <TableCell>{new Date(acta.fecha).toLocaleDateString()}</TableCell>
-                                    <TableCell>{getEstadoBadge(acta.estado)}</TableCell>
                                     <TableCell>{acta.detalles?.length || 0}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">
