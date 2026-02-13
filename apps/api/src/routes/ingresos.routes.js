@@ -304,12 +304,6 @@ async function ingresosRoutes(fastify, options) {
                         error: 'fecha_vencimiento no es válida'
                     });
                 }
-                if (fechaVenc <= hoy) {
-                    return reply.status(400).send({
-                        success: false,
-                        error: 'fecha_vencimiento debe ser mayor a la fecha actual'
-                    });
-                }
             }
 
             // Crear nota

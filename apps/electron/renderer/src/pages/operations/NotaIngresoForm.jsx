@@ -9,7 +9,6 @@ import { Card } from '../../components/common/Card';
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
-            proveedor: '',
             fecha: new Date().toISOString().split('T')[0],
             numero_ingreso: '',
             tipo_documento: '',
@@ -19,7 +18,7 @@ export const NotaIngresoForm = () => {
         }
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, update } = useFieldArray({
         control,
         name: "detalles"
     });
@@ -29,9 +28,7 @@ export const NotaIngresoForm = () => {
     const [selectedProduct, setSelectedProduct] = useState('');
     const [selectedClient, setSelectedClient] = useState('');
     const [clienteRuc, setClienteRuc] = useState('');
-    const [lotesDisponibles, setLotesDisponibles] = useState([]);
-    const [selectedLoteOption, setSelectedLoteOption] = useState('');
-    const [loteManual, setLoteManual] = useState('');
+    const [proveedorNombre, setProveedorNombre] = useState('');
     const [lastIngresoId, setLastIngresoId] = useState(null);
 
     // Calculator State
@@ -43,7 +40,8 @@ export const NotaIngresoForm = () => {
     const [bultos, setBultos] = useState('');
     const [um, setUm] = useState('');
     const [fabricante, setFabricante] = useState('');
-    const [temperatura, setTemperatura] = useState('');
+    const [temperaturaMin, setTemperaturaMin] = useState('');
+    const [temperaturaMax, setTemperaturaMax] = useState('');
 
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
@@ -56,30 +54,27 @@ export const NotaIngresoForm = () => {
     useEffect(() => {
         if (!selectedClient) {
             setClienteRuc('');
+            setProveedorNombre('');
             return;
         }
         const client = clients.find(c => String(c.id) === String(selectedClient));
         if (client) {
             setClienteRuc(client.cuit || '');
+            setProveedorNombre(client.razon_social || '');
         }
     }, [selectedClient, clients]);
 
     useEffect(() => {
         if (!selectedProduct) {
-            setLotesDisponibles([]);
-            setSelectedLoteOption('');
-            setLoteManual('');
             return;
         }
         const product = products.find(p => p.id === parseInt(selectedProduct));
-        const lotes = Array.isArray(product?.lotes)
-            ? product.lotes.map(l => l.numero_lote || l.lote_numero).filter(Boolean)
-            : (product?.lote ? [product.lote] : []);
-        setLotesDisponibles(lotes);
-        const first = lotes[0] || '';
-        setSelectedLoteOption(first);
-        setLoteManual('');
-        setLote(first);
+        setUm(product?.um || '');
+        setFabricante(product?.fabricante || '');
+        setTemperaturaMin(product?.temperatura_min_c ?? '');
+        setTemperaturaMax(product?.temperatura_max_c ?? '');
+        setLote(product?.lote || '');
+        setVencimiento(product?.fecha_vencimiento || '');
     }, [selectedProduct, products]);
 
     const loadData = async () => {
@@ -116,7 +111,7 @@ export const NotaIngresoForm = () => {
     }, [cajas, unidadesCaja, fraccion]);
 
     const handleAddProduct = () => {
-        const loteFinal = selectedLoteOption === 'OTRO' ? loteManual : selectedLoteOption;
+        const loteFinal = lote;
         if (!selectedProduct || !quantity || !loteFinal || !vencimiento) {
             alert("Por favor complete todos los datos del producto (Lote y Vencimiento son obligatorios)");
             return;
@@ -127,35 +122,56 @@ export const NotaIngresoForm = () => {
             return;
         }
 
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
         const fechaVenc = new Date(vencimiento);
-        if (Number.isNaN(fechaVenc.getTime()) || fechaVenc <= hoy) {
-            alert('La fecha de vencimiento debe ser mayor a la fecha actual');
+        if (Number.isNaN(fechaVenc.getTime())) {
+            alert('La fecha de vencimiento no es válida');
             return;
         }
 
         const product = products.find(p => p.id === parseInt(selectedProduct));
 
-        append({
-            producto_id: parseInt(selectedProduct),
-            producto_codigo: product?.codigo || '',
-            producto_nombre: product.descripcion,
-            cantidad: parseFloat(quantity),
-            lote_numero: loteFinal,
-            fecha_vencimiento: vencimiento,
-            um: um || '',
-            fabricante: fabricante || '',
-            temperatura: temperatura || '',
-            cantidad_bultos: parseFloat(bultos || 0),
-            cantidad_cajas: parseFloat(cajas || 0),
-            cantidad_por_caja: parseFloat(unidadesCaja || 0),
-            cantidad_fraccion: parseFloat(fraccion || 0),
-            cantidad_total: parseFloat(quantity || 0),
-            precio_unitario: parseFloat(precio || 0),
-            // Optional: Store calc details if needed later
-            detalle_calculo: `Bultos: ${bultos || 0}, Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
-        });
+        const existingIndex = fields.findIndex(
+            field => Number(field.producto_id) === Number(selectedProduct) && field.lote_numero === loteFinal
+        );
+
+        if (existingIndex >= 0) {
+            const existing = fields[existingIndex];
+            update(existingIndex, {
+                ...existing,
+                cantidad: Number(existing.cantidad || 0) + Number(quantity),
+                cantidad_total: Number(existing.cantidad_total || existing.cantidad || 0) + Number(quantity),
+                cantidad_bultos: Number(existing.cantidad_bultos || 0) + Number(bultos || 0),
+                cantidad_cajas: Number(existing.cantidad_cajas || 0) + Number(cajas || 0),
+                cantidad_por_caja: Number(existing.cantidad_por_caja || 0) + Number(unidadesCaja || 0),
+                cantidad_fraccion: Number(existing.cantidad_fraccion || 0) + Number(fraccion || 0),
+                fecha_vencimiento: vencimiento || existing.fecha_vencimiento,
+                um: um || existing.um,
+                fabricante: fabricante || existing.fabricante,
+                temperatura_min: temperaturaMin || existing.temperatura_min,
+                temperatura_max: temperaturaMax || existing.temperatura_max,
+                precio_unitario: Number.isFinite(Number(precio)) ? Number(precio) : existing.precio_unitario
+            });
+        } else {
+            append({
+                producto_id: parseInt(selectedProduct),
+                producto_codigo: product?.codigo || '',
+                producto_nombre: product.descripcion,
+                cantidad: parseFloat(quantity),
+                lote_numero: loteFinal,
+                fecha_vencimiento: vencimiento,
+                um: um || '',
+                fabricante: fabricante || '',
+                temperatura_min: temperaturaMin || '',
+                temperatura_max: temperaturaMax || '',
+                cantidad_bultos: parseFloat(bultos || 0),
+                cantidad_cajas: parseFloat(cajas || 0),
+                cantidad_por_caja: parseFloat(unidadesCaja || 0),
+                cantidad_fraccion: parseFloat(fraccion || 0),
+                cantidad_total: parseFloat(quantity || 0),
+                precio_unitario: parseFloat(precio || 0),
+                detalle_calculo: `Bultos: ${bultos || 0}, Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
+            });
+        }
 
         // Reset fields
         setSelectedProduct('');
@@ -166,19 +182,22 @@ export const NotaIngresoForm = () => {
         setBultos('');
         setUm('');
         setFabricante('');
-        setTemperatura('');
+        setTemperaturaMin('');
+        setTemperaturaMax('');
         setLote('');
-        setSelectedLoteOption('');
-        setLoteManual('');
         setVencimiento('');
         setPrecio('');
     };
 
     const onSubmit = async (data) => {
         try {
+            if (!selectedClient) {
+                alert('Seleccione un cliente antes de guardar.');
+                return;
+            }
             const payload = {
                 fecha: data.fecha,
-                proveedor: data.proveedor,
+                proveedor: proveedorNombre || clienteRuc || String(selectedClient),
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
                 responsable_id: data.responsable_id,
@@ -219,9 +238,7 @@ export const NotaIngresoForm = () => {
         setSelectedProduct('');
         setSelectedClient('');
         setClienteRuc('');
-        setLotesDisponibles([]);
-        setSelectedLoteOption('');
-        setLoteManual('');
+        setProveedorNombre('');
         setLote('');
         setVencimiento('');
         setPrecio('');
@@ -232,7 +249,8 @@ export const NotaIngresoForm = () => {
         setBultos('');
         setUm('');
         setFabricante('');
-        setTemperatura('');
+        setTemperaturaMin('');
+        setTemperaturaMax('');
         setLastIngresoId(null);
     };
 
@@ -258,9 +276,7 @@ export const NotaIngresoForm = () => {
                                     setSelectedClient(e.target.value);
                                     const client = clients.find(c => String(c.id) === String(e.target.value));
                                     if (client) {
-                                        const value = client.razon_social || '';
-                                        const eventLike = { target: { name: 'proveedor', value } };
-                                        register('proveedor').onChange(eventLike);
+                                        setProveedorNombre(client.razon_social || '');
                                     }
                                 }}
                                 className="input-premium"
@@ -278,47 +294,15 @@ export const NotaIngresoForm = () => {
                             <input value={clienteRuc} readOnly className="input-premium" />
                         </div>
                         <div>
-                            <label className="label-premium">Producto</label>
-                            <select
-                                value={selectedProduct}
-                                onChange={(e) => setSelectedProduct(e.target.value)}
-                                className="input-premium"
-                            >
-                                <option value="">Seleccione producto...</option>
-                                {products.map(p => (
-                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
                             <label className="label-premium">Lote</label>
-                            <select
-                                value={selectedLoteOption}
-                                onChange={(e) => {
-                                    setSelectedLoteOption(e.target.value);
-                                    setLote(e.target.value);
-                                }}
+                            <input
+                                value={lote}
+                                onChange={(e) => setLote(e.target.value)}
+                                type="text"
                                 className="input-premium"
-                            >
-                                <option value="">Seleccione lote...</option>
-                                {lotesDisponibles.map((l) => (
-                                    <option key={l} value={l}>{l}</option>
-                                ))}
-                                <option value="OTRO">Otro</option>
-                            </select>
+                                placeholder="Ingrese lote..."
+                            />
                         </div>
-                        {selectedLoteOption === 'OTRO' && (
-                            <div>
-                                <label className="label-premium">Agregue lote manualmente</label>
-                                <input
-                                    value={loteManual}
-                                    onChange={(e) => setLoteManual(e.target.value)}
-                                    type="text"
-                                    className="input-premium"
-                                    placeholder="Lote..."
-                                />
-                            </div>
-                        )}
                     </div>
                 </Card>
 
@@ -357,21 +341,6 @@ export const NotaIngresoForm = () => {
                                 className="input-premium"
                             />
                         </div>
-                        <div className="md:col-span-3">
-                            <label className="label-premium">Proveedor</label>
-                            <select
-                                {...register('proveedor', { required: 'Requerido' })}
-                                className="input-premium"
-                            >
-                                <option value="">Seleccione proveedor...</option>
-                                {clients.map(client => (
-                                    <option key={client.id} value={client.razon_social}>
-                                        {client.razon_social} (RUC: {client.cuit})
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.proveedor && <span className="text-xs text-red-500">Requerido</span>}
-                        </div>
                     </div>
                 </Card>
 
@@ -407,35 +376,6 @@ export const NotaIngresoForm = () => {
                                 ))}
                             </select>
                         </div>
-                        <div className="md:col-span-2">
-                            <label className="label-premium">Lote</label>
-                            <select
-                                value={selectedLoteOption}
-                                onChange={(e) => {
-                                    setSelectedLoteOption(e.target.value);
-                                    setLote(e.target.value);
-                                }}
-                                className="input-premium"
-                            >
-                                <option value="">Seleccione lote...</option>
-                                {lotesDisponibles.map((l) => (
-                                    <option key={l} value={l}>{l}</option>
-                                ))}
-                                <option value="OTRO">Otro</option>
-                            </select>
-                        </div>
-                        {selectedLoteOption === 'OTRO' && (
-                            <div className="md:col-span-2">
-                                <label className="label-premium">Agregue lote manualmente</label>
-                                <input
-                                    value={loteManual}
-                                    onChange={(e) => setLoteManual(e.target.value)}
-                                    type="text"
-                                    className="input-premium"
-                                    placeholder="Lote..."
-                                />
-                            </div>
-                        )}
                         <div className="md:col-span-2">
                             <label className="label-premium">Vencimiento</label>
                             <input
@@ -474,10 +414,20 @@ export const NotaIngresoForm = () => {
                             />
                         </div>
                         <div className="md:col-span-2">
-                            <label className="label-premium">Temp. (°C)</label>
+                            <label className="label-premium">Temp. Min (°C)</label>
                             <input
-                                value={temperatura}
-                                onChange={(e) => setTemperatura(e.target.value)}
+                                value={temperaturaMin}
+                                onChange={(e) => setTemperaturaMin(e.target.value)}
+                                type="number"
+                                step="0.01"
+                                className="input-premium"
+                            />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Temp. Max (°C)</label>
+                            <input
+                                value={temperaturaMax}
+                                onChange={(e) => setTemperaturaMax(e.target.value)}
                                 type="number"
                                 step="0.01"
                                 className="input-premium"
@@ -551,7 +501,8 @@ export const NotaIngresoForm = () => {
                                 <th className="px-6 py-4">Vencimiento</th>
                                 <th className="px-6 py-4">UM</th>
                                 <th className="px-6 py-4">Fabri.</th>
-                                <th className="px-6 py-4">Temp.</th>
+                                <th className="px-6 py-4">Temp. Min</th>
+                                <th className="px-6 py-4">Temp. Max</th>
                                 <th className="px-6 py-4">Cant.Bulto</th>
                                 <th className="px-6 py-4">Cant.Cajas</th>
                                 <th className="px-6 py-4">Cant.x Caja</th>
@@ -569,7 +520,8 @@ export const NotaIngresoForm = () => {
                                     <td className="px-6 py-3">{field.fecha_vencimiento}</td>
                                     <td className="px-6 py-3">{field.um || '-'}</td>
                                     <td className="px-6 py-3">{field.fabricante || '-'}</td>
-                                    <td className="px-6 py-3">{field.temperatura || '-'}</td>
+                                    <td className="px-6 py-3">{field.temperatura_min ?? '-'}</td>
+                                    <td className="px-6 py-3">{field.temperatura_max ?? '-'}</td>
                                     <td className="px-6 py-3">{field.cantidad_bultos ?? 0}</td>
                                     <td className="px-6 py-3">{field.cantidad_cajas ?? 0}</td>
                                     <td className="px-6 py-3">{field.cantidad_por_caja ?? 0}</td>
@@ -588,7 +540,7 @@ export const NotaIngresoForm = () => {
                             ))}
                             {fields.length === 0 && (
                                 <tr>
-                                    <td colSpan={13} className="px-6 py-8 text-center text-slate-400 italic">
+                                    <td colSpan={14} className="px-6 py-8 text-center text-slate-400 italic">
                                         No hay productos agregados a la nota.
                                     </td>
                                 </tr>
