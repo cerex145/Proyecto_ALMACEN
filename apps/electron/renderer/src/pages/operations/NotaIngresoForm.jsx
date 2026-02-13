@@ -50,6 +50,11 @@ export const NotaIngresoForm = () => {
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
     const [precio, setPrecio] = useState('');
+    
+    // Estados para importación CSV
+    const [mostrarModalImportacion, setMostrarModalImportacion] = useState(false);
+    const [archivoCSV, setArchivoCSV] = useState(null);
+    const [erroresImportacion, setErroresImportacion] = useState([]);
 
     useEffect(() => {
         loadData();
@@ -378,13 +383,163 @@ export const NotaIngresoForm = () => {
         setLastIngresoId(null);
     };
 
+    const handleImportarCSV = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        setArchivoCSV(file);
+        const reader = new FileReader();
+
+        reader.onload = async (e) => {
+            try {
+                const text = e.target.result;
+                const lines = text.split('\n').filter(line => line.trim());
+                
+                if (lines.length < 2) {
+                    alert('El archivo CSV está vacío o no tiene datos');
+                    return;
+                }
+
+                // Parsear encabezados
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                const errores = [];
+                const productosImportados = [];
+
+                // Validar encabezados requeridos
+                const requeridos = ['codigo_producto', 'lote', 'cantidad_total'];
+                const faltantes = requeridos.filter(r => !headers.includes(r));
+                
+                if (faltantes.length > 0) {
+                    alert(`Faltan columnas requeridas: ${faltantes.join(', ')}`);
+                    setErroresImportacion([`Columnas faltantes: ${faltantes.join(', ')}`]);
+                    return;
+                }
+
+                // Procesar cada fila
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    const row = {};
+                    
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+
+                    try {
+                        // Buscar producto por código
+                        const productoEncontrado = products.find(p => 
+                            p.codigo.toLowerCase() === row.codigo_producto.toLowerCase()
+                        );
+
+                        if (!productoEncontrado) {
+                            errores.push(`Fila ${i + 1}: Producto con código "${row.codigo_producto}" no encontrado`);
+                            continue;
+                        }
+
+                        // Construir objeto de detalle
+                        const detalle = {
+                            producto_id: productoEncontrado.id,
+                            producto_nombre: productoEncontrado.descripcion,
+                            producto_codigo: productoEncontrado.codigo,
+                            numero_lote: row.lote,
+                            fecha_vencimiento: row.fecha_vencimiento || '',
+                            cantidad_bultos: parseFloat(row.cantidad_bultos || 0),
+                            cantidad_cajas: parseFloat(row.cantidad_cajas || 0),
+                            cantidad_por_caja: parseFloat(row.cantidad_por_caja || 0),
+                            cantidad_fraccion: parseFloat(row.cantidad_fraccion || 0),
+                            cantidad_total: parseFloat(row.cantidad_total),
+                            precio_unitario: parseFloat(row.precio_unitario || 0),
+                            um: row.um || productoEncontrado.um || productoEncontrado.unidad || '',
+                            fabricante: row.fabricante || productoEncontrado.fabricante || '',
+                            temperatura_min_c: row.temperatura_min ? parseFloat(row.temperatura_min) : (productoEncontrado.temperatura_min_c || null),
+                            temperatura_max_c: row.temperatura_max ? parseFloat(row.temperatura_max) : (productoEncontrado.temperatura_max_c || null)
+                        };
+
+                        // Validar cantidad_total
+                        if (isNaN(detalle.cantidad_total) || detalle.cantidad_total <= 0) {
+                            errores.push(`Fila ${i + 1}: Cantidad total inválida`);
+                            continue;
+                        }
+
+                        productosImportados.push(detalle);
+                    } catch (error) {
+                        errores.push(`Fila ${i + 1}: Error al procesar - ${error.message}`);
+                    }
+                }
+
+                // Agregar productos importados al formulario
+                if (productosImportados.length > 0) {
+                    productosImportados.forEach(producto => append(producto));
+                    alert(`✅ ${productosImportados.length} productos importados correctamente`);
+                }
+
+                // Mostrar errores si existen
+                if (errores.length > 0) {
+                    setErroresImportacion(errores);
+                    console.error('Errores de importación:', errores);
+                }
+
+                setMostrarModalImportacion(false);
+                event.target.value = ''; // Limpiar input file
+            } catch (error) {
+                console.error('Error al procesar CSV:', error);
+                alert('Error al procesar el archivo CSV: ' + error.message);
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
+    const descargarPlantillaCSV = () => {
+        const headers = [
+            'codigo_producto',
+            'lote',
+            'fecha_vencimiento',
+            'cantidad_bultos',
+            'cantidad_cajas',
+            'cantidad_por_caja',
+            'cantidad_fraccion',
+            'cantidad_total',
+            'precio_unitario',
+            'um',
+            'fabricante',
+            'temperatura_min',
+            'temperatura_max'
+        ];
+
+        // Usar códigos reales del sistema
+        const ejemplos = [
+            ['MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', '25.50', 'UND', 'Laboratorio ABC', '2', '8'],
+            ['MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', '15.75', 'UND', 'Farmacia XYZ', '15', '30'],
+            ['INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', '42.00', 'UND', 'Insumos Med', '20', '28']
+        ];
+
+        const csvContent = headers.join(',') + '\n' + ejemplos.map(e => e.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'plantilla_nota_ingreso.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Registro de Ingreso</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">📥 Registro de Ingreso</h2>
                     <p className="text-slate-500">Recepción de mercadería y alta de lotes</p>
                 </div>
+                <Button
+                    type="button"
+                    onClick={() => setMostrarModalImportacion(true)}
+                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 font-semibold"
+                >
+                    📊 Importar CSV
+                </Button>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -744,6 +899,136 @@ export const NotaIngresoForm = () => {
                     </Button>
                 </div>
             </form>
+
+            {/* Modal de Importación CSV - Simplificado */}
+            {mostrarModalImportacion && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setMostrarModalImportacion(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 text-white p-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-2xl font-bold">📊 Importar desde CSV</h2>
+                                    <p className="text-white/90 text-sm mt-1">Carga múltiples productos de una vez</p>
+                                </div>
+                                <button
+                                    onClick={() => setMostrarModalImportacion(false)}
+                                    className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-5 overflow-y-auto" style={{maxHeight: 'calc(85vh - 140px)'}}>
+                            {/* Instrucciones Compactas */}
+                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                                <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+                                    <span className="text-xl">📋</span>
+                                    Pasos Rápidos
+                                </h3>
+                                <ol className="list-decimal list-inside space-y-1.5 text-sm text-blue-800">
+                                    <li>Descarga la plantilla CSV</li>
+                                    <li>Ábrela con Excel y completa los datos</li>
+                                    <li>Guarda como CSV y selecciona el archivo</li>
+                                </ol>
+                            </div>
+
+                            {/* Columnas Requeridas - Vista Compacta */}
+                            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-lg border-2 border-amber-200">
+                                <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+                                    <span className="text-xl">⚠️</span>
+                                    Columnas Obligatorias
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                        <p className="font-mono font-bold text-sm text-slate-800">codigo_producto</p>
+                                        <p className="text-xs text-slate-600 mt-1">Código del producto en el sistema</p>
+                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">PROD001</span></p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                        <p className="font-mono font-bold text-sm text-slate-800">lote</p>
+                                        <p className="text-xs text-slate-600 mt-1">Número de lote</p>
+                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">LOTE-2024-001</span></p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                        <p className="font-mono font-bold text-sm text-slate-800">cantidad_total</p>
+                                        <p className="text-xs text-slate-600 mt-1">Cantidad total de unidades</p>
+                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">505</span></p>
+                                    </div>
+                                </div>
+                                <details className="mt-3">
+                                    <summary className="text-xs text-amber-800 cursor-pointer hover:text-amber-900 font-medium">
+                                        Ver todas las columnas disponibles (13 en total)
+                                    </summary>
+                                    <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
+                                        <p className="font-mono">codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, precio_unitario, um, fabricante, temperatura_min, temperatura_max</p>
+                                    </div>
+                                </details>
+                            </div>
+
+                            {/* Ejemplo Compacto */}
+                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-300">
+                                <h3 className="font-bold text-green-900 mb-2 flex items-center gap-2">
+                                    <span className="text-xl">✅</span>
+                                    Ejemplo CSV Mínimo
+                                </h3>
+                                <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
+                                    <pre className="text-xs font-mono text-green-400">
+{`codigo_producto,lote,cantidad_total
+PROD001,LOTE-2024-001,505
+PROD002,LOTE-2024-002,500`}
+                                    </pre>
+                                </div>
+                                <p className="text-xs text-green-800 mt-2">💡 Puedes agregar más columnas opcionales como: fecha_vencimiento, precio_unitario, cantidad_cajas, etc.</p>
+                            </div>
+
+                            {/* Errores */}
+                            {erroresImportacion.length > 0 && (
+                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                                    <h3 className="font-bold text-red-900 mb-2">⚠️ Errores Encontrados</h3>
+                                    <ul className="list-disc list-inside space-y-1 text-sm text-red-800 max-h-40 overflow-y-auto">
+                                        {erroresImportacion.map((error, idx) => (
+                                            <li key={idx}>{error}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {/* Botones de acción */}
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    type="button"
+                                    onClick={descargarPlantillaCSV}
+                                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg font-semibold"
+                                >
+                                    📥 Descargar Plantilla
+                                </Button>
+                                <label className="flex-1">
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={handleImportarCSV}
+                                        className="hidden"
+                                        disabled={!selectedClient}
+                                    />
+                                    <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${
+                                        selectedClient 
+                                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105' 
+                                            : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+                                    }`}>
+                                        📂 Seleccionar Archivo
+                                    </div>
+                                </label>
+                            </div>
+                            {!selectedClient && (
+                                <p className="text-sm text-orange-600 text-center">⚠️ Primero selecciona un cliente para poder importar productos</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
