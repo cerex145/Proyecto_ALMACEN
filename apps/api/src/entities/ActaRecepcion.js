@@ -51,6 +51,21 @@ const ActaRecepcion = new EntitySchema({
             type: 'text',
             nullable: true
         },
+        responsable_recepcion: {
+            type: 'varchar',
+            length: 255,
+            nullable: true
+        },
+        responsable_entrega: {
+            type: 'varchar',
+            length: 255,
+            nullable: true
+        },
+        jefe_almacen: {
+            type: 'varchar',
+            length: 255,
+            nullable: true
+        },
         estado: {
             type: 'varchar',
             length: 20,

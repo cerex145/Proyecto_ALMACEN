@@ -17,6 +17,9 @@ export const ActaRecepcionForm = () => {
             tipo_conteo: '',
             condicion_temperatura: '',
             observaciones: '',
+            responsable_recepcion: '',
+            responsable_entrega: '',
+            jefe_almacen: '',
             detalles: []
         }
     });
@@ -521,6 +524,9 @@ export const ActaRecepcionForm = () => {
                 tipo_conteo: normalizeNullable(data.tipo_conteo),
                 condicion_temperatura: normalizeNullable(data.condicion_temperatura),
                 observaciones: normalizeNullable(data.observaciones),
+                responsable_recepcion: normalizeNullable(data.responsable_recepcion),
+                responsable_entrega: normalizeNullable(data.responsable_entrega),
+                jefe_almacen: normalizeNullable(data.jefe_almacen),
                 detalles: detallesNormalizados
             };
 
@@ -770,6 +776,18 @@ export const ActaRecepcionForm = () => {
                         <div className="md:col-span-2">
                             <label className="label-premium">Condición de Temperatura</label>
                             <input {...register('condicion_temperatura')} className="input-premium" placeholder="Ej: 2-8°C, Ambiente" />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="label-premium">Responsable de Recepción (Auxiliar)</label>
+                            <input {...register('responsable_recepcion')} className="input-premium" placeholder="Nombre del auxiliar de recepción" />
+                        </div>
+                        <div className="md:col-span-1">
+                            <label className="label-premium">Responsable de Entrega</label>
+                            <input {...register('responsable_entrega')} className="input-premium" placeholder="Nombre del responsable" />
+                        </div>
+                        <div className="md:col-span-1">
+                            <label className="label-premium">Jefe de Almacén</label>
+                            <input {...register('jefe_almacen')} className="input-premium" placeholder="Nombre del jefe de almacén" />
                         </div>
                     </div>
                 </Card>
