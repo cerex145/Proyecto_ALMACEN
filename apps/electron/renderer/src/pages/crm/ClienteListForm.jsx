@@ -81,6 +81,16 @@ export const ClienteListForm = () => {
                 body: JSON.stringify(payload)
             });
 
+            if (!response.ok) {
+                const result = await response.json().catch(() => ({}));
+                const apiError = result.error || 'No se pudo guardar el cliente';
+                const lowerError = String(apiError).toLowerCase();
+                const message = (lowerError.includes('codigo') || lowerError.includes('cuit') || lowerError.includes('ruc'))
+                    ? 'Ya existe un cliente con ese RUC/codigo'
+                    : apiError;
+                throw new Error(message);
+            }
+
             if (response.ok) {
                 setFormData({
                     numero_ruc: '',
@@ -101,7 +111,7 @@ export const ClienteListForm = () => {
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al guardar cliente');
+            alert(error.message || 'Error al guardar cliente');
         } finally {
             setLoading(false);
         }
@@ -228,7 +238,7 @@ export const ClienteListForm = () => {
                             <option value="Activo">Activo</option>
                             <option value="Inactivo">Inactivo</option>
                             <option value="Potencial">Potencial</option>
-                            <option value="Blokeado">Blokeado</option>
+                            <option value="Blokeado">Bloqueado</option>
                         </select>
                     </div>
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem' }}>
