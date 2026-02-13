@@ -7,7 +7,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
 export const NotaIngresoForm = () => {
-    const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             fecha: new Date().toISOString().split('T')[0],
             numero_ingreso: '',
@@ -92,6 +92,14 @@ export const NotaIngresoForm = () => {
         setFraccion(product?.cantidad_fraccion ?? '');
         setQuantityManual(false);
         setQuantity(Number(product?.cantidad_total ?? 0));
+        const currentTipo = getValues('tipo_documento');
+        const currentNumero = getValues('numero_documento');
+        if (!currentTipo && product?.tipo_documento) {
+            setValue('tipo_documento', product.tipo_documento);
+        }
+        if (!currentNumero && product?.numero_documento) {
+            setValue('numero_documento', product.numero_documento);
+        }
     }, [selectedProduct, products]);
 
     useEffect(() => {
@@ -201,6 +209,14 @@ export const NotaIngresoForm = () => {
                 setCajas(productoDetalle.cantidad_cajas ?? '');
                 setUnidadesCaja(productoDetalle.cantidad_por_caja ?? '');
                 setFraccion(productoDetalle.cantidad_fraccion ?? '');
+                const currentTipo = getValues('tipo_documento');
+                const currentNumero = getValues('numero_documento');
+                if (!currentTipo && productoDetalle.tipo_documento) {
+                    setValue('tipo_documento', productoDetalle.tipo_documento);
+                }
+                if (!currentNumero && productoDetalle.numero_documento) {
+                    setValue('numero_documento', productoDetalle.numero_documento);
+                }
             }
             const cantidadProducto = Number(productoDetalle?.cantidad_total ?? 0);
             const cantidadLote = Number(loteInfo.cantidad_disponible ?? loteInfo.cantidad_ingresada ?? 0);
