@@ -1,0 +1,26 @@
+# Dockerfile para Renderer (Vite + React)
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copiar package.json y package-lock.json del workspace
+COPY package.json package-lock.json ./
+
+# Instalar dependencias
+RUN npm install
+
+# Copiar todo el proyecto
+COPY . .
+
+# Instalar dependencias del renderer
+WORKDIR /app/apps/electron/renderer
+RUN npm install
+
+# Exponer puerto Vite
+EXPOSE 5173
+
+# Variables de entorno
+ENV NODE_ENV=development
+
+# Comando para iniciar dev server
+CMD ["npm", "run", "dev"]

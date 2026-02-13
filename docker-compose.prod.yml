@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Base de datos MySQL - PRODUCCIÓN
+  mysql:
+    image: mysql:8.0
+    container_name: almacen_mysql_prod
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${DB_NAME:-almacen}
+      MYSQL_USER: ${DB_USER:-almacen_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-almacen123}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data_prod:/var/lib/mysql
+      - ./tools/database/almacen_db.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./backups/almacen_backup_20260213_053823.sql:/docker-entrypoint-initdb.d/02-backup.sql
+    networks:
+      - almacen_network_prod
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    restart: always
+
+  # API Backend - PRODUCCIÓN
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: almacen_api_prod
+    environment:
+      NODE_ENV: production
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-almacen_user}
+      DB_PASSWORD: ${DB_PASSWORD:-almacen123}
+      DB_NAME: ${DB_NAME:-almacen}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret}
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - almacen_network_prod
+    restart: always
+
+  # Frontend Renderer - PRODUCCIÓN
+  renderer:
+    build:
+      context: .
+      dockerfile: Dockerfile.renderer.prod
+    container_name: almacen_renderer_prod
+    environment:
+      NODE_ENV: production
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    networks:
+      - almacen_network_prod
+    restart: always
+
+volumes:
+  mysql_data_prod:
+
+networks:
+  almacen_network_prod:
+    driver: bridge

@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # Base de datos MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: almacen_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: almacen
+      MYSQL_USER: almacen_user
+      MYSQL_PASSWORD: almacen123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./tools/database/almacen_db.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./backups/almacen_backup_20260213_053823.sql:/docker-entrypoint-initdb.d/02-backup.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    restart: unless-stopped
+
+  # API Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: almacen_api
+    environment:
+      NODE_ENV: development
+      DB_HOST: almacen_mysql
+      DB_PORT: 3306
+      DB_USER: almacen_user
+      DB_PASSWORD: almacen123
+      DB_NAME: almacen
+      JWT_SECRET: change-this-secret
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app/apps/api
+      - /app/apps/api/node_modules
+    restart: unless-stopped
+
+  # Frontend Renderer
+  renderer:
+    build:
+      context: .
+      dockerfile: Dockerfile.renderer
+    container_name: almacen_renderer
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    volumes:
+      - ./apps/electron/renderer:/app/apps/electron/renderer
+      - /app/apps/electron/renderer/node_modules
+    restart: unless-stopped
+
+volumes:
+  mysql_data:

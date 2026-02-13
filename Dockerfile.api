@@ -1,0 +1,32 @@
+# Dockerfile para API (Node.js)
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copiar package.json y package-lock.json del workspace
+COPY package.json package-lock.json ./
+
+# Instalar dependencias del workspace root
+RUN npm install
+
+# Copiar todo el proyecto
+COPY . .
+
+# Instalar dependencias de la API
+WORKDIR /app/apps/api
+RUN npm install
+
+# Exponer puerto
+EXPOSE 3000
+
+# Variables de entorno por defecto
+ENV NODE_ENV=development
+ENV DB_HOST=mysql
+ENV DB_PORT=3306
+ENV DB_USER=almacen_user
+ENV DB_PASSWORD=almacen123
+ENV DB_NAME=almacen
+ENV JWT_SECRET=change-this-secret
+
+# Comando para iniciar
+CMD ["npm", "run", "dev"]

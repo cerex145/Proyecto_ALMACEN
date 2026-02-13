@@ -1,0 +1,28 @@
+# Dockerfile para Producción (Multi-stage build)
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm install
+
+COPY . .
+
+# Build del renderer
+WORKDIR /app/apps/electron/renderer
+RUN npm install && npm run build
+
+# Etapa final - Servidor simple para servir el frontend
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Instalar serve para servir el frontend
+RUN npm install -g serve
+
+# Copiar desde builder
+COPY --from=builder /app/apps/electron/renderer/dist ./public
+
+EXPOSE 5173
+
+CMD ["serve", "-s", "public", "-l", "5173"]
