@@ -29,6 +29,9 @@ export const NotaIngresoForm = () => {
     const [selectedClient, setSelectedClient] = useState('');
     const [clienteRuc, setClienteRuc] = useState('');
     const [proveedorNombre, setProveedorNombre] = useState('');
+    const [showAllProducts, setShowAllProducts] = useState(false);
+    const [lotesDisponibles, setLotesDisponibles] = useState([]);
+    const [selectedLoteId, setSelectedLoteId] = useState('');
     const [lastIngresoId, setLastIngresoId] = useState(null);
 
     // Calculator State
@@ -36,6 +39,7 @@ export const NotaIngresoForm = () => {
     const [unidadesCaja, setUnidadesCaja] = useState('');
     const [fraccion, setFraccion] = useState('');
     const [quantity, setQuantity] = useState(0);
+    const [quantityManual, setQuantityManual] = useState(false);
 
     const [bultos, setBultos] = useState('');
     const [um, setUm] = useState('');
@@ -52,6 +56,10 @@ export const NotaIngresoForm = () => {
     }, []);
 
     useEffect(() => {
+        loadProducts();
+    }, [selectedClient, showAllProducts]);
+
+    useEffect(() => {
         if (!selectedClient) {
             setClienteRuc('');
             setProveedorNombre('');
@@ -66,9 +74,12 @@ export const NotaIngresoForm = () => {
 
     useEffect(() => {
         if (!selectedProduct) {
+            setLotesDisponibles([]);
+            setSelectedLoteId('');
             return;
         }
         const product = products.find(p => p.id === parseInt(selectedProduct));
+        setSelectedLoteId(product?.lote ? 'PRODUCTO_LOTE' : '');
         setUm(product?.um || '');
         setFabricante(product?.fabricante || '');
         setTemperaturaMin(product?.temperatura_min_c ?? '');
@@ -77,17 +88,44 @@ export const NotaIngresoForm = () => {
         setVencimiento(product?.fecha_vencimiento || '');
     }, [selectedProduct, products]);
 
-    const loadData = async () => {
-        // Load Products
-        try {
-            const productsResponse = await productService.getProducts();
-            console.log('Productos cargados:', productsResponse);
-            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
-        } catch (error) {
-            console.error('Error cargando productos:', error);
-            alert('Error al cargar la lista de Productos. Verifique la conexión con el servidor.');
-        }
+    useEffect(() => {
+        const loadLotes = async () => {
+            if (!selectedProduct) {
+                return;
+            }
+            try {
+                const filters = {
+                    producto_id: Number(selectedProduct)
+                };
+                if (!showAllProducts && selectedClient) {
+                    filters.cliente_id = Number(selectedClient);
+                }
+                const lotes = await productService.getLotes(filters);
+                const product = products.find(p => p.id === parseInt(selectedProduct));
+                const normalized = Array.isArray(lotes) ? lotes : [];
+                if (product?.lote) {
+                    const exists = normalized.some(l => String(l.numero_lote) === String(product.lote));
+                    if (!exists) {
+                        normalized.unshift({
+                            id: 'PRODUCTO_LOTE',
+                            numero_lote: product.lote,
+                            fecha_vencimiento: product.fecha_vencimiento || null,
+                            cantidad_ingresada: product.cantidad_total ?? null,
+                            cantidad_disponible: product.stock_actual ?? null
+                        });
+                    }
+                }
+                setLotesDisponibles(normalized);
+            } catch (error) {
+                console.error('Error cargando lotes:', error);
+                setLotesDisponibles([]);
+            }
+        };
 
+        loadLotes();
+    }, [selectedProduct, selectedClient, showAllProducts]);
+
+    const loadData = async () => {
         // Load Clients
         try {
             const clientsResponse = await clientesService.listar();
@@ -101,14 +139,59 @@ export const NotaIngresoForm = () => {
         }
     };
 
+    const loadProducts = async () => {
+        try {
+            if (!showAllProducts && !selectedClient) {
+                setProducts([]);
+                return;
+            }
+            const filters = showAllProducts ? {} : { cliente_id: Number(selectedClient) };
+            const productsResponse = await productService.getProducts(filters);
+            console.log('Productos cargados:', productsResponse);
+            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
+        } catch (error) {
+            console.error('Error cargando productos:', error);
+            alert('Error al cargar la lista de Productos. Verifique la conexión con el servidor.');
+        }
+    };
+
     // Auto-calculate quantity
     useEffect(() => {
+        if (quantityManual) {
+            return;
+        }
         const c = parseInt(cajas) || 0;
         const u = parseInt(unidadesCaja) || 0;
         const f = parseInt(fraccion) || 0;
         const total = (c * u) + f;
         setQuantity(total);
-    }, [cajas, unidadesCaja, fraccion]);
+    }, [cajas, unidadesCaja, fraccion, quantityManual]);
+
+    const handleCalcChange = (setter) => (e) => {
+        setter(e.target.value);
+        setQuantityManual(false);
+    };
+
+    const handleSelectLote = (value) => {
+        setSelectedLoteId(value);
+        if (value === 'OTRO' || value === '') {
+            if (value === 'OTRO') {
+                setLote('');
+            }
+            return;
+        }
+
+        const loteInfo = lotesDisponibles.find(l => String(l.id) === String(value));
+        if (loteInfo) {
+            setLote(loteInfo.numero_lote || '');
+            setVencimiento(loteInfo.fecha_vencimiento || '');
+            const cantidadBase = Number(loteInfo.cantidad_disponible ?? loteInfo.cantidad_ingresada ?? 0);
+            if (Number.isFinite(cantidadBase) && cantidadBase > 0) {
+                setQuantity(cantidadBase);
+                setQuantityManual(true);
+            }
+        }
+    };
 
     const handleAddProduct = () => {
         const loteFinal = lote;
@@ -175,10 +258,12 @@ export const NotaIngresoForm = () => {
 
         // Reset fields
         setSelectedProduct('');
+        setSelectedLoteId('');
         setCajas('');
         setUnidadesCaja('');
         setFraccion('');
         setQuantity(0);
+        setQuantityManual(false);
         setBultos('');
         setUm('');
         setFabricante('');
@@ -239,6 +324,7 @@ export const NotaIngresoForm = () => {
         setSelectedClient('');
         setClienteRuc('');
         setProveedorNombre('');
+        setSelectedLoteId('');
         setLote('');
         setVencimiento('');
         setPrecio('');
@@ -246,6 +332,7 @@ export const NotaIngresoForm = () => {
         setUnidadesCaja('');
         setFraccion('');
         setQuantity(0);
+        setQuantityManual(false);
         setBultos('');
         setUm('');
         setFabricante('');
@@ -274,6 +361,10 @@ export const NotaIngresoForm = () => {
                                 value={selectedClient}
                                 onChange={(e) => {
                                     setSelectedClient(e.target.value);
+                                    setSelectedProduct('');
+                                    setSelectedLoteId('');
+                                    setLote('');
+                                    setVencimiento('');
                                     const client = clients.find(c => String(c.id) === String(e.target.value));
                                     if (client) {
                                         setProveedorNombre(client.razon_social || '');
@@ -294,6 +385,51 @@ export const NotaIngresoForm = () => {
                             <input value={clienteRuc} readOnly className="input-premium" />
                         </div>
                         <div>
+                            <label className="label-premium">Mostrar productos</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    id="showAllProducts"
+                                    type="checkbox"
+                                    checked={showAllProducts}
+                                    onChange={(e) => setShowAllProducts(e.target.checked)}
+                                />
+                                <label htmlFor="showAllProducts" className="text-sm text-slate-600">
+                                    Mostrar todos
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="label-premium">Producto</label>
+                            <select
+                                value={selectedProduct}
+                                onChange={(e) => setSelectedProduct(e.target.value)}
+                                className="input-premium"
+                                disabled={!showAllProducts && !selectedClient}
+                            >
+                                <option value="">Seleccione producto...</option>
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="label-premium">Lote existente</label>
+                            <select
+                                value={selectedLoteId}
+                                onChange={(e) => handleSelectLote(e.target.value)}
+                                className="input-premium"
+                                disabled={!selectedProduct}
+                            >
+                                <option value="">Seleccione lote...</option>
+                                {lotesDisponibles.map((l) => (
+                                    <option key={l.id} value={l.id}>
+                                        {l.numero_lote}
+                                    </option>
+                                ))}
+                                <option value="OTRO">Otro (manual)</option>
+                            </select>
+                        </div>
+                        <div>
                             <label className="label-premium">Lote</label>
                             <input
                                 value={lote}
@@ -301,6 +437,7 @@ export const NotaIngresoForm = () => {
                                 type="text"
                                 className="input-premium"
                                 placeholder="Ingrese lote..."
+                                readOnly={selectedLoteId !== 'OTRO' && selectedLoteId !== ''}
                             />
                         </div>
                     </div>
@@ -363,19 +500,6 @@ export const NotaIngresoForm = () => {
 
                     <h3 className="text-lg font-semibold text-blue-800 mb-4">Detalle de Productos (Lotes)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div className="md:col-span-4">
-                            <label className="label-premium">Producto</label>
-                            <select
-                                value={selectedProduct}
-                                onChange={(e) => setSelectedProduct(e.target.value)}
-                                className="input-premium"
-                            >
-                                <option value="">Seleccione producto...</option>
-                                {products.map(p => (
-                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
-                                ))}
-                            </select>
-                        </div>
                         <div className="md:col-span-2">
                             <label className="label-premium">Vencimiento</label>
                             <input
@@ -441,7 +565,7 @@ export const NotaIngresoForm = () => {
                                 <input
                                     type="number"
                                     value={bultos}
-                                    onChange={(e) => setBultos(e.target.value)}
+                                    onChange={handleCalcChange(setBultos)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
@@ -451,7 +575,7 @@ export const NotaIngresoForm = () => {
                                 <input
                                     type="number"
                                     value={cajas}
-                                    onChange={(e) => setCajas(e.target.value)}
+                                    onChange={handleCalcChange(setCajas)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
@@ -461,7 +585,7 @@ export const NotaIngresoForm = () => {
                                 <input
                                     type="number"
                                     value={unidadesCaja}
-                                    onChange={(e) => setUnidadesCaja(e.target.value)}
+                                    onChange={handleCalcChange(setUnidadesCaja)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
@@ -471,14 +595,22 @@ export const NotaIngresoForm = () => {
                                 <input
                                     type="number"
                                     value={fraccion}
-                                    onChange={(e) => setFraccion(e.target.value)}
+                                    onChange={handleCalcChange(setFraccion)}
                                     className="input-premium h-8 text-sm p-1"
                                     placeholder="0"
                                 />
                             </div>
                             <div className="col-span-3 flex justify-between items-center pt-1 border-t border-slate-100 mt-1">
                                 <span className="text-xs text-slate-400 font-medium">Total Unidades:</span>
-                                <span className="font-bold text-blue-600 text-lg">{quantity}</span>
+                                <input
+                                    type="number"
+                                    value={quantity}
+                                    onChange={(e) => {
+                                        setQuantity(Number(e.target.value));
+                                        setQuantityManual(true);
+                                    }}
+                                    className="input-premium h-8 text-sm p-1 w-24 text-right"
+                                />
                             </div>
                         </div>
 

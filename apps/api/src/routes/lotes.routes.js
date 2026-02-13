@@ -94,7 +94,9 @@ async function lotesRoutes(fastify, options) {
         }
 
         if (cliente_id) {
-            queryBuilder.andWhere('notaIngreso.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
+            // Evitar dependencia de una columna cliente_id ausente en notas_ingreso.
+            queryBuilder.leftJoin('clientes', 'cliente', 'cliente.razon_social = notaIngreso.proveedor');
+            queryBuilder.andWhere('cliente.id = :cliente_id', { cliente_id: Number(cliente_id) });
         }
 
         if (busqueda) {

@@ -2,8 +2,8 @@ import api from './api';
 
 export const productService = {
     // Productos
-    getProducts: async () => {
-        const response = await api.get('/productos');
+    getProducts: async (filters = {}) => {
+        const response = await api.get('/productos', { params: filters });
         return response.data.data || [];
     },
 
@@ -46,6 +46,11 @@ export const productService = {
     // Lotes
     getLotesByProduct: async (productId) => {
         const response = await api.get(`/lotes/producto/${productId}`);
+        return response.data.data || [];
+    },
+
+    getLotes: async (filters = {}) => {
+        const response = await api.get('/lotes', { params: filters });
         return response.data.data || [];
     }
 };

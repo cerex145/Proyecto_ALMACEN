@@ -93,6 +93,7 @@ async function productoRoutes(fastify, options) {
                     activo: { type: 'string', enum: ['true', 'false'] },
                     categoria_ingreso: { type: 'string' },
                     lote: { type: 'string' },
+                    cliente_id: { type: 'integer' },
                     page: { type: 'integer', minimum: 1 },
                     limit: { type: 'integer', minimum: 1 },
                     orderBy: { type: 'string' },
@@ -137,14 +138,15 @@ async function productoRoutes(fastify, options) {
 
         if (cliente_id) {
             // Filtrar productos que tengan lotes asociados a este cliente (via NotaIngreso)
-            // Subquery existe: SELECT 1 FROM lotes l JOIN notas_ingreso ni ON l.nota_ingreso_id = ni.id WHERE l.producto_id = producto.id AND ni.cliente_id = :cliente_id
+            // Usar proveedor (razon_social) para evitar dependencia de una columna cliente_id ausente.
             queryBuilder.andWhere(qb => {
                 const subQuery = qb.subQuery()
                     .select("1")
                     .from("lotes", "l")
                     .innerJoin("notas_ingreso", "ni", "l.nota_ingreso_id = ni.id")
+                    .innerJoin("clientes", "c", "c.razon_social = ni.proveedor")
                     .where("l.producto_id = producto.id")
-                    .andWhere("ni.cliente_id = :cliente_id")
+                    .andWhere("c.id = :cliente_id")
                     .getQuery();
                 return "EXISTS " + subQuery;
             }, { cliente_id });
