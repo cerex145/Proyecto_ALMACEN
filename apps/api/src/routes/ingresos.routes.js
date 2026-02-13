@@ -23,10 +23,12 @@ const NotaIngresoDetalleSchema = {
         id: { type: 'integer' },
         nota_ingreso_id: { type: 'integer' },
         producto_id: { type: 'integer' },
+        lote_id: { type: 'integer', nullable: true },
         cantidad: { type: 'number' },
         precio_unitario: { type: 'number' },
         lote_numero: { type: 'string', nullable: true },
         fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+        cantidad_disponible: { type: 'number', nullable: true },
         producto: { type: 'object', nullable: true }
     }
 };
@@ -228,11 +230,35 @@ async function ingresosRoutes(fastify, options) {
             .where('detalle.nota_ingreso_id = :id', { id: Number(id) })
             .getMany();
 
+        const lotes = await loteRepo.find({
+            where: { nota_ingreso_id: Number(id) }
+        });
+
+        const loteMap = new Map();
+        for (const lote of lotes) {
+            const key = `${lote.producto_id}::${lote.numero_lote}`;
+            loteMap.set(key, lote);
+        }
+
+        const detallesConSaldo = detalles.map((detalle) => {
+            const key = `${detalle.producto_id}::${detalle.lote_numero}`;
+            const lote = loteMap.get(key);
+            const totalRaw = Number(detalle.cantidad_total ?? detalle.cantidad ?? 0);
+            const disponibleRaw = lote ? Number(lote.cantidad_disponible) : 0;
+            const disponible = Math.max(0, Math.min(disponibleRaw, totalRaw));
+
+            return {
+                ...detalle,
+                lote_id: lote?.id ?? null,
+                cantidad_disponible: disponible
+            };
+        });
+
         return {
             success: true,
             data: {
                 ...nota,
-                detalles
+                detalles: detallesConSaldo
             }
         };
     });

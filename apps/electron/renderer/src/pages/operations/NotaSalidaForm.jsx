@@ -66,6 +66,15 @@ export const NotaSalidaForm = () => {
         return parsed.toISOString().split('T')[0];
     };
 
+    const getDetalleDisponible = (detalle) => {
+        const totalRaw = Number(detalle?.cantidad_total ?? detalle?.cantidad ?? 0);
+        const disponibleRaw = Number(detalle?.cantidad_disponible ?? totalRaw);
+        if (Number.isNaN(disponibleRaw)) {
+            return 0;
+        }
+        return Math.max(0, Math.min(disponibleRaw, totalRaw || disponibleRaw));
+    };
+
     useEffect(() => {
         loadClients();
         // Cargar productos iniciales (sin filtro o todos)
@@ -177,7 +186,9 @@ export const NotaSalidaForm = () => {
                     try {
                         const detRes = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
                         const detJson = await detRes.json();
-                        return { ...nota, detalles: detJson?.data?.detalles || [] };
+                        const detallesRaw = detJson?.data?.detalles || [];
+                        const detallesFiltrados = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
+                        return { ...nota, detalles: detallesFiltrados };
                     } catch (err) {
                         console.error('Error al cargar detalles:', err);
                         return { ...nota, detalles: [] };
@@ -185,7 +196,8 @@ export const NotaSalidaForm = () => {
                 })
             );
 
-            setNotasIngreso(notasConDetalles);
+            const notasConSaldo = notasConDetalles.filter((nota) => (nota.detalles || []).length > 0);
+            setNotasIngreso(notasConSaldo);
         } catch (error) {
             console.error('Error loading notas de ingreso:', error);
             setNotasIngreso([]);
@@ -227,17 +239,23 @@ export const NotaSalidaForm = () => {
         }
 
         // Agregar todos los productos de la nota
-        nota.detalles.forEach(detalle => {
+        const disponibles = nota.detalles.filter((detalle) => getDetalleDisponible(detalle) > 0);
+        disponibles.forEach(detalle => {
             if (detalle.producto_id) {
                 handleAgregarProductoDesdeNota(notaId, detalle);
             }
         });
 
-        alert(`✅ Se agregaron ${nota.detalles.length} productos de la nota de ingreso`);
+        alert(`✅ Se agregaron ${disponibles.length} productos de la nota de ingreso`);
     };
 
     const handleAgregarProductoDesdeNota = (notaId, detalle) => {
         const key = `${notaId}-${detalle.id}`;
+        const disponible = getDetalleDisponible(detalle);
+        if (disponible <= 0) {
+            alert('Este detalle ya no tiene saldo disponible');
+            return;
+        }
         
         // Verificar si ya existe este producto con el mismo lote
         const existingIndex = fields.findIndex(
@@ -246,24 +264,14 @@ export const NotaSalidaForm = () => {
         );
 
         if (existingIndex >= 0) {
-            // Actualizar cantidad si ya existe
-            const existing = fields[existingIndex];
-            update(existingIndex, {
-                ...existing,
-                cantidad: Number(existing.cantidad || 0) + Number(detalle.cantidad_total || detalle.cantidad || 0),
-                cant_total: Number(existing.cant_total || existing.cantidad || 0) + Number(detalle.cantidad_total || detalle.cantidad || 0),
-                cant_bulto: Number(existing.cant_bulto || 0) + Number(detalle.cantidad_bultos || 0),
-                cant_caja: Number(existing.cant_caja || 0) + Number(detalle.cantidad_cajas || 0),
-                cant_por_caja: Number(detalle.cantidad_por_caja || existing.cant_por_caja || 0),
-                cant_fraccion: Number(existing.cant_fraccion || 0) + Number(detalle.cantidad_fraccion || 0)
-            });
+            alert('Este detalle ya fue agregado a la nota de salida');
         } else {
             // Agregar nuevo producto
             append({
                 producto_id: Number(detalle.producto_id),
                 producto_codigo: detalle.producto?.codigo || '',
                 producto_nombre: detalle.producto?.descripcion || '',
-                lote_id: null,
+                lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
                 lote_numero: detalle.lote_numero || '',
                 fecha_vencimiento: detalle.fecha_vencimiento || '',
                 um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
@@ -274,8 +282,9 @@ export const NotaSalidaForm = () => {
                 cant_caja: Number(detalle.cantidad_cajas || 0),
                 cant_por_caja: Number(detalle.cantidad_por_caja || 0),
                 cant_fraccion: Number(detalle.cantidad_fraccion || 0),
-                cant_total: Number(detalle.cantidad_total || detalle.cantidad || 0),
-                cantidad: Number(detalle.cantidad_total || detalle.cantidad || 0)
+                cant_total: disponible,
+                cantidad: disponible,
+                cantidad_disponible: disponible
             });
         }
     };
@@ -283,6 +292,12 @@ export const NotaSalidaForm = () => {
     const handleToggleProductoFromNota = (notaId, detalle) => {
         const key = `${notaId}-${detalle.id}`;
         const isSelected = selectedProductosFromNota[key];
+        const disponible = getDetalleDisponible(detalle);
+
+        if (!isSelected && disponible <= 0) {
+            alert('Este detalle ya no tiene saldo disponible');
+            return;
+        }
 
         if (isSelected) {
             // Deseleccionar
@@ -309,6 +324,11 @@ export const NotaSalidaForm = () => {
 
         const product = products.find(p => p.id === parseInt(selectedProduct));
         const lote = lotesDisponibles.find(l => String(l.numero_lote) === String(selectedLoteOption));
+        const disponible = lote?.cantidad_disponible != null ? Number(lote.cantidad_disponible) : null;
+        if (disponible != null && Number(cantidadTotal) > disponible) {
+            alert(`La cantidad supera el disponible del lote (${disponible})`);
+            return;
+        }
         const fechaFinal = normalizeDateInput(fechaVencimiento || lote?.fecha_vencimiento || '');
         const numeroFinal = loteFinal;
         const loteIdFinal = isOtro ? null : (lote?.id ? parseInt(lote.id) : null);
@@ -326,7 +346,8 @@ export const NotaSalidaForm = () => {
             cant_por_caja: parseFloat(unidadesCaja || 0),
             cant_fraccion: parseFloat(fraccion || 0),
             cant_total: parseFloat(cantidadTotal || 0),
-            cantidad: parseFloat(cantidadTotal || 0)
+            cantidad: parseFloat(cantidadTotal || 0),
+            cantidad_disponible: disponible
         });
 
         setSelectedProduct('');
@@ -380,6 +401,10 @@ export const NotaSalidaForm = () => {
                 }
                 if (Number(det.cantidad) <= 0) {
                     alert(`❌ Detalle ${i + 1}: Cantidad debe ser mayor a 0`);
+                    return;
+                }
+                if (det.cantidad_disponible != null && Number(det.cantidad) > Number(det.cantidad_disponible)) {
+                    alert(`❌ Detalle ${i + 1}: Cantidad supera el disponible (${det.cantidad_disponible})`);
                     return;
                 }
             }
@@ -539,13 +564,15 @@ export const NotaSalidaForm = () => {
                                                                 <th className="px-2 py-2 text-left">Lote</th>
                                                                 <th className="px-2 py-2 text-left">Vencimiento</th>
                                                                 <th className="px-2 py-2 text-left">UM</th>
-                                                                <th className="px-2 py-2 text-right">Cantidad</th>
+                                                                <th className="px-2 py-2 text-right">Disponible</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y">
                                                             {nota.detalles.map(detalle => {
                                                                 const key = `${nota.id}-${detalle.id}`;
                                                                 const isSelected = selectedProductosFromNota[key];
+                                                                const disponible = getDetalleDisponible(detalle);
+                                                                const total = Number(detalle.cantidad_total || detalle.cantidad || 0);
                                                                 return (
                                                                     <tr key={detalle.id} className={isSelected ? 'bg-purple-50' : 'hover:bg-slate-50'}>
                                                                         <td className="px-2 py-2">
@@ -553,6 +580,7 @@ export const NotaSalidaForm = () => {
                                                                                 type="checkbox"
                                                                                 checked={isSelected || false}
                                                                                 onChange={() => handleToggleProductoFromNota(nota.id, detalle)}
+                                                                                disabled={disponible <= 0}
                                                                                 className="w-4 h-4 text-purple-600 rounded"
                                                                             />
                                                                         </td>
@@ -564,7 +592,7 @@ export const NotaSalidaForm = () => {
                                                                         </td>
                                                                         <td className="px-2 py-2">{detalle.um || detalle.producto?.um || '-'}</td>
                                                                         <td className="px-2 py-2 text-right font-semibold text-blue-600">
-                                                                            {detalle.cantidad_total || detalle.cantidad || 0}
+                                                                            {disponible} / {total}
                                                                         </td>
                                                                     </tr>
                                                                 );
@@ -802,7 +830,7 @@ export const NotaSalidaForm = () => {
                                 <th className="px-6 py-4">Cant.Cajas</th>
                                 <th className="px-6 py-4">Cant.x Caja</th>
                                 <th className="px-6 py-4">Cant.Fracción</th>
-                                <th className="px-6 py-4 text-right">Cant.Total</th>
+                                <th className="px-6 py-4 text-right">Cant.Salida</th>
                                 <th className="px-6 py-4 text-center">Acción</th>
                             </tr>
                         </thead>
@@ -820,7 +848,32 @@ export const NotaSalidaForm = () => {
                                     <td className="px-6 py-3">{field.cant_caja ?? 0}</td>
                                     <td className="px-6 py-3">{field.cant_por_caja ?? 0}</td>
                                     <td className="px-6 py-3">{field.cant_fraccion ?? 0}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-blue-600">{field.cant_total ?? field.cantidad}</td>
+                                    <td className="px-6 py-3 text-right">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={field.cantidad ?? 0}
+                                            onChange={(event) => {
+                                                const raw = Number(event.target.value);
+                                                const max = field.cantidad_disponible != null
+                                                    ? Number(field.cantidad_disponible)
+                                                    : null;
+                                                const next = Number.isNaN(raw)
+                                                    ? 0
+                                                    : (max != null ? Math.min(raw, max) : raw);
+                                                update(index, {
+                                                    ...field,
+                                                    cantidad: next,
+                                                    cant_total: next
+                                                });
+                                            }}
+                                            className="input-premium w-28 text-right"
+                                        />
+                                        {field.cantidad_disponible != null && (
+                                            <div className="text-[10px] text-slate-400">Disp: {field.cantidad_disponible}</div>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-3 text-center">
                                         <button
                                             type="button"
