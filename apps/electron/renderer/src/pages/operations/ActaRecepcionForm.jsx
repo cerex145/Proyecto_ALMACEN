@@ -253,7 +253,7 @@ export const ActaRecepcionForm = () => {
                         producto_codigo: detalle.producto?.codigo || '',
                         producto_nombre: detalle.producto?.descripcion || '',
                         fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
-                        lote_numero: detalle.numero_lote,
+                        lote_numero: detalle.lote_numero || detalle.numero_lote || '',
                         fecha_vencimiento: detalle.fecha_vencimiento,
                         um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
                         temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
@@ -334,6 +334,21 @@ export const ActaRecepcionForm = () => {
         setAspecto('EMB');
     };
 
+    const normalizeNullable = (value) => {
+        if (value === '' || value === undefined || value === null) return null;
+        return value;
+    };
+
+    const toNullableNumber = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+    };
+
+    const toNumberOrZero = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : 0;
+    };
+
     const onSubmit = async (data) => {
         try {
             if (!selectedClient) {
@@ -345,17 +360,43 @@ export const ActaRecepcionForm = () => {
                 return;
             }
 
+            const detallesNormalizados = data.detalles.map((detalle) => {
+                const loteNumero = String(detalle.lote_numero || '').trim();
+                if (!loteNumero) {
+                    throw new Error('Cada producto debe tener un lote válido');
+                }
+
+                return {
+                    ...detalle,
+                    producto_id: Number(detalle.producto_id),
+                    lote_numero: loteNumero,
+                    fecha_vencimiento: normalizeNullable(detalle.fecha_vencimiento),
+                    um: normalizeNullable(detalle.um),
+                    fabricante: normalizeNullable(detalle.fabricante),
+                    temperatura_min: toNullableNumber(detalle.temperatura_min),
+                    temperatura_max: toNullableNumber(detalle.temperatura_max),
+                    cantidad_solicitada: toNumberOrZero(detalle.cantidad_solicitada),
+                    cantidad_recibida: toNumberOrZero(detalle.cantidad_recibida),
+                    cantidad_bultos: toNumberOrZero(detalle.cantidad_bultos),
+                    cantidad_cajas: toNumberOrZero(detalle.cantidad_cajas),
+                    cantidad_por_caja: toNumberOrZero(detalle.cantidad_por_caja),
+                    cantidad_fraccion: toNumberOrZero(detalle.cantidad_fraccion),
+                    aspecto: detalle.aspecto || 'EMB',
+                    observaciones: normalizeNullable(detalle.observaciones)
+                };
+            });
+
             const payload = {
                 fecha: data.fecha,
                 tipo_documento: data.tipo_documento,
                 numero_documento: data.numero_documento,
-                cliente_id: selectedClient,
-                proveedor: proveedorNombre || clienteRuc,
-                tipo_operacion: data.tipo_operacion,
-                tipo_conteo: data.tipo_conteo,
-                condicion_temperatura: data.condicion_temperatura,
-                observaciones: data.observaciones,
-                detalles: data.detalles
+                cliente_id: Number(selectedClient),
+                proveedor: normalizeNullable(proveedorNombre || clienteRuc),
+                tipo_operacion: normalizeNullable(data.tipo_operacion),
+                tipo_conteo: normalizeNullable(data.tipo_conteo),
+                condicion_temperatura: normalizeNullable(data.condicion_temperatura),
+                observaciones: normalizeNullable(data.observaciones),
+                detalles: detallesNormalizados
             };
 
             console.log('Payload a enviar:', payload);

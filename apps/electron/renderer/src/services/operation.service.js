@@ -21,7 +21,7 @@ export const operationService = {
     // Actas de Recepción
     createActaRecepcion: async (data) => {
         // data: { ingreso_id, fecha_recepcion, responsable_recepcion_id, detalles: [{ producto_id, lote_numero, fecha_vencimiento, cantidad_recibida }] }
-        const response = await api.post('/actas-recepcion', data);
+        const response = await api.post('/actas', data);
         return response.data.data || response.data;
     },
 

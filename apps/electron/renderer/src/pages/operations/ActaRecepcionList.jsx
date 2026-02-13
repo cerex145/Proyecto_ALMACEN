@@ -39,12 +39,14 @@ export const ActaRecepcionList = () => {
     };
 
     const getEstadoBadge = (estado) => {
+        const estadoNormalizado = (estado || '').toLowerCase();
         const colores = {
-            'REGISTRADA': 'primary',
-            'APROBADA': 'success',
-            'RECHAZADA': 'danger'
+            registrada: 'primary',
+            confirmada: 'success',
+            rechazada: 'danger',
+            activa: 'primary'
         };
-        return <Badge variant={colores[estado] || 'secondary'}>{estado}</Badge>;
+        return <Badge variant={colores[estadoNormalizado] || 'secondary'}>{estado || 'Sin estado'}</Badge>;
     };
 
     return (
@@ -74,8 +76,9 @@ export const ActaRecepcionList = () => {
                     <TableHead>
                         <TableRow>
                             <TableHeader>Número Acta</TableHeader>
-                            <TableHeader>Nota Ingreso</TableHeader>
-                            <TableHeader>Fecha Recepción</TableHeader>
+                            <TableHeader>Cliente</TableHeader>
+                            <TableHeader>Documento</TableHeader>
+                            <TableHeader>Fecha</TableHeader>
                             <TableHeader>Cantidad Detalles</TableHeader>
                             <TableHeader>Estado</TableHeader>
                             <TableHeader>Acciones</TableHeader>
@@ -85,13 +88,17 @@ export const ActaRecepcionList = () => {
                         {actas.length > 0 ? (
                             actas.map((acta) => (
                                 <TableRow key={acta.id}>
-                                    <TableCell>{acta.numero_acta || acta.id}</TableCell>
-                                    <TableCell>{acta.nota_ingreso_id}</TableCell>
-                                    <TableCell>{new Date(acta.fecha_recepcion).toLocaleDateString()}</TableCell>
-                                    <TableCell>{acta.detalles_count || 0}</TableCell>
+                                    <TableCell>{acta.id}</TableCell>
+                                    <TableCell>{acta.cliente?.razon_social || '—'}</TableCell>
+                                    <TableCell>
+                                        {(acta.tipo_documento || 'Documento')}
+                                        {acta.numero_documento ? ` - ${acta.numero_documento}` : ''}
+                                    </TableCell>
+                                    <TableCell>{new Date(acta.fecha).toLocaleDateString()}</TableCell>
+                                    <TableCell>{acta.detalles?.length || 0}</TableCell>
                                     <TableCell>{getEstadoBadge(acta.estado)}</TableCell>
                                     <TableCell>
-                                        {acta.estado === 'REGISTRADA' && (
+                                        {(acta.estado || '').toLowerCase() === 'registrada' && (
                                             <Button
                                                 variant="success"
                                                 size="sm"
@@ -100,8 +107,8 @@ export const ActaRecepcionList = () => {
                                                 Aprobar
                                             </Button>
                                         )}
-                                        {acta.estado === 'APROBADA' && (
-                                            <Badge variant="success">Aprobada</Badge>
+                                        {(acta.estado || '').toLowerCase() === 'confirmada' && (
+                                            <Badge variant="success">Confirmada</Badge>
                                         )}
                                     </TableCell>
                                 </TableRow>

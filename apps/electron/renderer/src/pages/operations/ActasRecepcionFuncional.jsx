@@ -16,7 +16,7 @@ export const ActasRecepcionFuncional = () => {
     const cargarActas = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:3000/api/actas-recepcion');
+            const response = await fetch('http://localhost:3000/api/actas');
             const result = await response.json();
             setActas(result.data || []);
         } catch (error) {
@@ -28,7 +28,7 @@ export const ActasRecepcionFuncional = () => {
 
     const handleDownloadPDF = async (id) => {
         try {
-            const url = `http://localhost:3000/api/actas-recepcion/${id}/pdf`;
+            const url = `http://localhost:3000/api/actas/${id}/pdf`;
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', url);
             } else {
@@ -41,11 +41,18 @@ export const ActasRecepcionFuncional = () => {
     };
 
     const getEstadoBadge = (estado) => {
-        switch (estado) {
-            case 'REGISTRADA': return <Badge variant="registrado">Registrada</Badge>;
-            case 'CONFIRMADA': return <Badge variant="observado">Confirmada</Badge>;
-            case 'RECHAZADA': return <Badge variant="anulado">Rechazada</Badge>;
-            default: return <Badge variant="secondary">{estado}</Badge>;
+        const estadoNormalizado = (estado || '').toLowerCase();
+        switch (estadoNormalizado) {
+            case 'registrada':
+                return <Badge variant="registrado">Registrada</Badge>;
+            case 'confirmada':
+                return <Badge variant="observado">Confirmada</Badge>;
+            case 'rechazada':
+                return <Badge variant="anulado">Rechazada</Badge>;
+            case 'activa':
+                return <Badge variant="registrado">Activa</Badge>;
+            default:
+                return <Badge variant="secondary">{estado || 'Sin estado'}</Badge>;
         }
     };
 
@@ -57,7 +64,7 @@ export const ActasRecepcionFuncional = () => {
                 <Card className="p-8">
                     <div className="flex justify-between items-start mb-8 border-b pb-6">
                         <div>
-                            <h2 className="text-2xl font-bold text-slate-800">Acta Nº {selectedActa.numero_acta}</h2>
+                            <h2 className="text-2xl font-bold text-slate-800">Acta Nº {selectedActa.id}</h2>
                             <p className="text-slate-500 mt-1">Detalle de recepción de mercadería</p>
                         </div>
                         <Button onClick={() => handleDownloadPDF(selectedActa.id)} className="btn-gradient-primary">
@@ -68,16 +75,21 @@ export const ActasRecepcionFuncional = () => {
                     <div className="grid grid-cols-2 gap-8 mb-8 bg-slate-50 p-6 rounded-xl">
                         <div className="space-y-3">
                             <p className="flex justify-between border-b border-slate-200 pb-2">
-                                <span className="font-semibold text-slate-600">Referencia Ingreso:</span>
-                                <span className="font-mono text-blue-600">{selectedActa.ingreso?.numero_ingreso}</span>
+                                <span className="font-semibold text-slate-600">Cliente:</span>
+                                <span className="font-mono text-blue-600">
+                                    {selectedActa.cliente?.razon_social || '—'}
+                                </span>
                             </p>
                             <p className="flex justify-between border-b border-slate-200 pb-2">
                                 <span className="font-semibold text-slate-600">Fecha Recepción:</span>
-                                <span>{new Date(selectedActa.fecha_recepcion).toLocaleDateString()}</span>
+                                <span>{new Date(selectedActa.fecha).toLocaleDateString()}</span>
                             </p>
                             <p className="flex justify-between border-b border-slate-200 pb-2">
-                                <span className="font-semibold text-slate-600">Responsable:</span>
-                                <span>{selectedActa.responsable_recepcion?.usuario}</span>
+                                <span className="font-semibold text-slate-600">Documento:</span>
+                                <span>
+                                    {(selectedActa.tipo_documento || 'Documento')}
+                                    {selectedActa.numero_documento ? ` - ${selectedActa.numero_documento}` : ''}
+                                </span>
                             </p>
                         </div>
                         <div className="space-y-3">
@@ -87,7 +99,11 @@ export const ActasRecepcionFuncional = () => {
                             </p>
                             <p className="flex justify-between border-b border-slate-200 pb-2">
                                 <span className="font-semibold text-slate-600">Total Items:</span>
-                                <span className="font-bold text-slate-800">{selectedActa.detalle_acta?.length || 0}</span>
+                                <span className="font-bold text-slate-800">{selectedActa.detalles?.length || 0}</span>
+                            </p>
+                            <p className="flex justify-between border-b border-slate-200 pb-2">
+                                <span className="font-semibold text-slate-600">Proveedor:</span>
+                                <span>{selectedActa.proveedor || '—'}</span>
                             </p>
                         </div>
                     </div>
@@ -106,19 +122,26 @@ export const ActasRecepcionFuncional = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {selectedActa.detalle_acta?.map((item, idx) => (
+                                {selectedActa.detalles?.map((item, idx) => (
                                     <TableRow key={idx} className="hover:bg-slate-50">
-                                        <TableCell>{item.producto?.descripcion}</TableCell>
-                                        <TableCell>{item.numero_lote}</TableCell>
-                                        <TableCell>{new Date(item.fecha_vencimiento).toLocaleDateString()}</TableCell>
-                                        <TableCell>{item.cantidad_esperada}</TableCell>
+                                        <TableCell>{item.producto?.descripcion || item.producto_nombre}</TableCell>
+                                        <TableCell>{item.lote_numero}</TableCell>
+                                        <TableCell>{item.fecha_vencimiento ? new Date(item.fecha_vencimiento).toLocaleDateString() : '—'}</TableCell>
+                                        <TableCell>{item.cantidad_solicitada}</TableCell>
                                         <TableCell><strong className="text-blue-700">{item.cantidad_recibida}</strong></TableCell>
                                         <TableCell>
+                                            {(() => {
+                                                const solicitado = Number(item.cantidad_solicitada || 0);
+                                                const recibido = Number(item.cantidad_recibida || 0);
+                                                const diferencia = recibido - solicitado;
+                                                return (
                                             <span
-                                                className={`font-mono font-bold ${item.diferencia === 0 ? 'text-green-500' : 'text-red-500'}`}
+                                                className={`font-mono font-bold ${diferencia === 0 ? 'text-green-500' : 'text-red-500'}`}
                                             >
-                                                {item.diferencia > 0 ? '+' : ''}{item.diferencia}
+                                                {diferencia > 0 ? '+' : ''}{diferencia}
                                             </span>
+                                                );
+                                            })()}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -156,9 +179,9 @@ export const ActasRecepcionFuncional = () => {
                         <TableHead>
                             <TableRow>
                                 <TableHeader>Nº Acta</TableHeader>
-                                <TableHeader>Ingreso</TableHeader>
-                                <TableHeader>Fecha Recepción</TableHeader>
-                                <TableHeader>Responsable</TableHeader>
+                                <TableHeader>Cliente</TableHeader>
+                                <TableHeader>Documento</TableHeader>
+                                <TableHeader>Fecha</TableHeader>
                                 <TableHeader>Estado</TableHeader>
                                 <TableHeader>Items</TableHeader>
                                 <TableHeader>Acción</TableHeader>
@@ -167,12 +190,15 @@ export const ActasRecepcionFuncional = () => {
                         <TableBody>
                             {actas.map(acta => (
                                 <TableRow key={acta.id}>
-                                    <TableCell><span className="font-semibold">{acta.numero_acta}</span></TableCell>
-                                    <TableCell>{acta.ingreso?.numero_ingreso}</TableCell>
-                                    <TableCell>{new Date(acta.fecha_recepcion).toLocaleDateString()}</TableCell>
-                                    <TableCell>{acta.responsable_recepcion?.usuario}</TableCell>
+                                    <TableCell><span className="font-semibold">{acta.id}</span></TableCell>
+                                    <TableCell>{acta.cliente?.razon_social || '—'}</TableCell>
+                                    <TableCell>
+                                        {(acta.tipo_documento || 'Documento')}
+                                        {acta.numero_documento ? ` - ${acta.numero_documento}` : ''}
+                                    </TableCell>
+                                    <TableCell>{new Date(acta.fecha).toLocaleDateString()}</TableCell>
                                     <TableCell>{getEstadoBadge(acta.estado)}</TableCell>
-                                    <TableCell>{acta.detalle_acta?.length || 0}</TableCell>
+                                    <TableCell>{acta.detalles?.length || 0}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">
                                             <Button size="sm" onClick={() => setSelectedActa(acta)}>
