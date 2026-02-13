@@ -26,6 +26,28 @@ module.exports = new EntitySchema({
             type: 'date',
             nullable: true
         },
+        um: {
+            type: 'varchar',
+            length: 50,
+            nullable: true
+        },
+        fabricante: {
+            type: 'varchar',
+            length: 200,
+            nullable: true
+        },
+        temperatura_min_c: {
+            type: 'decimal',
+            precision: 5,
+            scale: 2,
+            nullable: true
+        },
+        temperatura_max_c: {
+            type: 'decimal',
+            precision: 5,
+            scale: 2,
+            nullable: true
+        },
         cantidad: {
             type: 'decimal',
             precision: 10,

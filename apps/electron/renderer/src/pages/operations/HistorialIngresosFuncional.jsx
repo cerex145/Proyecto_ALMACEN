@@ -100,12 +100,10 @@ export const HistorialIngresosFuncional = () => {
                 }
 
                 detalles.forEach((d, index) => {
-                    const tempMin = d.producto?.temperatura_min_c;
-                    const tempMax = d.producto?.temperatura_max_c;
+                    const tempMin = d.temperatura_min_c || d.producto?.temperatura_min_c;
+                    const tempMax = d.temperatura_max_c || d.producto?.temperatura_max_c;
                     let tempText = '-';
-                    if (d.temperatura) {
-                        tempText = d.temperatura;
-                    } else if (tempMin != null || tempMax != null) {
+                    if (tempMin != null || tempMax != null) {
                         tempText = `${tempMin ?? '-'} a ${tempMax ?? '-'}`;
                     }
 
@@ -115,14 +113,14 @@ export const HistorialIngresosFuncional = () => {
                         producto: d.producto?.descripcion || '-',
                         lote: d.lote_numero || '-',
                         vencimiento: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
-                        um: d.um || d.producto?.um || '-',
+                        um: d.um || d.producto?.um || d.producto?.unidad || '-',
                         fabricante: d.fabricante || d.producto?.fabricante || '-',
                         temperatura: tempText,
-                        cantBulto: d.cantidad_bultos ?? d.cant_bulto ?? '-',
-                        cantCajas: d.cantidad_cajas ?? d.cant_caja ?? '-',
-                        cantPorCaja: d.cantidad_por_caja ?? d.cant_por_caja ?? '-',
-                        cantFraccion: d.cantidad_fraccion ?? d.cant_fraccion ?? '-',
-                        cantTotal: d.cantidad_total ?? d.cant_total ?? d.cantidad ?? '-',
+                        cantBulto: d.cantidad_bultos ?? '-',
+                        cantCajas: d.cantidad_cajas ?? '-',
+                        cantPorCaja: d.cantidad_por_caja ?? '-',
+                        cantFraccion: d.cantidad_fraccion ?? '-',
+                        cantTotal: d.cantidad_total ?? d.cantidad ?? '-',
                         fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
                         mes,
                         dia,

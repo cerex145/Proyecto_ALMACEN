@@ -182,10 +182,6 @@ async function ingresosRoutes(fastify, options) {
                 properties: {
                     id: { type: 'integer' }
                 }
-            },
-            response: {
-                200: NotaIngresoResponseSchema,
-                404: ErrorResponseSchema
             }
         }
     }, async (request, reply) => {
@@ -196,10 +192,11 @@ async function ingresosRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
         }
 
-        const detalles = await notaIngresoDetalleRepo.find({
-            where: { nota_ingreso_id: Number(id) },
-            relations: ['producto']
-        });
+        const detalles = await notaIngresoDetalleRepo
+            .createQueryBuilder('detalle')
+            .leftJoinAndSelect('detalle.producto', 'producto')
+            .where('detalle.nota_ingreso_id = :id', { id: Number(id) })
+            .getMany();
 
         return {
             success: true,
@@ -236,6 +233,12 @@ async function ingresosRoutes(fastify, options) {
                                 precio_unitario: { type: 'number', minimum: 0 },
                                 lote_numero: { type: 'string' },
                                 fecha_vencimiento: { type: 'string', format: 'date' },
+                                um: { type: 'string' },
+                                fabricante: { type: 'string' },
+                                temperatura_min: { type: 'number' },
+                                temperatura_max: { type: 'number' },
+                                temperatura_min_c: { type: 'number' },
+                                temperatura_max_c: { type: 'number' },
                                 cantidad_bultos: { type: 'number' },
                                 cantidad_cajas: { type: 'number' },
                                 cantidad_por_caja: { type: 'number' },
@@ -347,6 +350,10 @@ async function ingresosRoutes(fastify, options) {
                         producto_id: detalle.producto_id,
                         lote_numero: detalle.lote_numero,
                         fecha_vencimiento: detalle.fecha_vencimiento,
+                        um: detalle.um || null,
+                        fabricante: detalle.fabricante || null,
+                        temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || null,
+                        temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || null,
                         cantidad: detalle.cantidad,
                         precio_unitario: detalle.precio_unitario || 0,
                         cantidad_bultos: detalle.cantidad_bultos || 0,
