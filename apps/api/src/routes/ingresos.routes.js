@@ -78,6 +78,7 @@ async function ingresosRoutes(fastify, options) {
     const notaIngresoRepo = fastify.db.getRepository('NotaIngreso');
     const notaIngresoDetalleRepo = fastify.db.getRepository('NotaIngresoDetalle');
     const productoRepo = fastify.db.getRepository('Producto');
+    const clienteRepo = fastify.db.getRepository('Cliente');
     const loteRepo = fastify.db.getRepository('Lote');
     const kardexRepo = fastify.db.getRepository('Kardex');
 
@@ -808,6 +809,15 @@ async function ingresosRoutes(fastify, options) {
             });
         }
 
+        const proveedor = String(nota.proveedor || '').trim();
+        const cliente = proveedor
+            ? await clienteRepo
+                .createQueryBuilder('cliente')
+                .where('cliente.razon_social = :proveedor', { proveedor })
+                .orWhere('cliente.razon_social LIKE :proveedorLike', { proveedorLike: `%${proveedor}%` })
+                .getOne()
+            : null;
+
         const detalles = await notaIngresoDetalleRepo.find({
             where: {
                 nota_ingreso_id: Number(id)
@@ -868,19 +878,19 @@ async function ingresosRoutes(fastify, options) {
                                 {
                                     columns: [
                                         { text: 'Código Cliente :', width: 80, style: 'labelBold' },
-                                        { text: '-', style: 'labelText' }
+                                        { text: cliente?.codigo || '-', style: 'labelText' }
                                     ]
                                 },
                                 {
                                     columns: [
                                         { text: 'RUC :', width: 80, style: 'labelBold' },
-                                        { text: '-', style: 'labelText' }
+                                        { text: cliente?.cuit || '-', style: 'labelText' }
                                     ]
                                 },
                                 {
                                     columns: [
                                         { text: 'Dirección :', width: 80, style: 'labelBold' },
-                                        { text: '-', style: 'labelText' }
+                                        { text: cliente?.direccion || '-', style: 'labelText' }
                                     ]
                                 }
                             ],
