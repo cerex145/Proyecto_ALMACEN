@@ -868,19 +868,19 @@ async function ingresosRoutes(fastify, options) {
                                 {
                                     columns: [
                                         { text: 'Código Cliente :', width: 80, style: 'labelBold' },
-                                        { text: 'CLI-2241-001', style: 'labelText' } // Mock o dato real si existiera
+                                        { text: '-', style: 'labelText' }
                                     ]
                                 },
                                 {
                                     columns: [
                                         { text: 'RUC :', width: 80, style: 'labelBold' },
-                                        { text: '20605712241', style: 'labelText' } // Mock o dato real
+                                        { text: '-', style: 'labelText' }
                                     ]
                                 },
                                 {
                                     columns: [
                                         { text: 'Dirección :', width: 80, style: 'labelBold' },
-                                        { text: 'JR. DIANA INT.11,MZ.D2,LT.25,1 Y 2 PIS URB.SANTA MARIA DE SURCO', style: 'labelText' } // Mock
+                                        { text: '-', style: 'labelText' }
                                     ]
                                 }
                             ],
@@ -893,6 +893,12 @@ async function ingresosRoutes(fastify, options) {
                                     columns: [
                                         { text: 'Fecha de Ingreso:', width: '*', alignment: 'right', style: 'labelBold' },
                                         { text: new Date(nota.fecha).toLocaleDateString('es-PE'), width: 100, alignment: 'right', style: 'labelText' }
+                                    ]
+                                },
+                                {
+                                    columns: [
+                                        { text: 'Motivo:', width: '*', alignment: 'right', style: 'labelBold' },
+                                        { text: '-', width: 100, alignment: 'right', style: 'labelText' }
                                     ]
                                 }
                             ],
@@ -959,8 +965,8 @@ async function ingresosRoutes(fastify, options) {
                             stack: [
                                 {
                                     text: [
-                                        { text: 'Motivo de la Salida:\n', bold: true, decoration: 'underline' },
-                                        { text: '(Describir causa)' } // No tenemos campo motivo salida en ingreso
+                                        { text: 'Motivo del Ingreso:\n', bold: true, decoration: 'underline' },
+                                        { text: '(Describir causa)' }
                                     ],
                                     margin: [0, 5, 0, 5]
                                 },
