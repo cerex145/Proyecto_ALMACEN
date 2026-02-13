@@ -360,29 +360,31 @@ export const ActaRecepcionForm = () => {
                 return;
             }
 
-            const detallesNormalizados = data.detalles.map((detalle) => {
-                const loteNumero = String(detalle.lote_numero || '').trim();
+            const detallesFuente = fields.length > 0 ? fields : (data.detalles || []);
+            const detallesNormalizados = detallesFuente.map((detalle, index) => {
+                const { id, ...detalleData } = detalle || {};
+                const loteNumero = String(detalleData.lote_numero || '').trim();
                 if (!loteNumero) {
-                    throw new Error('Cada producto debe tener un lote válido');
+                    throw new Error(`Producto #${index + 1}: cada producto debe tener un lote válido`);
                 }
 
                 return {
-                    ...detalle,
-                    producto_id: Number(detalle.producto_id),
+                    ...detalleData,
+                    producto_id: Number(detalleData.producto_id),
                     lote_numero: loteNumero,
-                    fecha_vencimiento: normalizeNullable(detalle.fecha_vencimiento),
-                    um: normalizeNullable(detalle.um),
-                    fabricante: normalizeNullable(detalle.fabricante),
-                    temperatura_min: toNullableNumber(detalle.temperatura_min),
-                    temperatura_max: toNullableNumber(detalle.temperatura_max),
-                    cantidad_solicitada: toNumberOrZero(detalle.cantidad_solicitada),
-                    cantidad_recibida: toNumberOrZero(detalle.cantidad_recibida),
-                    cantidad_bultos: toNumberOrZero(detalle.cantidad_bultos),
-                    cantidad_cajas: toNumberOrZero(detalle.cantidad_cajas),
-                    cantidad_por_caja: toNumberOrZero(detalle.cantidad_por_caja),
-                    cantidad_fraccion: toNumberOrZero(detalle.cantidad_fraccion),
-                    aspecto: detalle.aspecto || 'EMB',
-                    observaciones: normalizeNullable(detalle.observaciones)
+                    fecha_vencimiento: normalizeNullable(detalleData.fecha_vencimiento),
+                    um: normalizeNullable(detalleData.um),
+                    fabricante: normalizeNullable(detalleData.fabricante),
+                    temperatura_min: toNullableNumber(detalleData.temperatura_min),
+                    temperatura_max: toNullableNumber(detalleData.temperatura_max),
+                    cantidad_solicitada: toNumberOrZero(detalleData.cantidad_solicitada),
+                    cantidad_recibida: toNumberOrZero(detalleData.cantidad_recibida),
+                    cantidad_bultos: toNumberOrZero(detalleData.cantidad_bultos),
+                    cantidad_cajas: toNumberOrZero(detalleData.cantidad_cajas),
+                    cantidad_por_caja: toNumberOrZero(detalleData.cantidad_por_caja),
+                    cantidad_fraccion: toNumberOrZero(detalleData.cantidad_fraccion),
+                    aspecto: detalleData.aspecto || 'EMB',
+                    observaciones: normalizeNullable(detalleData.observaciones)
                 };
             });
 

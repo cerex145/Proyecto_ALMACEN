@@ -1,4 +1,3 @@
-const { getRepository } = require('typeorm');
 const { ActaRecepcion, ActaRecepcionDetalle } = require('../entities/ActaRecepcion');
 const { Cliente } = require('../entities/Cliente');
 const { Producto } = require('../entities/Producto');
@@ -9,7 +8,7 @@ module.exports = async function (fastify, opts) {
         try {
             const { cliente_id, fecha_desde, fecha_hasta, tipo_documento } = request.query;
             
-            const actasRepo = getRepository(ActaRecepcion);
+            const actasRepo = fastify.db.getRepository(ActaRecepcion);
             let query = actasRepo.createQueryBuilder('acta')
                 .leftJoinAndSelect('acta.cliente', 'cliente')
                 .leftJoinAndSelect('acta.detalles', 'detalles')
@@ -55,7 +54,7 @@ module.exports = async function (fastify, opts) {
         try {
             const { id } = request.params;
             
-            const actasRepo = getRepository(ActaRecepcion);
+            const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.createQueryBuilder('acta')
                 .leftJoinAndSelect('acta.cliente', 'cliente')
                 .leftJoinAndSelect('acta.detalles', 'detalles')
@@ -115,8 +114,8 @@ module.exports = async function (fastify, opts) {
                 });
             }
 
-            const actasRepo = getRepository(ActaRecepcion);
-            const detallesRepo = getRepository(ActaRecepcionDetalle);
+            const actasRepo = fastify.db.getRepository(ActaRecepcion);
+            const detallesRepo = fastify.db.getRepository(ActaRecepcionDetalle);
 
             // Crear acta principal
             const nuevaActa = actasRepo.create({
@@ -190,7 +189,7 @@ module.exports = async function (fastify, opts) {
         try {
             const { id } = request.params;
             
-            const actasRepo = getRepository(ActaRecepcion);
+            const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.findOne({ where: { id } });
 
             if (!acta) {
@@ -222,7 +221,7 @@ module.exports = async function (fastify, opts) {
             const { id } = request.params;
             const { estado, observaciones } = request.body;
             
-            const actasRepo = getRepository(ActaRecepcion);
+            const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.findOne({ where: { id } });
 
             if (!acta) {
@@ -267,7 +266,7 @@ module.exports = async function (fastify, opts) {
             const path = require('path');
 
             // Obtener acta con relaciones
-            const actasRepo = getRepository(ActaRecepcion);
+            const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.createQueryBuilder('acta')
                 .leftJoinAndSelect('acta.cliente', 'cliente')
                 .leftJoinAndSelect('acta.detalles', 'detalles')
