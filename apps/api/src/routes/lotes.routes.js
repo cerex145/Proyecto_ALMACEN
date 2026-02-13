@@ -86,8 +86,8 @@ async function lotesRoutes(fastify, options) {
         const skip = (page - 1) * limit;
         const queryBuilder = loteRepo.createQueryBuilder('lote');
 
-        // Join con NotaIngreso para filtrar por cliente
-        queryBuilder.leftJoinAndSelect('lote.notaIngreso', 'notaIngreso');
+        // Join con NotaIngreso para filtrar por cliente (sin seleccionar columnas)
+        queryBuilder.leftJoin('lote.notaIngreso', 'notaIngreso');
 
         if (producto_id) {
             queryBuilder.andWhere('lote.producto_id = :producto_id', { producto_id: Number(producto_id) });
