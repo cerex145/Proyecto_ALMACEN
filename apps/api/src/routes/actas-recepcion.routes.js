@@ -7,7 +7,7 @@ module.exports = async function (fastify, opts) {
     fastify.get('/api/actas', async (request, reply) => {
         try {
             const { cliente_id, fecha_desde, fecha_hasta, tipo_documento } = request.query;
-            
+
             const actasRepo = fastify.db.getRepository(ActaRecepcion);
             let query = actasRepo.createQueryBuilder('acta')
                 .leftJoinAndSelect('acta.cliente', 'cliente')
@@ -53,7 +53,7 @@ module.exports = async function (fastify, opts) {
     fastify.get('/api/actas/:id', async (request, reply) => {
         try {
             const { id } = request.params;
-            
+
             const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.createQueryBuilder('acta')
                 .leftJoinAndSelect('acta.cliente', 'cliente')
@@ -86,17 +86,20 @@ module.exports = async function (fastify, opts) {
     // POST /api/actas - Crear nueva acta de recepción
     fastify.post('/api/actas', async (request, reply) => {
         try {
-            const { 
-                fecha, 
-                tipo_documento, 
-                numero_documento, 
-                cliente_id, 
+            const {
+                fecha,
+                tipo_documento,
+                numero_documento,
+                cliente_id,
                 proveedor,
                 tipo_operacion,
                 tipo_conteo,
                 condicion_temperatura,
-                observaciones, 
-                detalles 
+                observaciones,
+                responsable_recepcion,
+                responsable_entrega,
+                jefe_almacen,
+                detalles
             } = request.body;
 
             // Validaciones
@@ -128,6 +131,9 @@ module.exports = async function (fastify, opts) {
                 tipo_conteo,
                 condicion_temperatura,
                 observaciones,
+                responsable_recepcion,
+                responsable_entrega,
+                jefe_almacen,
                 estado: 'activa'
             });
 
@@ -188,7 +194,7 @@ module.exports = async function (fastify, opts) {
     fastify.delete('/api/actas/:id', async (request, reply) => {
         try {
             const { id } = request.params;
-            
+
             const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.findOne({ where: { id } });
 
@@ -220,7 +226,7 @@ module.exports = async function (fastify, opts) {
         try {
             const { id } = request.params;
             const { estado, observaciones } = request.body;
-            
+
             const actasRepo = fastify.db.getRepository(ActaRecepcion);
             const acta = await actasRepo.findOne({ where: { id } });
 
@@ -281,265 +287,449 @@ module.exports = async function (fastify, opts) {
                 });
             }
 
-            // Logo
-            const logoPath = path.join(__dirname, '../assets/logo.png');
-            let logoImage = null;
-            if (fs.existsSync(logoPath)) {
-                logoImage = { image: logoPath, width: 150 };
-            } else {
-                logoImage = { text: 'AGUPAL PERU', style: 'brand', fontSize: 20 };
-            }
+            // Determinar checkboxes según tipo_documento
+            const tipoDoc = (acta.tipo_documento || '').toLowerCase();
+            const checkPackingList = tipoDoc.includes('packing') || tipoDoc.includes('package');
+            const checkInvoice = tipoDoc.includes('invoice');
+            const checkGuiaRemision = tipoDoc.includes('guía') || tipoDoc.includes('guia');
+            const checkFactura = tipoDoc.includes('factura');
 
-            // Calcular totales
-            const totalSolicitado = acta.detalles.reduce((acc, d) => acc + Number(d.cantidad_solicitada || 0), 0);
-            const totalRecibido = acta.detalles.reduce((acc, d) => acc + Number(d.cantidad_recibida || 0), 0);
-            const diferencia = totalRecibido - totalSolicitado;
+            // Determinar checkboxes según tipo_operacion
+            const tipoOp = (acta.tipo_operacion || '').toLowerCase();
+            const checkImportacion = tipoOp.includes('importa');
+            const checkCompraLocal = tipoOp.includes('compra') || tipoOp.includes('local');
+            const checkTraslado = tipoOp.includes('traslado');
+            const checkDevolucion = tipoOp.includes('devolu');
 
-            // Definición del documento
+            // Determinar checkboxes según tipo_conteo
+            const tipoConteo = (acta.tipo_conteo || '').toLowerCase();
+            const checkConteo100 = tipoConteo.includes('100');
+            const checkConteoMuestreo = tipoConteo.includes('muestreo');
+            const checkConteoSinApertura = tipoConteo.includes('sin apertura') || tipoConteo.includes('caja');
+
+            // Definición del documento con formato AGUPAL
             const docDefinition = {
                 pageSize: 'A4',
                 pageOrientation: 'landscape',
-                pageMargins: [20, 20, 20, 20],
+                pageMargins: [15, 15, 15, 15],
                 content: [
-                    // Encabezado
+                    // Número de documento en esquina superior derecha
                     {
-                        columns: [
-                            logoImage,
-                            { text: 'ACTA DE RECEPCIÓN', style: 'headerTitle', alignment: 'center', margin: [0, 10, 0, 0] },
-                            { 
-                                stack: [
-                                    { text: `Nº ${acta.id}`, style: 'headerNumber', alignment: 'right' },
-                                    { text: 'AGUPAL', style: 'headerSubtitle', alignment: 'right' }
-                                ],
-                                margin: [0, 5, 0, 0] 
-                            }
-                        ],
-                        margin: [0, 0, 0, 10]
-                    },
-                    { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 800, y2: 0, lineWidth: 1 }] },
-
-                    // Información del Acta
-                    {
-                        columns: [
-                            {
-                                width: '50%',
-                                stack: [
-                                    {
-                                        columns: [
-                                            { text: 'Cliente:', width: 100, style: 'labelBold' },
-                                            { text: acta.cliente?.nombre || '-', style: 'labelText' }
-                                        ]
-                                    },
-                                    {
-                                        columns: [
-                                            { text: 'Proveedor:', width: 100, style: 'labelBold' },
-                                            { text: acta.proveedor || '-', style: 'labelText' }
-                                        ]
-                                    },
-                                    {
-                                        columns: [
-                                            { text: 'Tipo Documento:', width: 100, style: 'labelBold' },
-                                            { text: acta.tipo_documento || '-', style: 'labelText' }
-                                        ]
-                                    },
-                                    {
-                                        columns: [
-                                            { text: 'Nº Documento:', width: 100, style: 'labelBold' },
-                                            { text: acta.numero_documento || '-', style: 'labelText' }
-                                        ]
-                                    }
-                                ],
-                                margin: [0, 10, 0, 0]
-                            },
-                            {
-                                width: '50%',
-                                stack: [
-                                    {
-                                        columns: [
-                                            { text: 'Fecha:', width: 120, alignment: 'right', style: 'labelBold' },
-                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: 100, alignment: 'right', style: 'labelText' }
-                                        ]
-                                    },
-                                    {
-                                        columns: [
-                                            { text: 'Tipo Operación:', width: 120, alignment: 'right', style: 'labelBold' },
-                                            { text: acta.tipo_operacion || '-', width: 100, alignment: 'right', style: 'labelText' }
-                                        ]
-                                    },
-                                    {
-                                        columns: [
-                                            { text: 'Tipo Conteo:', width: 120, alignment: 'right', style: 'labelBold' },
-                                            { text: acta.tipo_conteo || '-', width: 100, alignment: 'right', style: 'labelText' }
-                                        ]
-                                    },
-                                    {
-                                        columns: [
-                                            { text: 'Cond. Temperatura:', width: 120, alignment: 'right', style: 'labelBold' },
-                                            { text: acta.condicion_temperatura || '-', width: 100, alignment: 'right', style: 'labelText' }
-                                        ]
-                                    }
-                                ],
-                                margin: [0, 10, 0, 0]
-                            }
-                        ],
-                        margin: [0, 0, 0, 10]
+                        text: `N° ${acta.id}`,
+                        style: 'cornerNumber',
+                        alignment: 'right',
+                        margin: [0, 0, 0, 5]
                     },
 
-                    // Tabla de Productos
+                    // ENCABEZADO PRINCIPAL
                     {
                         table: {
-                            headerRows: 1,
-                            widths: [20, 50, '*', 50, 45, 30, 60, 45, 45, 45, 45, 40],
+                            widths: [120, '*', 80],
                             body: [
                                 [
-                                    { text: 'Item', style: 'tableHeader' },
-                                    { text: 'Código', style: 'tableHeader' },
-                                    { text: 'Producto', style: 'tableHeader' },
-                                    { text: 'Lote', style: 'tableHeader' },
-                                    { text: 'Vencimiento', style: 'tableHeader' },
-                                    { text: 'UM', style: 'tableHeader' },
-                                    { text: 'Fabricante', style: 'tableHeader' },
-                                    { text: 'Temp.', style: 'tableHeader' },
-                                    { text: 'Solicitado', style: 'tableHeader' },
-                                    { text: 'Recibido', style: 'tableHeader' },
-                                    { text: 'Diferencia', style: 'tableHeader' },
-                                    { text: 'Aspecto', style: 'tableHeader' }
-                                ],
-                                ...acta.detalles.map((d, idx) => {
-                                    const dif = Number(d.cantidad_recibida || 0) - Number(d.cantidad_solicitada || 0);
-                                    return [
-                                        { text: String(idx + 1), style: 'tableCell' },
-                                        { text: d.producto_codigo || d.producto?.codigo || '-', style: 'tableCell' },
-                                        { text: d.producto_nombre || d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
-                                        { text: d.lote_numero || '-', style: 'tableCell' },
-                                        { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-', style: 'tableCell' },
-                                        { text: d.um || '-', style: 'tableCell' },
-                                        { text: d.fabricante || '-', style: 'tableCell', alignment: 'left' },
-                                        { text: (d.temperatura_min && d.temperatura_max) ? `${d.temperatura_min}°-${d.temperatura_max}°C` : '-', style: 'tableCell' },
-                                        { text: parseFloat(d.cantidad_solicitada || 0).toFixed(2), style: 'tableCell' },
-                                        { text: parseFloat(d.cantidad_recibida || 0).toFixed(2), style: 'tableCell', bold: true },
-                                        { text: dif.toFixed(2), style: 'tableCell', color: dif === 0 ? 'green' : (dif > 0 ? 'blue' : 'red') },
-                                        { text: d.aspecto || 'EMB', style: 'tableCell' }
-                                    ];
-                                })
+                                    {
+                                        text: 'AGUPAL PERU',
+                                        style: 'brandLogo',
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        text: 'ACTA DE RECEPCION',
+                                        style: 'mainTitle',
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        text: 'POE.ALM. 01.01',
+                                        style: 'codeHeader',
+                                        border: [true, true, true, true]
+                                    }
+                                ]
                             ]
                         },
                         layout: {
-                            hLineWidth: function () { return 1; },
-                            vLineWidth: function () { return 1; },
-                            hLineColor: function () { return 'black'; },
-                            vLineColor: function () { return 'black'; },
-                            paddingLeft: function () { return 2; },
-                            paddingRight: function () { return 2; },
-                        }
+                            hLineWidth: () => 2,
+                            vLineWidth: () => 2,
+                            hLineColor: () => 'black',
+                            vLineColor: () => 'black'
+                        },
+                        margin: [0, 0, 0, 2]
                     },
 
-                    // Resumen y Observaciones
+                    // TABLA PRINCIPAL CON 3 SECCIONES
                     {
-                        columns: [
-                            {
-                                width: '*',
-                                stack: [
+                        table: {
+                            widths: [200, 160, 40, 140],
+                            body: [
+                                // FILA DE ENCABEZADOS
+                                [
+                                    { text: 'DATOS GENERALES', style: 'sectionHeader', colSpan: 1 },
+                                    { text: 'TIPO DOCUMENTARIO', style: 'sectionHeader', colSpan: 1 },
+                                    { text: 'TYPE', style: 'sectionHeader', colSpan: 1 },
+                                    { text: 'TIPO DE CONTEO Y REVISION', style: 'sectionHeader', colSpan: 1 }
+                                ],
+                                // FILA 1
+                                [
                                     {
-                                        text: [
-                                            { text: 'Observaciones:\n', bold: true, decoration: 'underline' },
-                                            { text: acta.observaciones || 'Sin observaciones' }
+                                        columns: [
+                                            { text: 'CLIENTE:', width: 60, style: 'labelBoldSmall' },
+                                            { text: acta.cliente?.razon_social || acta.cliente?.nombre || 'No encontrado', width: '*', style: 'dataText' }
                                         ],
-                                        margin: [0, 5, 0, 5]
+                                        border: [true, true, true, true]
                                     },
-                                    { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 500, y2: 0, lineWidth: 0.5 }] },
                                     {
-                                        text: [
-                                            { text: 'LEYENDA:\n', bold: true },
-                                            { text: 'Aspecto EMB: ', bold: true }, 'Empaque Bueno\n',
-                                            { text: 'Aspecto ENB: ', bold: true }, 'Empaque con No conformidades\n',
-                                            { text: 'Diferencia: ', bold: true }, 'Cantidad Recibida - Cantidad Solicitada\n'
+                                        columns: [
+                                            { text: 'PACKING LIST', width: 80, style: 'labelSmall' },
+                                            { text: checkPackingList ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: '', width: '*', style: 'dataText' }
                                         ],
-                                        style: 'legend',
-                                        margin: [0, 5, 0, 0]
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'IMPORTACION', width: 80, style: 'labelSmall' },
+                                            { text: checkImportacion ? '✓' : '', width: 15, style: 'checkbox' }
+                                        ],
+                                        colSpan: 2,
+                                        border: [true, true, true, true]
+                                    },
+                                    {}
+                                ],
+                                // FILA 2
+                                [
+                                    {
+                                        columns: [
+                                            { text: 'PROVEEDOR:', width: 60, style: 'labelBoldSmall' },
+                                            { text: acta.proveedor || 'No encontrado', width: '*', style: 'dataText' }
+                                        ],
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'INVOICE', width: 50, style: 'labelSmall' },
+                                            { text: checkInvoice ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: acta.numero_documento || '', width: '*', style: 'dataTextSmall' }
+                                        ],
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'COMPRA LOCAL', width: 80, style: 'labelSmall' },
+                                            { text: checkCompraLocal ? '✓' : '', width: 15, style: 'checkbox' }
+                                        ],
+                                        colSpan: 2,
+                                        border: [true, true, true, true]
+                                    },
+                                    {}
+                                ],
+                                // FILA 3
+                                [
+                                    {
+                                        columns: [
+                                            { text: 'FECHA:', width: 60, style: 'labelBoldSmall' },
+                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: '*', style: 'dataText' }
+                                        ],
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'GUIA REMISION', width: 80, style: 'labelSmall' },
+                                            { text: checkGuiaRemision ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: '', width: '*', style: 'dataText' }
+                                        ],
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'TRASLADO', width: 80, style: 'labelSmall' },
+                                            { text: checkTraslado ? '✓' : '', width: 15, style: 'checkbox' }
+                                        ],
+                                        colSpan: 2,
+                                        border: [true, true, true, true]
+                                    },
+                                    {}
+                                ],
+                                // FILA 4
+                                [
+                                    { text: '', border: [true, false, true, true] },
+                                    {
+                                        columns: [
+                                            { text: 'FACTURA', width: 50, style: 'labelSmall' },
+                                            { text: checkFactura ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: '', width: '*', style: 'dataText' }
+                                        ],
+                                        border: [true, true, true, true]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'DEVOLUCION', width: 80, style: 'labelSmall' },
+                                            { text: checkDevolucion ? '✓' : '', width: 15, style: 'checkbox' }
+                                        ],
+                                        colSpan: 2,
+                                        border: [true, true, true, true]
+                                    },
+                                    {}
+                                ]
+                            ]
+                        },
+                        layout: {
+                            hLineWidth: () => 1,
+                            vLineWidth: () => 1,
+                            hLineColor: () => 'black',
+                            vLineColor: () => 'black',
+                            paddingLeft: () => 3,
+                            paddingRight: () => 3,
+                            paddingTop: () => 2,
+                            paddingBottom: () => 2
+                        },
+                        margin: [0, 0, 0, 2]
+                    },
+
+                    // TABLA DE TIPO DE CONTEO (separada)
+                    {
+                        table: {
+                            widths: [100, 15, 15],
+                            body: [
+                                [
+                                    { text: 'CONTEO AL 100%', style: 'labelSmall' },
+                                    { text: 'A', style: 'labelBoldSmall', alignment: 'center' },
+                                    { text: checkConteo100 ? '✓' : '', style: 'checkbox', alignment: 'center' }
+                                ],
+                                [
+                                    { text: 'CONTEO POR MUESTREO', style: 'labelSmall' },
+                                    { text: 'B', style: 'labelBoldSmall', alignment: 'center' },
+                                    { text: checkConteoMuestreo ? '✓' : '', style: 'checkbox', alignment: 'center' }
+                                ],
+                                [
+                                    { text: 'CONT. SIM APERT. DE CAJA', style: 'labelSmall' },
+                                    { text: 'C', style: 'labelBoldSmall', alignment: 'center' },
+                                    { text: checkConteoSinApertura ? '✓' : '', style: 'checkbox', alignment: 'center' }
+                                ]
+                            ]
+                        },
+                        layout: {
+                            hLineWidth: () => 1,
+                            vLineWidth: () => 1,
+                            hLineColor: () => 'black',
+                            vLineColor: () => 'black',
+                            paddingLeft: () => 3,
+                            paddingRight: () => 3,
+                            paddingTop: () => 2,
+                            paddingBottom: () => 2
+                        },
+                        absolutePosition: { x: 550, y: 70 },
+                        margin: [0, 0, 0, 2]
+                    },
+
+                    // TABLA DE PRODUCTOS
+                    {
+                        table: {
+                            headerRows: 1,
+                            widths: [15, 45, '*', 50, 40, 35, 35, 35, 30, 30],
+                            body: [
+                                [
+                                    { text: 'N°', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'CODIGO PRODUCTO', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'DESCRIPCIÓN DEL PRODUCTO', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'FABRICANTE', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'LOTE/SERIE', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'F.VCTO.', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'CANT.SOLIC', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'CANT.RECI', style: 'tableHeader', rowSpan: 2 },
+                                    { text: 'ASPECTO', style: 'tableHeader', colSpan: 2 },
+                                    {}
+                                ],
+                                [
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    {},
+                                    { text: 'EMB.', style: 'tableHeaderSmall' },
+                                    { text: 'ENV.', style: 'tableHeaderSmall' }
+                                ],
+                                ...acta.detalles.map((d, idx) => [
+                                    { text: String(idx + 1), style: 'tableCell' },
+                                    { text: d.producto_codigo || d.producto?.codigo || '', style: 'tableCellSmall' },
+                                    { text: d.producto_nombre || d.producto?.descripcion || '', style: 'tableCellLeft' },
+                                    { text: d.fabricante || '', style: 'tableCellSmall' },
+                                    { text: d.lote_numero || '', style: 'tableCellSmall' },
+                                    { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '', style: 'tableCellSmall' },
+                                    { text: parseFloat(d.cantidad_solicitada || 0).toFixed(0), style: 'tableCell' },
+                                    { text: parseFloat(d.cantidad_recibida || 0).toFixed(0), style: 'tableCell' },
+                                    { text: d.aspecto === 'EMB' ? '✓' : '', style: 'tableCell' },
+                                    { text: d.aspecto === 'ENV' ? '✓' : '', style: 'tableCell' }
+                                ])
+                            ]
+                        },
+                        layout: {
+                            hLineWidth: () => 1,
+                            vLineWidth: () => 1,
+                            hLineColor: () => 'black',
+                            vLineColor: () => 'black',
+                            paddingLeft: () => 2,
+                            paddingRight: () => 2,
+                            paddingTop: () => 2,
+                            paddingBottom: () => 2,
+                            fillColor: (rowIndex) => {
+                                return rowIndex === 0 || rowIndex === 1 ? '#d3d3d3' : null;
+                            }
+                        },
+                        margin: [0, 0, 0, 2]
+                    },
+
+                    // OBSERVACIONES
+                    {
+                        text: [
+                            { text: 'OBSERVACIONES: ', style: 'labelBoldSmall', italics: true },
+                            { text: acta.observaciones || '', style: 'dataTextSmall', italics: true }
+                        ],
+                        margin: [0, 2, 0, 2]
+                    },
+
+                    // SECCIÓN DE FIRMAS
+                    {
+                        table: {
+                            widths: ['50%', '50%'],
+                            body: [
+                                [
+                                    { text: 'RECIBIDO Auxiliar de Recepcion', style: 'firmaHeader', fillColor: '#e5e7eb' },
+                                    { text: 'Verificado por Jefe de Almacen', style: 'firmaHeader', fillColor: '#e5e7eb' }
+                                ],
+                                [
+                                    {
+                                        columns: [
+                                            { text: 'NOMBRE:', width: 50, style: 'labelSmall' },
+                                            { text: acta.responsable_recepcion || '', width: '*', style: 'firmaNombre' }
+                                        ]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'NOMBRE:', width: 50, style: 'labelSmall' },
+                                            { text: acta.jefe_almacen || '', width: '*', style: 'firmaNombre' }
+                                        ]
+                                    }
+                                ],
+                                [
+                                    { text: '', margin: [0, 15, 0, 15] },
+                                    { text: '', margin: [0, 15, 0, 15] }
+                                ],
+                                [
+                                    {
+                                        columns: [
+                                            { text: 'FECHA:', width: 40, style: 'labelSmall' },
+                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: 60, style: 'dataTextSmall' },
+                                            { text: 'FIRMA', width: '*', style: 'labelSmall', alignment: 'right' }
+                                        ]
+                                    },
+                                    {
+                                        columns: [
+                                            { text: 'FECHA:', width: 40, style: 'labelSmall' },
+                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: 60, style: 'dataTextSmall' },
+                                            { text: 'FIRMA Y SELLO', width: '*', style: 'labelSmall', alignment: 'right' }
+                                        ]
                                     }
                                 ]
-                            },
-                            {
-                                width: 280,
-                                table: {
-                                    widths: ['50%', '50%'],
-                                    body: [
-                                        [
-                                            { text: 'TOTAL SOLICITADO', style: 'footerGridHeader' },
-                                            { text: 'TOTAL RECIBIDO', style: 'footerGridHeader' }
-                                        ],
-                                        [
-                                            { text: parseFloat(totalSolicitado).toFixed(2), style: 'footerGridValue', minHeight: 40 },
-                                            { text: parseFloat(totalRecibido).toFixed(2), style: 'footerGridValue', minHeight: 40, bold: true, color: 'blue' }
-                                        ],
-                                        [
-                                            { text: 'DIFERENCIA TOTAL', style: 'footerGridHeader', colSpan: 2 },
-                                            {}
-                                        ],
-                                        [
-                                            { 
-                                                text: diferencia.toFixed(2), 
-                                                style: 'footerGridValue', 
-                                                minHeight: 40, 
-                                                colSpan: 2,
-                                                bold: true,
-                                                color: diferencia === 0 ? 'green' : (diferencia > 0 ? 'blue' : 'red')
-                                            },
-                                            {}
-                                        ]
-                                    ]
-                                }
-                            }
-                        ],
-                        margin: [0, 10, 0, 0]
+                            ]
+                        },
+                        layout: {
+                            hLineWidth: () => 1,
+                            vLineWidth: () => 1,
+                            hLineColor: () => 'black',
+                            vLineColor: () => 'black',
+                            paddingLeft: () => 3,
+                            paddingRight: () => 3,
+                            paddingTop: () => 2,
+                            paddingBottom: () => 2
+                        },
+                        margin: [0, 2, 0, 2]
                     },
 
-                    // Firmas
+                    // LEYENDA
                     {
-                        columns: [
-                            { 
-                                stack: [
-                                    { text: '________________________' }, 
-                                    { text: 'Recepcionado por', style: 'firma' },
-                                    { text: '(Jefe de Almacén)', style: 'firmaDetail' }
-                                ], 
-                                alignment: 'center' 
-                            },
-                            { 
-                                stack: [
-                                    { text: '________________________' }, 
-                                    { text: 'Verificado por', style: 'firma' },
-                                    { text: '(Control de Calidad)', style: 'firmaDetail' }
-                                ], 
-                                alignment: 'center' 
-                            },
-                            { 
-                                stack: [
-                                    { text: '________________________' }, 
-                                    { text: 'Autorizado por', style: 'firma' },
-                                    { text: '(Gerencia)', style: 'firmaDetail' }
-                                ], 
-                                alignment: 'center' 
-                            }
-                        ],
-                        margin: [0, 40, 0, 0]
+                        table: {
+                            widths: ['*'],
+                            body: [
+                                [
+                                    {
+                                        stack: [
+                                            { text: 'LEYENDA', style: 'legendTitle', decoration: 'underline' },
+                                            {
+                                                columns: [
+                                                    { text: 'EMB: Embalaje', width: 80, style: 'legendText' },
+                                                    { text: '√: Conforme', width: 70, style: 'legendText' },
+                                                    { text: 'X: No Conforme', width: 80, style: 'legendText' },
+                                                    { text: 'NA: No Aplica', width: 70, style: 'legendText' },
+                                                    { text: 'DT: Director Técnico', width: 100, style: 'legendText' },
+                                                    { text: 'Q.F. A: Farmacéutico Asistente', width: '*', style: 'legendText' }
+                                                ],
+                                                margin: [0, 2, 0, 2]
+                                            },
+                                            { text: 'Características de Conformidad:', style: 'legendSubtitle', margin: [0, 2, 0, 1] },
+                                            {
+                                                text: 'DESCRIPCION: Nombre del producto, Concentración, forma farmacéutica, presentación farmacéutica de acuerdo al documento.',
+                                                style: 'legendDetail',
+                                                margin: [0, 0, 0, 1]
+                                            },
+                                            {
+                                                text: 'EMBALAJE: Embalaje, Limpio, no arrugado, no roto, no húmedo, no se encuentre abierto, u otro signo que indique deterioro del producto. Corresponde al producto, limpio, no arrugado, no roto, no húmedo, no se encuentre abierto o evidencia que no ha sido aperturado. Legibles, indelebles y en caso de etiquetas bien adheridas al envase con datos de descripción completos.',
+                                                style: 'legendDetail',
+                                                margin: [0, 0, 0, 1]
+                                            },
+                                            {
+                                                text: 'ENVASE: que no ha sido aperturado. Legibles, indelebles y en caso de etiquetas bien adheridas al envase con datos de descripción completos.',
+                                                style: 'legendDetail'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            ]
+                        },
+                        layout: {
+                            hLineWidth: () => 1,
+                            vLineWidth: () => 1,
+                            hLineColor: () => 'black',
+                            vLineColor: () => 'black',
+                            paddingLeft: () => 5,
+                            paddingRight: () => 5,
+                            paddingTop: () => 3,
+                            paddingBottom: () => 3
+                        },
+                        margin: [0, 2, 0, 0]
+                    },
+
+                    // CÓDIGO DE FORMULARIO
+                    {
+                        text: 'FR.ALM.01.01',
+                        style: 'formCode',
+                        alignment: 'right',
+                        margin: [0, 2, 0, 0]
                     }
                 ],
                 styles: {
-                    brand: { fontSize: 18, bold: true, color: '#0b6aa2' },
-                    headerTitle: { fontSize: 16, bold: true },
-                    headerNumber: { fontSize: 14, bold: true },
-                    headerSubtitle: { fontSize: 10, italics: true },
-                    labelBold: { fontSize: 8, bold: true },
-                    labelText: { fontSize: 8 },
-                    tableHeader: { fontSize: 7, bold: true, color: 'white', fillColor: '#1e40af', alignment: 'center' },
+                    cornerNumber: { fontSize: 8, bold: true },
+                    brandLogo: { fontSize: 14, bold: true, color: '#1e40af', alignment: 'center', margin: [0, 5, 0, 5] },
+                    mainTitle: { fontSize: 14, bold: true, alignment: 'center', margin: [0, 5, 0, 5] },
+                    codeHeader: { fontSize: 8, bold: true, alignment: 'center', margin: [0, 5, 0, 5] },
+                    sectionHeader: { fontSize: 8, bold: true, fillColor: '#d3d3d3', alignment: 'center', margin: [0, 2, 0, 2] },
+                    labelBoldSmall: { fontSize: 7, bold: true },
+                    labelSmall: { fontSize: 7, bold: true },
+                    dataText: { fontSize: 7 },
+                    dataTextSmall: { fontSize: 6 },
+                    checkbox: { fontSize: 10, bold: true },
+                    tableHeader: { fontSize: 7, bold: true, alignment: 'center', fillColor: '#d3d3d3' },
+                    tableHeaderSmall: { fontSize: 6, bold: true, alignment: 'center', fillColor: '#d3d3d3' },
                     tableCell: { fontSize: 7, alignment: 'center' },
-                    footerGridHeader: { fontSize: 8, bold: true, fillColor: '#e5e7eb', alignment: 'center' },
-                    footerGridValue: { fontSize: 10, bold: true, alignment: 'center', margin: [0, 5, 0, 0] },
-                    legend: { fontSize: 6 },
-                    firma: { fontSize: 9, bold: true, margin: [0, 5, 0, 0] },
-                    firmaDetail: { fontSize: 7, color: 'gray' }
+                    tableCellSmall: { fontSize: 6, alignment: 'center' },
+                    tableCellLeft: { fontSize: 6, alignment: 'left' },
+                    firmaHeader: { fontSize: 7, bold: true, margin: [0, 2, 0, 2] },
+                    firmaNombre: { fontSize: 7, bold: true, alignment: 'center' },
+                    legendTitle: { fontSize: 7, bold: true, margin: [0, 0, 0, 2] },
+                    legendText: { fontSize: 7, bold: true },
+                    legendSubtitle: { fontSize: 7, bold: true },
+                    legendDetail: { fontSize: 6 },
+                    formCode: { fontSize: 8, bold: true }
                 }
             };
 
