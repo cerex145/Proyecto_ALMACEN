@@ -27,12 +27,21 @@ export const productService = {
         return response.data;
     },
 
-    importProducts: async (file) => {
+    importProducts: async (file, numeroDocumento) => {
         const formData = new FormData();
-        formData.append('archivo', file);
+        formData.append('file', file);
+        if (numeroDocumento) {
+            formData.append('numero_documento', numeroDocumento);
+        }
         const response = await api.post('/productos/importar', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
+        return response.data;
+    },
+
+    createProductsLote: async (data) => {
+        // data.numero_documento string, data.productos array
+        const response = await api.post('/productos/lote', data);
         return response.data;
     },
 

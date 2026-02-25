@@ -76,7 +76,7 @@ module.exports = new EntitySchema({
         },
         um: {
             type: 'enum',
-            enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'],
+            enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'],
             nullable: true
         },
         temperatura_min_c: {

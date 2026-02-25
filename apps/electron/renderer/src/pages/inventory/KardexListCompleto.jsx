@@ -9,6 +9,8 @@ export const KardexListCompleto = () => {
     const [loading, setLoading] = useState(false);
     const [filtros, setFiltros] = useState({
         producto_id: '',
+        producto_nombre: '',
+        cliente_nombre: '',
         tipo_movimiento: '',
         fecha_desde: '',
         fecha_hasta: '',
@@ -33,14 +35,16 @@ export const KardexListCompleto = () => {
 
     const handleExportar = async () => {
         try {
-            const url = 'http://localhost:3000/api/kardex/exportar';
+            const queryParams = new URLSearchParams(filtros);
+            const url = `http://localhost:3000/api/kardex/exportar?${queryParams.toString()}`;
+
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('download-file', {
                     url,
                     filename: 'kardex.xlsx'
                 });
             } else {
-                const blob = await kardexService.exportar();
+                const blob = await kardexService.exportar(filtros);
                 const urlObj = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = urlObj;
@@ -83,12 +87,23 @@ export const KardexListCompleto = () => {
 
             <div style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
                 <div>
-                    <label>Producto ID</label>
+                    <label>Producto (Nombre o Cód.)</label>
                     <Input
-                        type="number"
-                        placeholder="ID del producto"
-                        value={filtros.producto_id}
-                        onChange={(e) => setFiltros({ ...filtros, producto_id: e.target.value })}
+                        type="text"
+                        placeholder="Buscar producto..."
+                        value={filtros.producto_nombre}
+                        onChange={(e) => setFiltros({ ...filtros, producto_nombre: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Enter' && cargarKardex()}
+                    />
+                </div>
+                <div>
+                    <label>Cliente / Proveedor</label>
+                    <Input
+                        type="text"
+                        placeholder="Buscar cliente..."
+                        value={filtros.cliente_nombre}
+                        onChange={(e) => setFiltros({ ...filtros, cliente_nombre: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Enter' && cargarKardex()}
                     />
                 </div>
                 <div>
@@ -134,9 +149,11 @@ export const KardexListCompleto = () => {
                     <TableHead>
                         <TableRow>
                             <TableHeader>Fecha</TableHeader>
-                            <TableHeader>Producto ID</TableHeader>
+                            <TableHeader>Producto</TableHeader>
                             <TableHeader>Lote</TableHeader>
-                            <TableHeader>Tipo Movimiento</TableHeader>
+                            <TableHeader>Cliente/Proveedor</TableHeader>
+                            <TableHeader>Tipo Mov.</TableHeader>
+                            <TableHeader>Documento</TableHeader>
                             <TableHeader>Cantidad</TableHeader>
                             <TableHeader>Saldo</TableHeader>
                             <TableHeader>Documento</TableHeader>
@@ -148,12 +165,25 @@ export const KardexListCompleto = () => {
                             movimientos.map((mov) => (
                                 <TableRow key={mov.id}>
                                     <TableCell>{new Date(mov.created_at).toLocaleDateString()}</TableCell>
-                                    <TableCell>{mov.producto_id}</TableCell>
-                                    <TableCell>{mov.lote_id || '-'}</TableCell>
+                                    <TableCell>
+                                        <div style={{ fontSize: '0.9em' }}>
+                                            <strong>{mov.producto?.codigo || '-'}</strong><br />
+                                            {mov.producto?.descripcion || `ID: ${mov.producto_id}`}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>{mov.lote_id || mov.lote_numero || '-'}</TableCell>
+                                    <TableCell>{mov.cliente_nombre || '-'}</TableCell>
                                     <TableCell>{getTipoMovimientoBadge(mov.tipo_movimiento)}</TableCell>
-                                    <TableCell>{mov.cantidad}</TableCell>
+                                    <TableCell>{mov.documento_referencia || (mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : '-')}</TableCell>
+                                    <TableCell>
+                                        <b style={{
+                                            color: (mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION') ? 'green' :
+                                                (mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO') ? 'red' : 'inherit'
+                                        }}>
+                                            {(mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION') ? '+' : (mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO') ? '-' : ''}{mov.cantidad}
+                                        </b>
+                                    </TableCell>
                                     <TableCell style={{ fontWeight: 'bold' }}>{mov.saldo}</TableCell>
-                                    <TableCell>{mov.documento_referencia || '-'}</TableCell>
                                     <TableCell>{mov.observaciones || '-'}</TableCell>
                                 </TableRow>
                             ))

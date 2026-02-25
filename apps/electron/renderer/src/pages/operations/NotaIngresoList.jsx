@@ -71,7 +71,7 @@ export const NotaIngresoList = () => {
 
             <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <Input
-                    placeholder="Buscar por número o proveedor..."
+                    placeholder="Buscar N° Ingreso, Proveedor o N° Doc..."
                     value={filtros.busqueda}
                     onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value })}
                 />

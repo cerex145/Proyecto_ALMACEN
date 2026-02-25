@@ -145,7 +145,7 @@ async function ingresosRoutes(fastify, options) {
 
         if (busqueda) {
             queryBuilder.where(
-                '(nota.numero_ingreso LIKE :busqueda OR nota.proveedor LIKE :busqueda)',
+                '(nota.numero_ingreso LIKE :busqueda OR nota.proveedor LIKE :busqueda OR nota.numero_documento LIKE :busqueda)',
                 { busqueda: `%${busqueda}%` }
             );
         }

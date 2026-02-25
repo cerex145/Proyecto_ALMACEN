@@ -5,6 +5,7 @@ import { Button } from '../../components/common/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/common/Card';
 import { LoteManager } from './LoteManager';
 import { ProductoForm } from './ProductoForm';
+import { CargaMasivaForm } from './CargaMasivaForm';
 
 export const ProductoList = () => {
     const [products, setProducts] = useState([]);
@@ -12,11 +13,16 @@ export const ProductoList = () => {
     const [selectedProduct, setSelectedProduct] = useState(null); // For Lotes
     const [isEditing, setIsEditing] = useState(false); // For Form
     const [editingProduct, setEditingProduct] = useState(null);
+    const [isMassCharge, setIsMassCharge] = useState(false);
+    const [searchDoc, setSearchDoc] = useState('');
 
     const loadProducts = async () => {
         try {
             setLoading(true);
-            const data = await productService.getProducts();
+            const params = {};
+            if (searchDoc) params.numero_documento = searchDoc;
+
+            const data = await productService.getProducts(params);
             setProducts(data);
         } catch (error) {
             console.error('Error loading products:', error);
@@ -27,7 +33,7 @@ export const ProductoList = () => {
 
     useEffect(() => {
         loadProducts();
-    }, []);
+    }, [searchDoc]);
 
     const getStockStatus = (stock, min) => {
         if (stock <= 0) return { label: 'Sin Stock', variant: 'anulado' };
@@ -38,17 +44,26 @@ export const ProductoList = () => {
     const handleCreate = () => {
         setEditingProduct(null);
         setIsEditing(true);
+        setIsMassCharge(false);
+        setSelectedProduct(null);
+    };
+
+    const handleMassCharge = () => {
+        setIsMassCharge(true);
+        setIsEditing(false);
         setSelectedProduct(null);
     };
 
     const handleEdit = (product) => {
         setEditingProduct(product);
         setIsEditing(true);
+        setIsMassCharge(false);
         setSelectedProduct(null);
     };
 
     const handleFormSuccess = () => {
         setIsEditing(false);
+        setIsMassCharge(false);
         loadProducts();
     };
 
@@ -62,6 +77,15 @@ export const ProductoList = () => {
         );
     }
 
+    if (isMassCharge) {
+        return (
+            <CargaMasivaForm
+                onSuccess={handleFormSuccess}
+                onCancel={() => setIsMassCharge(false)}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -69,9 +93,21 @@ export const ProductoList = () => {
                     <h1 className="text-2xl font-bold text-slate-800">Inventario de Productos</h1>
                     <p className="text-slate-500">Gestión general del catálogo</p>
                 </div>
-                <Button onClick={handleCreate} className="shadow-lg shadow-blue-500/20">
-                    + Nuevo Producto
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                    <input
+                        type="text"
+                        placeholder="Filtrar por N° Documento..."
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm min-w-[200px]"
+                        value={searchDoc}
+                        onChange={(e) => setSearchDoc(e.target.value)}
+                    />
+                    <Button onClick={handleMassCharge} className="bg-green-600 hover:bg-green-700 text-white shadow-lg mx-2">
+                        + Carga Masiva
+                    </Button>
+                    <Button onClick={handleCreate} className="shadow-lg shadow-blue-500/20">
+                        + Nuevo Producto
+                    </Button>
+                </div>
             </div>
 
             <div className="flex flex-col xl:flex-row gap-6 items-start">

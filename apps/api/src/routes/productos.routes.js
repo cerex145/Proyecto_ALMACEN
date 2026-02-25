@@ -18,7 +18,7 @@ const ProductoSchema = {
         fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
         unidad: { type: 'string', nullable: true },
         unidad_otro: { type: 'string', nullable: true },
-        um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'], nullable: true },
+        um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
         temperatura_min_c: { type: 'number', nullable: true },
         temperatura_max_c: { type: 'number', nullable: true },
         cantidad_bultos: { type: 'number' },
@@ -112,6 +112,7 @@ async function productoRoutes(fastify, options) {
             categoria_ingreso,
             lote,
             cliente_id,
+            numero_documento, // <-- Nuevo filtro
             page = 1,
             limit = 50,
             orderBy = 'descripcion',
@@ -135,6 +136,10 @@ async function productoRoutes(fastify, options) {
 
         if (activo !== undefined) {
             queryBuilder.andWhere('producto.activo = :activo', { activo: activo === 'true' });
+        }
+
+        if (numero_documento) {
+            queryBuilder.andWhere('producto.numero_documento LIKE :numero_documento', { numero_documento: `%${numero_documento}%` });
         }
 
         if (cliente_id) {
@@ -247,7 +252,7 @@ async function productoRoutes(fastify, options) {
                     fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
-                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'], nullable: true },
+                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
                     temperatura_min_c: { type: 'number', nullable: true },
                     temperatura_max_c: { type: 'number', nullable: true },
                     cantidad_bultos: { type: 'number', nullable: true },
@@ -381,7 +386,7 @@ async function productoRoutes(fastify, options) {
                     fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
-                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G'], nullable: true },
+                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
                     temperatura_min_c: { type: 'number', nullable: true },
                     temperatura_max_c: { type: 'number', nullable: true },
                     cantidad_bultos: { type: 'number', nullable: true },
@@ -526,7 +531,8 @@ async function productoRoutes(fastify, options) {
                 type: 'object',
                 required: ['file'],
                 properties: {
-                    file: { type: 'string', format: 'binary' }
+                    file: { isFileType: true },
+                    numero_documento: { type: 'string' }
                 }
             },
             response: {
@@ -541,15 +547,26 @@ async function productoRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const data = await request.file();
+        const parts = request.parts();
+        let fileBuffer = null;
+        let numeroDocumentoGeneral = null;
 
-        if (!data) {
+        for await (const part of parts) {
+            if (part.type === 'file') {
+                fileBuffer = await part.toBuffer();
+            } else {
+                if (part.fieldname === 'numero_documento') {
+                    numeroDocumentoGeneral = part.value;
+                }
+            }
+        }
+
+        if (!fileBuffer) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
 
-        const buffer = await data.toBuffer();
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(buffer);
+        await workbook.xlsx.load(fileBuffer);
         const worksheet = workbook.worksheets[0];
 
         const productos = [];
@@ -583,10 +600,17 @@ async function productoRoutes(fastify, options) {
         for (const productoData of productos) {
             const existente = await productoRepo.findOneBy({ codigo: productoData.codigo });
             if (!existente) {
-                await productoRepo.save(productoRepo.create(productoData));
+                const nuevoProducto = productoRepo.create({
+                    ...productoData,
+                    numero_documento: numeroDocumentoGeneral || null
+                });
+                await productoRepo.save(nuevoProducto);
                 insertados++;
             } else {
                 existente.descripcion = productoData.descripcion;
+                if (numeroDocumentoGeneral) {
+                    existente.numero_documento = numeroDocumentoGeneral;
+                }
                 await productoRepo.save(existente);
                 actualizados++;
             }
@@ -596,6 +620,93 @@ async function productoRoutes(fastify, options) {
             success: true,
             message: `Importación completada: ${insertados} insertados, ${actualizados} actualizados`
         };
+    });
+
+    // POST /api/productos/lote - Alta masiva manual
+    fastify.post('/api/productos/lote', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Crear o actualizar múltiples productos asignados a un número de documento',
+            body: {
+                type: 'object',
+                required: ['numero_documento', 'productos'],
+                properties: {
+                    numero_documento: { type: 'string' },
+                    productos: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['codigo', 'descripcion'],
+                            properties: {
+                                codigo: { type: 'string' },
+                                descripcion: { type: 'string' },
+                                cantidad: { type: 'number' },
+                                lote: { type: 'string' },
+                                // se pueden omitir o agregar los mismos que productoSchema si fuera necesario
+                            }
+                        }
+                    }
+                }
+            },
+            response: {
+                201: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' },
+                        insertados: { type: 'integer' },
+                        actualizados: { type: 'integer' }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
+        const { numero_documento, productos } = request.body;
+
+        if (!numero_documento || !productos || !Array.isArray(productos) || productos.length === 0) {
+            return reply.status(400).send({
+                success: false,
+                error: 'Número de documento y una lista de productos son requeridos'
+            });
+        }
+
+        let insertados = 0;
+        let actualizados = 0;
+
+        for (const prod of productos) {
+            if (!prod.codigo || !prod.descripcion) {
+                continue;
+            }
+
+            const existente = await productoRepo.findOneBy({ codigo: prod.codigo });
+            if (!existente) {
+                const nuevoProducto = productoRepo.create({
+                    codigo: prod.codigo,
+                    descripcion: prod.descripcion,
+                    stock_actual: prod.cantidad || 0,
+                    lote: prod.lote || null,
+                    numero_documento: numero_documento,
+                    activo: true
+                });
+                await productoRepo.save(nuevoProducto);
+                insertados++;
+            } else {
+                existente.descripcion = prod.descripcion;
+                if (prod.cantidad !== undefined) existente.stock_actual = (existente.stock_actual || 0) + prod.cantidad;
+                if (prod.lote) existente.lote = prod.lote;
+                existente.numero_documento = numero_documento;
+                await productoRepo.save(existente);
+                actualizados++;
+            }
+        }
+
+        return reply.status(201).send({
+            success: true,
+            message: `Lote procesado: ${insertados} creados, ${actualizados} actualizados`,
+            insertados,
+            actualizados
+        });
     });
 
     // GET /api/productos/exportar - Exportar a Excel

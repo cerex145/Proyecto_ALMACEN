@@ -58,44 +58,12 @@ export const ActaRecepcionForm = () => {
 
     const [lastActaId, setLastActaId] = useState(null);
 
-    // Estados para documentos de notas de ingreso
-    const [notasIngresoDocs, setNotasIngresoDocs] = useState([]);
-
-    const selectedTipoDocumento = watch('tipo_documento');
-    const numeroDocumentoActual = watch('numero_documento');
-
-    const [numeroDocumentoSeleccion, setNumeroDocumentoSeleccion] = useState('');
-    const [numeroDocumentoManual, setNumeroDocumentoManual] = useState('');
-
-    const tipoDocumentoOptions = useMemo(() => {
-        const extraOptions = new Set();
-
-        notasIngresoDocs.forEach((nota) => {
-            const value = String(nota?.tipo_documento || '').trim();
-            if (value) extraOptions.add(value);
-        });
-
-        return Array.from(extraOptions);
-    }, [notasIngresoDocs]);
-
-    const numeroDocumentoOptions = useMemo(() => {
-        const options = new Set();
-        const selected = String(selectedTipoDocumento || '').trim();
-
-        notasIngresoDocs.forEach((nota) => {
-            const tipo = String(nota?.tipo_documento || '').trim();
-            const numero = String(nota?.numero_documento || '').trim();
-            if (!numero) return;
-            if (selected && tipo !== selected) return;
-            options.add(numero);
-        });
-
-        return Array.from(options);
-    }, [notasIngresoDocs, selectedTipoDocumento]);
+    // Estados para la búsqueda por N° de Documento
+    const [numeroDocBusqueda, setNumeroDocBusqueda] = useState('');
+    const [buscandoDoc, setBuscandoDoc] = useState(false);
 
     useEffect(() => {
         loadClients();
-        loadNotasIngresoDocumentos();
     }, []);
 
     useEffect(() => {
@@ -115,39 +83,7 @@ export const ActaRecepcionForm = () => {
         }
     }, [selectedProduct, selectedClient]);
 
-    useEffect(() => {
-        if (!selectedTipoDocumento) return;
-        const currentNumero = String(getValues('numero_documento') || '').trim();
-        if (currentNumero && !numeroDocumentoOptions.includes(currentNumero)) {
-            setValue('numero_documento', '');
-            setNumeroDocumentoSeleccion('');
-            setNumeroDocumentoManual('');
-        }
-    }, [selectedTipoDocumento, numeroDocumentoOptions, getValues, setValue]);
 
-    useEffect(() => {
-        const currentNumero = String(numeroDocumentoActual || '').trim();
-        if (!currentNumero) {
-            if (numeroDocumentoSeleccion) setNumeroDocumentoSeleccion('');
-            if (numeroDocumentoManual) setNumeroDocumentoManual('');
-            return;
-        }
-
-        if (numeroDocumentoOptions.includes(currentNumero)) {
-            if (numeroDocumentoSeleccion !== currentNumero) {
-                setNumeroDocumentoSeleccion(currentNumero);
-            }
-            if (numeroDocumentoManual) setNumeroDocumentoManual('');
-            return;
-        }
-
-        if (numeroDocumentoSeleccion !== 'OTRO') {
-            setNumeroDocumentoSeleccion('OTRO');
-        }
-        if (numeroDocumentoManual !== currentNumero) {
-            setNumeroDocumentoManual(currentNumero);
-        }
-    }, [numeroDocumentoActual, numeroDocumentoOptions, numeroDocumentoSeleccion, numeroDocumentoManual]);
 
     // Auto-fill producto
     useEffect(() => {
@@ -209,105 +145,101 @@ export const ActaRecepcionForm = () => {
         }
     }, [selectedLoteId, lotesDisponibles]);
 
-    // Auto-cargar Nota de Ingreso cuando se ingresa el número de documento
-    const numeroDocumento = watch('numero_documento');
-    useEffect(() => {
-        const buscarYCargarNotaIngreso = async () => {
-            const numeroDoc = String(numeroDocumento || '').trim();
-            if (!numeroDoc) return;
+    const handleBuscarPorDocumento = async () => {
+        if (!numeroDocBusqueda) {
+            alert('Ingrese un número de documento para buscar');
+            return;
+        }
+        setBuscandoDoc(true);
+        try {
+            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?numero_documento=${encodeURIComponent(numeroDocBusqueda)}`);
+            const result = await response.json();
+            const notas = result.data || [];
 
-            try {
-                // Buscar nota de ingreso por número de documento
-                const tipoDoc = String(getValues('tipo_documento') || '').trim();
-                const queryParams = new URLSearchParams({ numero_documento: numeroDoc });
-                if (tipoDoc) queryParams.set('tipo_documento', tipoDoc);
-
-                const response = await fetch(`http://127.0.0.1:3000/api/ingresos?${queryParams.toString()}`);
-                if (!response.ok) return;
-
-                const result = await response.json();
-                const notas = result.data || [];
-
-                if (notas.length === 0) return;
-
-                // Tomar la primera nota que coincida
-                let nota = notas[0];
-                if (nota && (!nota.detalles || nota.detalles.length === 0)) {
-                    const notaResponse = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
-                    if (notaResponse.ok) {
-                        const notaDetalleResult = await notaResponse.json();
-                        nota = notaDetalleResult.data || notaDetalleResult;
-                    }
-                }
-
-                const proveedorNota = String(nota.proveedor || '').trim();
-                if (proveedorNota) {
-                    setProveedorNombre(proveedorNota);
-                    setValue('proveedor', proveedorNota);
-
-                    const proveedorKey = proveedorNota.toLowerCase();
-                    const clientMatch = clients.find((client) => {
-                        const razon = String(client.razon_social || '').trim().toLowerCase();
-                        return razon && razon === proveedorKey;
-                    });
-
-                    if (clientMatch) {
-                        const clientId = String(clientMatch.id);
-                        if (selectedClient !== clientId) {
-                            setSelectedClient(clientId);
-                        }
-                        setClienteRuc(clientMatch.cuit || '');
-                        setProveedorNombre(clientMatch.razon_social || proveedorNota);
-                        setValue('cliente_id', clientId);
-                        setValue('proveedor', clientMatch.razon_social || proveedorNota);
-                    } else if (!selectedClient) {
-                        setClienteRuc('');
-                        setValue('cliente_id', '');
-                    }
-                }
-
-                // Auto-llenar campos del documento
-                if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
-                if (nota.numero_documento) setValue('numero_documento', nota.numero_documento);
-                if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
-
-                if (nota.observaciones) {
-                    const currentObs = String(getValues('observaciones') || '').trim();
-                    if (!currentObs) setValue('observaciones', nota.observaciones);
-                }
-
-                // Limpiar productos actuales solo si hay productos en la nota
-                if (nota.detalles && nota.detalles.length > 0) {
-                    const detallesNota = nota.detalles.map((detalle) => ({
-                        producto_id: detalle.producto_id,
-                        producto_codigo: detalle.producto?.codigo || '',
-                        producto_nombre: detalle.producto?.descripcion || '',
-                        fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
-                        lote_numero: detalle.lote_numero || detalle.numero_lote || '',
-                        fecha_vencimiento: detalle.fecha_vencimiento,
-                        um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
-                        temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
-                        temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
-                        cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
-                        cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
-                        cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
-                        cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
-                        cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
-                        cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
-                        aspecto: 'EMB'
-                    }));
-
-                    replace(detallesNota);
-                }
-            } catch (error) {
-                console.error('Error al buscar nota de ingreso:', error);
+            if (notas.length === 0) {
+                alert('No se encontró ninguna nota de ingreso con ese número de documento.');
+                setBuscandoDoc(false);
+                return;
             }
-        };
 
-        // Debounce para evitar múltiples llamadas
-        const timeoutId = setTimeout(buscarYCargarNotaIngreso, 500);
-        return () => clearTimeout(timeoutId);
-    }, [numeroDocumento, clients, selectedClient]);
+            let nota = notas[0];
+            if (nota && (!nota.detalles || nota.detalles.length === 0)) {
+                const notaResponse = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+                if (notaResponse.ok) {
+                    const notaDetalleResult = await notaResponse.json();
+                    nota = notaDetalleResult.data || notaDetalleResult;
+                }
+            }
+
+            const proveedorNota = String(nota.proveedor || '').trim();
+            if (proveedorNota) {
+                setProveedorNombre(proveedorNota);
+                setValue('proveedor', proveedorNota);
+
+                const proveedorKey = proveedorNota.toLowerCase();
+                const clientMatch = clients.find((client) => {
+                    const razon = String(client.razon_social || '').trim().toLowerCase();
+                    return razon && razon === proveedorKey;
+                });
+
+                if (clientMatch) {
+                    const clientId = String(clientMatch.id);
+                    setSelectedClient(clientId);
+                    setClienteRuc(clientMatch.cuit || '');
+                    setProveedorNombre(clientMatch.razon_social || proveedorNota);
+                    setValue('cliente_id', clientId);
+                    setValue('proveedor', clientMatch.razon_social || proveedorNota);
+                } else {
+                    alert(`El proveedor/cliente "${proveedorNota}" del ingreso no fue encontrado en el catálogo de clientes. Por favor, asigne el cliente manualmente.`);
+                    setSelectedClient('');
+                    setClienteRuc('');
+                    setValue('cliente_id', '');
+                }
+            }
+
+            // Auto-llenar campos del documento
+            if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
+            if (nota.numero_documento) setValue('numero_documento', nota.numero_documento);
+            if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
+
+            if (nota.observaciones) {
+                const currentObs = String(getValues('observaciones') || '').trim();
+                if (!currentObs) setValue('observaciones', nota.observaciones);
+            }
+
+            // Reemplazar productos actuales
+            if (nota.detalles && nota.detalles.length > 0) {
+                const detallesNota = nota.detalles.map((detalle) => ({
+                    producto_id: detalle.producto_id,
+                    producto_codigo: detalle.producto?.codigo || '',
+                    producto_nombre: detalle.producto?.descripcion || '',
+                    fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                    lote_numero: detalle.lote_numero || detalle.numero_lote || '',
+                    fecha_vencimiento: detalle.fecha_vencimiento,
+                    um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                    temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                    temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                    cantidad_solicitada: parseFloat(detalle.cantidad_total || 0),
+                    cantidad_recibida: parseFloat(detalle.cantidad_total || 0),
+                    cantidad_bultos: parseFloat(detalle.cantidad_bultos || 0),
+                    cantidad_cajas: parseFloat(detalle.cantidad_cajas || 0),
+                    cantidad_por_caja: parseFloat(detalle.cantidad_por_caja || 0),
+                    cantidad_fraccion: parseFloat(detalle.cantidad_fraccion || 0),
+                    aspecto: 'EMB'
+                }));
+
+                replace(detallesNota);
+                alert(`✅ Se cargaron los datos básicos y ${detallesNota.length} producto(s) desde el documento.`);
+            } else {
+                alert('Se cargaron los datos básicos, pero la nota de ingreso no tiene detalles de productos.');
+            }
+        } catch (error) {
+            console.error('Error al buscar nota de ingreso:', error);
+            alert('Ocurrió un error al buscar nota de ingreso.');
+        } finally {
+            setBuscandoDoc(false);
+        }
+    };
 
     // Auto-cálculo de cantidad recibida
     useEffect(() => {
@@ -362,32 +294,7 @@ export const ActaRecepcionForm = () => {
         }
     };
 
-    const loadNotasIngresoDocumentos = async () => {
-        try {
-            const limit = 200;
-            let page = 1;
-            let totalPages = 1;
-            const allNotas = [];
 
-            while (page <= totalPages) {
-                const response = await fetch(`http://127.0.0.1:3000/api/ingresos?page=${page}&limit=${limit}`);
-                if (!response.ok) throw new Error('Error al cargar notas de ingreso');
-
-                const result = await response.json();
-                const notas = result.data || [];
-                const pagination = result.pagination || {};
-
-                allNotas.push(...notas);
-                totalPages = Number(pagination.totalPages || 1);
-                page += 1;
-            }
-
-            setNotasIngresoDocs(allNotas);
-        } catch (error) {
-            console.error('Error loading documentos de notas ingreso:', error);
-            setNotasIngresoDocs([]);
-        }
-    };
 
     const handleAddProducto = () => {
         if (!selectedProduct) {
@@ -548,8 +455,6 @@ export const ActaRecepcionForm = () => {
         setSelectedLoteId('');
         setProducts([]);
         setLotesDisponibles([]);
-        setNumeroDocumentoSeleccion('');
-        setNumeroDocumentoManual('');
         setLote('');
         setVencimiento('');
         setUm('');
@@ -601,6 +506,30 @@ export const ActaRecepcionForm = () => {
                 </div>
             </div>
 
+            <Card className="p-4 bg-blue-50 border-blue-200">
+                <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                        <label className="label-premium text-blue-800">Autocompletar por N° de Documento de Ingreso</label>
+                        <input
+                            type="text"
+                            className="input-premium border-blue-300 focus:border-blue-500 focus:ring-blue-200"
+                            placeholder="Ingrese N° de Documento (ej. DOC-123)"
+                            value={numeroDocBusqueda}
+                            onChange={(e) => setNumeroDocBusqueda(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleBuscarPorDocumento()}
+                        />
+                    </div>
+                    <Button
+                        type="button"
+                        onClick={handleBuscarPorDocumento}
+                        disabled={buscandoDoc}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                        {buscandoDoc ? 'Buscando...' : '🔍 Buscar y Cargar'}
+                    </Button>
+                </div>
+            </Card>
+
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 {/* Información del Documento */}
                 <Card className="p-6">
@@ -608,52 +537,20 @@ export const ActaRecepcionForm = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                             <label className="label-premium">Tipo de Documento *</label>
-                            <select {...register('tipo_documento', { required: true })} className="input-premium">
-                                <option value="">Seleccione...</option>
-                                {tipoDocumentoOptions.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                ))}
-                            </select>
+                            <input
+                                {...register('tipo_documento', { required: true })}
+                                className="input-premium"
+                                placeholder="Ej: Factura, Guía Remisión..."
+                            />
                             {errors.tipo_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
                             <label className="label-premium">Número de Documento *</label>
-                            <select
-                                value={numeroDocumentoSeleccion}
-                                onChange={(event) => {
-                                    const value = event.target.value;
-                                    setNumeroDocumentoSeleccion(value);
-
-                                    if (value === 'OTRO') {
-                                        setNumeroDocumentoManual('');
-                                        setValue('numero_documento', '');
-                                        return;
-                                    }
-
-                                    setNumeroDocumentoManual('');
-                                    setValue('numero_documento', value);
-                                }}
+                            <input
+                                {...register('numero_documento', { required: true })}
                                 className="input-premium"
-                            >
-                                <option value="">Seleccione...</option>
-                                {numeroDocumentoOptions.map((option) => (
-                                    <option key={option} value={option}>{option}</option>
-                                ))}
-                                <option value="OTRO">Otro</option>
-                            </select>
-                            {numeroDocumentoSeleccion === 'OTRO' && (
-                                <input
-                                    value={numeroDocumentoManual}
-                                    onChange={(event) => {
-                                        const value = event.target.value;
-                                        setNumeroDocumentoManual(value);
-                                        setValue('numero_documento', value);
-                                    }}
-                                    className="input-premium mt-2"
-                                    placeholder="Ingrese numero de documento"
-                                />
-                            )}
-                            <input type="hidden" {...register('numero_documento', { required: true })} />
+                                placeholder="Ej: F001-00045"
+                            />
                             {errors.numero_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>

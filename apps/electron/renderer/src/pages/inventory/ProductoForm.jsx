@@ -263,6 +263,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                         <option value="CJ">CJ</option>
                                         <option value="KG">KG</option>
                                         <option value="G">G</option>
+                                        <option value="UND">UND</option>
                                     </select>
                                 </div>
                                 <div>

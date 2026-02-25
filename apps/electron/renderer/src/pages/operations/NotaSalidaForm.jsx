@@ -54,6 +54,9 @@ export const NotaSalidaForm = () => {
     const [cantidadTotal, setCantidadTotal] = useState(0);
     const [lastSalidaId, setLastSalidaId] = useState(null);
 
+    const [numeroDocBusqueda, setNumeroDocBusqueda] = useState('');
+    const [buscandoDoc, setBuscandoDoc] = useState(false);
+
     const normalizeDateInput = (value) => {
         if (!value) {
             return '';
@@ -233,6 +236,91 @@ export const NotaSalidaForm = () => {
     // const loadData replaced by separated functions
     // loadData removed
 
+    const handleBuscarPorDocumento = async () => {
+        if (!numeroDocBusqueda) {
+            alert('Ingrese un número de documento para buscar');
+            return;
+        }
+        setBuscandoDoc(true);
+        try {
+            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?numero_documento=${encodeURIComponent(numeroDocBusqueda)}`);
+            const result = await response.json();
+            const notas = result.data || [];
+            if (notas.length === 0) {
+                alert('No se encontró ninguna nota de ingreso con ese número de documento.');
+                setBuscandoDoc(false);
+                return;
+            }
+
+            // Tomamos la primera coincidencia
+            const nota = notas[0];
+
+            // Buscar el cliente por razon_social = nota.proveedor
+            const client = clients.find(c => c.razon_social?.toUpperCase() === nota.proveedor?.toUpperCase());
+            if (client) {
+                setSelectedClient(client.id);
+            } else {
+                alert(`Atención: No se encontró un cliente registrado con la razón social "${nota.proveedor}". Deberá seleccionarlo manualmente.`);
+            }
+
+            // Cargar detalles de esa nota
+            const detRes = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+            const detJson = await detRes.json();
+            const detallesRaw = detJson?.data?.detalles || [];
+            const disponibles = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
+
+            if (disponibles.length === 0) {
+                alert('La nota de ingreso encontrada no tiene productos con saldo disponible.');
+                setBuscandoDoc(false);
+                return;
+            }
+
+            let agregados = 0;
+            disponibles.forEach(detalle => {
+                const disponible = getDetalleDisponible(detalle);
+                const existingIndex = fields.findIndex(
+                    f => Number(f.producto_id) === Number(detalle.producto_id) &&
+                        f.lote_numero === detalle.lote_numero
+                );
+
+                if (existingIndex < 0) {
+                    append({
+                        producto_id: Number(detalle.producto_id),
+                        producto_codigo: detalle.producto?.codigo || '',
+                        producto_nombre: detalle.producto?.descripcion || '',
+                        lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
+                        lote_numero: detalle.lote_numero || '',
+                        fecha_vencimiento: detalle.fecha_vencimiento || '',
+                        um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                        fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                        temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                        temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                        cant_bulto: Number(detalle.cantidad_bultos || 0),
+                        cant_caja: Number(detalle.cantidad_cajas || 0),
+                        cant_por_caja: Number(detalle.cantidad_por_caja || 0),
+                        cant_fraccion: Number(detalle.cantidad_fraccion || 0),
+                        cant_total: disponible,
+                        cantidad: disponible,
+                        cantidad_disponible: disponible
+                    });
+                    agregados++;
+                }
+            });
+
+            if (agregados > 0) {
+                alert(`✅ Se agregaron ${agregados} productos asociados a este documento.`);
+            } else {
+                alert('Todos los productos con saldo de este documento ya estaban en la lista.');
+            }
+
+        } catch (error) {
+            console.error('Error buscando por documento:', error);
+            alert('Ocurrió un error al buscar el documento.');
+        } finally {
+            setBuscandoDoc(false);
+        }
+    };
+
     const handleSelectTodaNota = (notaId) => {
         const nota = notasIngreso.find(n => n.id === notaId);
         if (!nota || !nota.detalles || nota.detalles.length === 0) {
@@ -258,11 +346,11 @@ export const NotaSalidaForm = () => {
             alert('Este detalle ya no tiene saldo disponible');
             return;
         }
-        
+
         // Verificar si ya existe este producto con el mismo lote
         const existingIndex = fields.findIndex(
-            f => Number(f.producto_id) === Number(detalle.producto_id) && 
-                 f.lote_numero === detalle.lote_numero
+            f => Number(f.producto_id) === Number(detalle.producto_id) &&
+                f.lote_numero === detalle.lote_numero
         );
 
         if (existingIndex >= 0) {
@@ -464,7 +552,7 @@ export const NotaSalidaForm = () => {
                     precio_unitario: det.precio_unitario ? Number(det.precio_unitario) : null
                 }))
             };
-            
+
             console.log('📤 Enviando payload:', JSON.stringify(payload, null, 2));
             const created = await operationService.createSalida(payload);
             setLastSalidaId(created?.id || null);
@@ -511,6 +599,30 @@ export const NotaSalidaForm = () => {
                     <p className="text-slate-500">Controles de Nota de Salida</p>
                 </div>
             </div>
+
+            <Card className="p-4 bg-purple-50 border-purple-200">
+                <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                        <label className="label-premium text-purple-800">Autocompletar por N° de Documento de Ingreso</label>
+                        <input
+                            type="text"
+                            className="input-premium border-purple-300 focus:border-purple-500 focus:ring-purple-200"
+                            placeholder="Ingrese N° de Documento (ej. DOC-123)"
+                            value={numeroDocBusqueda}
+                            onChange={(e) => setNumeroDocBusqueda(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleBuscarPorDocumento()}
+                        />
+                    </div>
+                    <Button
+                        type="button"
+                        onClick={handleBuscarPorDocumento}
+                        disabled={buscandoDoc}
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                        {buscandoDoc ? 'Buscando...' : '🔍 Buscar y Cargar'}
+                    </Button>
+                </div>
+            </Card>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                 <Card className="p-6">
@@ -702,8 +814,8 @@ export const NotaSalidaForm = () => {
                         <Button type="button" onClick={handleAddLine} variant="primary" className="bg-green-600 hover:bg-green-700">
                             ➕ Agregar Producto
                         </Button>
-                        <Button 
-                            type="button" 
+                        <Button
+                            type="button"
                             onClick={handleRemoveSelected}
                             className="bg-red-600 hover:bg-red-700 text-white font-bold"
                             disabled={fields.length === 0}
@@ -842,8 +954,8 @@ export const NotaSalidaForm = () => {
                         </div>
 
                         <div className="md:col-span-12 flex justify-end gap-3">
-                            <Button 
-                                type="button" 
+                            <Button
+                                type="button"
                                 onClick={handleRemoveSelected}
                                 className="bg-red-600 hover:bg-red-700 text-white font-bold w-full md:w-auto"
                                 disabled={fields.length === 0}

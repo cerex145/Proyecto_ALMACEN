@@ -20,8 +20,9 @@ export const kardexService = {
     },
 
     // Exportar a Excel
-    exportar: async () => {
+    exportar: async (filtros = {}) => {
         const response = await api.get('/kardex/exportar', {
+            params: filtros,
             responseType: 'blob'
         });
         return response.data;

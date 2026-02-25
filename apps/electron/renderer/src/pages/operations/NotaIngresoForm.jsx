@@ -745,6 +745,7 @@ export const NotaIngresoForm = () => {
                                 <option value="CJ">CJ</option>
                                 <option value="KG">KG</option>
                                 <option value="G">G</option>
+                                <option value="UND">UND</option>
                             </select>
                         </div>
                         <div className="md:col-span-2">
@@ -1065,8 +1066,8 @@ PROD002,LOTE-2024-002,500`}
                                         disabled={!selectedClient}
                                     />
                                     <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${selectedClient
-                                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
-                                            : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+                                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
+                                        : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
                                         }`}>
                                         📂 Seleccionar Archivo
                                     </div>

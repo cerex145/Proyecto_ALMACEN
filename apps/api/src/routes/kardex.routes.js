@@ -57,6 +57,8 @@ async function kardexRoutes(fastify, options) {
                 type: 'object',
                 properties: {
                     producto_id: { type: 'integer', description: 'Filtrar por ID de producto' },
+                    producto_nombre: { type: 'string', description: 'Filtrar por nombre o código de producto' },
+                    cliente_nombre: { type: 'string', description: 'Filtrar por nombre de cliente o proveedor' },
                     lote_id: { type: 'string', description: 'Filtrar por número de lote' },
                     tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE'], description: 'Tipo de movimiento' },
                     fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio' },
@@ -81,6 +83,8 @@ async function kardexRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             producto_id,
+            producto_nombre,
+            cliente_nombre,
             lote_id,
             tipo_movimiento,
             fecha_desde,
@@ -101,9 +105,13 @@ async function kardexRoutes(fastify, options) {
                 k.id, k.producto_id, k.lote_numero, k.tipo_movimiento,
                 k.cantidad, k.saldo, k.documento_tipo, k.documento_numero,
                 k.referencia_id, k.observaciones, k.created_at,
-                p.codigo as codigo_producto, p.descripcion as descripcion_producto
+                p.codigo as codigo_producto, p.descripcion as descripcion_producto,
+                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
+            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento = 'INGRESO'
+            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id AND k.tipo_movimiento = 'SALIDA'
+            LEFT JOIN clientes c ON ns.cliente_id = c.id
             WHERE 1=1
         `;
 
@@ -114,9 +122,19 @@ async function kardexRoutes(fastify, options) {
             params.push(Number(producto_id));
         }
 
+        if (producto_nombre) {
+            sql += ` AND (p.descripcion LIKE ? OR p.codigo LIKE ?)`;
+            params.push(`%${producto_nombre}%`, `%${producto_nombre}%`);
+        }
+
+        if (cliente_nombre) {
+            sql += ` AND COALESCE(ni.proveedor, c.razon_social) LIKE ?`;
+            params.push(`%${cliente_nombre}%`);
+        }
+
         if (lote_id) {
-            sql += ` AND k.lote_numero = ?`;
-            params.push(String(lote_id));
+            sql += ` AND k.lote_numero LIKE ?`;
+            params.push(`%${lote_id}%`);
         }
 
         if (tipo_movimiento) {
@@ -125,12 +143,12 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (fecha_desde) {
-            sql += ` AND k.created_at >= ?`;
+            sql += ` AND DATE(k.created_at) >= ?`;
             params.push(fecha_desde);
         }
 
         if (fecha_hasta) {
-            sql += ` AND k.created_at <= ?`;
+            sql += ` AND DATE(k.created_at) <= ?`;
             params.push(fecha_hasta);
         }
 
@@ -162,6 +180,7 @@ async function kardexRoutes(fastify, options) {
             documento_numero: row.documento_numero,
             referencia_id: row.referencia_id,
             observaciones: row.observaciones,
+            cliente_nombre: row.cliente_nombre || 'N/A',
             created_at: row.created_at,
             producto: {
                 id: row.producto_id,
@@ -242,7 +261,11 @@ async function kardexRoutes(fastify, options) {
             querystring: {
                 type: 'object',
                 properties: {
-                    producto_id: { type: 'integer', description: 'Filtrar por ID de producto' }
+                    producto_id: { type: 'integer', description: 'Filtrar por ID de producto' },
+                    producto_nombre: { type: 'string', description: 'Filtrar por nombre o código de producto' },
+                    cliente_nombre: { type: 'string', description: 'Filtrar por nombre de cliente o proveedor' },
+                    fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio' },
+                    fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin' },
                 }
             },
             response: {
@@ -254,44 +277,88 @@ async function kardexRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { producto_id } = request.query;
+        const { producto_id, producto_nombre, cliente_nombre, fecha_desde, fecha_hasta } = request.query;
 
-        let queryBuilder = kardexRepo.createQueryBuilder('kardex');
+        const connection = kardexRepo.manager.connection;
+
+        let sql = `
+            SELECT 
+                k.id, k.producto_id, k.lote_numero, k.tipo_movimiento,
+                k.cantidad, k.saldo, k.documento_tipo, k.documento_numero,
+                k.referencia_id, k.observaciones, k.created_at,
+                p.codigo as codigo_producto, p.descripcion as descripcion_producto,
+                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre
+            FROM kardex k
+            LEFT JOIN productos p ON k.producto_id = p.id
+            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento = 'INGRESO'
+            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id AND k.tipo_movimiento = 'SALIDA'
+            LEFT JOIN clientes c ON ns.cliente_id = c.id
+            WHERE 1=1
+        `;
+
+        const params = [];
 
         if (producto_id) {
-            queryBuilder = queryBuilder.where('kardex.producto_id = :producto_id', { producto_id: Number(producto_id) });
+            sql += ` AND k.producto_id = ?`;
+            params.push(Number(producto_id));
         }
 
-        const movimientos = await queryBuilder
-            .leftJoinAndSelect('kardex.producto', 'producto')
-            .orderBy('kardex.created_at', 'ASC')
-            .getMany();
+        if (producto_nombre) {
+            sql += ` AND (p.descripcion LIKE ? OR p.codigo LIKE ?)`;
+            params.push(`%${producto_nombre}%`, `%${producto_nombre}%`);
+        }
+
+        if (cliente_nombre) {
+            sql += ` AND COALESCE(ni.proveedor, c.razon_social) LIKE ?`;
+            params.push(`%${cliente_nombre}%`);
+        }
+
+        if (fecha_desde) {
+            sql += ` AND DATE(k.created_at) >= ?`;
+            params.push(fecha_desde);
+        }
+
+        if (fecha_hasta) {
+            sql += ` AND DATE(k.created_at) <= ?`;
+            params.push(fecha_hasta);
+        }
+
+        sql += ` ORDER BY k.created_at ASC`;
+
+        const movimientos = await connection.query(sql, params);
 
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Kardex');
 
         worksheet.columns = [
-            { header: 'Fecha', key: 'fecha', width: 15 },
+            { header: 'Fecha', key: 'fecha', width: 20 },
+            { header: 'Documento', key: 'documento', width: 25 },
+            { header: 'Cliente / Proveedor', key: 'cliente_nombre', width: 40 },
             { header: 'Código Producto', key: 'codigo_producto', width: 15 },
-            { header: 'Descripción', key: 'descripcion', width: 40 },
-            { header: 'Número Lote', key: 'lote_numero', width: 20 },
-            { header: 'Tipo Movimiento', key: 'tipo_movimiento', width: 20 },
-            { header: 'Cantidad', key: 'cantidad', width: 15 },
+            { header: 'Producto', key: 'descripcion', width: 40 },
+            { header: 'Lote', key: 'lote_numero', width: 20 },
+            { header: 'Tipo Mvto', key: 'tipo_movimiento', width: 20 },
+            { header: 'Ingreso', key: 'ingreso', width: 15 },
+            { header: 'Salida', key: 'salida', width: 15 },
             { header: 'Saldo', key: 'saldo', width: 15 },
-            { header: 'Documento', key: 'documento', width: 20 },
             { header: 'Observaciones', key: 'observaciones', width: 40 }
         ];
 
         movimientos.forEach(mov => {
+            const isIngreso = mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION';
+            const isSalida = mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO';
+
             worksheet.addRow({
-                fecha: new Date(mov.created_at).toLocaleDateString('es-AR'),
-                codigo_producto: mov.producto?.codigo || 'N/A',
-                descripcion: mov.producto?.descripcion || 'N/A',
-                lote_numero: mov.lote_numero || 'N/A',
-                tipo_movimiento: mov.tipo_movimiento,
-                cantidad: Number(mov.cantidad),
-                saldo: Number(mov.saldo),
+                fecha: new Date(mov.created_at).toLocaleString('es-PE'),
                 documento: mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : 'N/A',
+                cliente_nombre: mov.cliente_nombre || 'N/A',
+                codigo_producto: mov.codigo_producto || 'N/A',
+                descripcion: mov.descripcion_producto || 'N/A',
+                lote_numero: mov.lote_numero || '-',
+                tipo_movimiento: mov.tipo_movimiento,
+                ingreso: isIngreso ? Number(mov.cantidad) : '',
+                salida: isSalida ? Number(mov.cantidad) : '',
+                saldo: Number(mov.saldo),
                 observaciones: mov.observaciones || ''
             });
         });
@@ -299,11 +366,14 @@ async function kardexRoutes(fastify, options) {
         // Agregar total final
         const totalRow = worksheet.addRow({
             fecha: '',
+            documento: '',
+            cliente_nombre: '',
             codigo_producto: '',
             descripcion: 'TOTAL FINAL',
             lote_numero: '',
             tipo_movimiento: '',
-            cantidad: '',
+            ingreso: '',
+            salida: '',
             saldo: movimientos.length > 0 ? Number(movimientos[movimientos.length - 1].saldo) : 0,
             documento: '',
             observaciones: ''
