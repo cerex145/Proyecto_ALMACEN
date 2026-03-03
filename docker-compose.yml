@@ -11,7 +11,7 @@ services:
       MYSQL_USER: almacen_user
       MYSQL_PASSWORD: almacen123
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./tools/database/almacen_db.sql:/docker-entrypoint-initdb.d/01-schema.sql

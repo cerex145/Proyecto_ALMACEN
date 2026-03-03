@@ -521,20 +521,116 @@ async function productoRoutes(fastify, options) {
         return { success: true, message: 'Producto desactivado exitosamente' };
     });
 
-    // POST /api/productos/importar - Importar desde Excel
-    fastify.post('/api/productos/importar', {
+    // POST /api/productos/parsear-plantilla - Parsea el xlsx y devuelve filas como JSON
+    fastify.post('/api/productos/parsear-plantilla', {
         schema: {
             tags: ['Productos'],
-            description: 'Importar productos desde archivo Excel',
-            consumes: ['multipart/form-data'],
-            body: {
-                type: 'object',
-                required: ['file'],
-                properties: {
-                    file: { isFileType: true },
-                    numero_documento: { type: 'string' }
+            description: 'Parsea la plantilla Excel de carga masiva y devuelve las filas como JSON'
+        }
+    }, async (request, reply) => {
+        const parts = request.parts();
+        let fileBuffer = null;
+
+        for await (const part of parts) {
+            if (part.type === 'file') {
+                fileBuffer = await part.toBuffer();
+                break;
+            }
+        }
+
+        if (!fileBuffer) {
+            return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
+        }
+
+        // Mapeo por POSICIÓN de columna (independiente del nombre del encabezado)
+        const COLUMNAS = [
+            'codigo',            // A - col 1
+            'descripcion',       // B - col 2
+            'lote',              // C - col 3
+            'fabricante',        // D - col 4
+            'fecha_vencimiento', // E - col 5
+            'um',                // F - col 6
+            'temperatura_min_c', // G - col 7
+            'temperatura_max_c', // H - col 8
+            'cantidad_bultos',   // I - col 9
+            'cantidad_cajas',    // J - col 10
+            'cantidad_por_caja', // K - col 11
+            'cantidad_fraccion', // L - col 12
+            'cantidad_total',    // M - col 13
+            'observaciones',     // N - col 14
+        ];
+        const NUMERICAS = ['temperatura_min_c', 'temperatura_max_c', 'cantidad_bultos', 'cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion', 'cantidad_total'];
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(fileBuffer);
+        const ws = workbook.worksheets[0];
+
+        const errores = [];
+        const filas = [];
+
+        ws.eachRow((row, rowNumber) => {
+            if (rowNumber <= 3) return; // Saltar título, instrucciones y encabezados
+
+            const values = row.values; // values[1] = col A, values[2] = col B, etc.
+
+            // Saltar filas completamente vacías
+            const tieneAlgo = COLUMNAS.some((_, i) => {
+                const v = values[i + 1];
+                return v !== null && v !== undefined && String(v).trim() !== '';
+            });
+            if (!tieneAlgo) return;
+
+            const obj = {};
+            COLUMNAS.forEach((key, i) => {
+                let val = values[i + 1];
+                // Manejar celdas con objetos rich text de ExcelJS
+                if (val && typeof val === 'object' && val.text) val = val.text;
+                if (val && typeof val === 'object' && val.result !== undefined) val = val.result;
+                // Manejar fechas de Excel
+                if (val instanceof Date) {
+                    val = val.toISOString().split('T')[0]; // AAAA-MM-DD
                 }
-            },
+                const str = val !== null && val !== undefined ? String(val).trim() : '';
+                if (NUMERICAS.includes(key)) {
+                    obj[key] = str !== '' ? parseFloat(str) : null;
+                } else {
+                    obj[key] = str || null;
+                }
+            });
+
+            // Validaciones mínimas
+            if (!obj.codigo) {
+                errores.push(`Fila ${rowNumber}: falta el Código de Producto`);
+                return;
+            }
+            if (!obj.descripcion) {
+                errores.push(`Fila ${rowNumber}: falta la Descripción`);
+                return;
+            }
+            if (obj.cantidad_total === null || isNaN(obj.cantidad_total) || obj.cantidad_total < 0) {
+                errores.push(`Fila ${rowNumber} (${obj.codigo}): Cant. Total inválida o vacía`);
+                return;
+            }
+
+            filas.push(obj);
+        });
+
+        return reply.send({
+            success: true,
+            filas,
+            errores,
+            total: filas.length
+        });
+    });
+
+    // POST /api/productos/importar - Importar desde Excel
+    fastify.post('/api/productos/importar', {
+
+        schema: {
+            tags: ['Productos'],
+            description: 'Importar productos desde archivo Excel (multipart/form-data)',
+            consumes: ['multipart/form-data'],
+            // No se declara body schema para rutas multipart: se usa request.parts() directamente
             response: {
                 200: {
                     type: 'object',
@@ -758,6 +854,216 @@ async function productoRoutes(fastify, options) {
 
         reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         reply.header('Content-Disposition', 'attachment; filename=productos.xlsx');
+        return reply.send(buffer);
+    });
+
+    // GET /api/productos/plantilla - Descargar plantilla Excel para carga masiva
+    fastify.get('/api/productos/plantilla', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Descargar plantilla Excel lista para llenar (carga masiva)'
+        }
+    }, async (request, reply) => {
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Sistema Almacén';
+        workbook.created = new Date();
+
+        const ws = workbook.addWorksheet('Productos', {
+            views: [{ state: 'frozen', ySplit: 3 }] // congelar las 3 primeras filas
+        });
+
+        // ── Colores ──
+        const AZUL_OSCURO = '1E3A5F';
+        const AZUL_CLARO = 'D6E4F0';
+        const VERDE = '1A7A4A';
+        const AMARILLO = 'FFF3CD';
+        const GRIS_CLARO = 'F5F5F5';
+
+        // ── Fila 1: Título / instrucciones ──
+        ws.mergeCells('A1:N1');
+        const titCell = ws.getCell('A1');
+        titCell.value = '📋  PLANTILLA DE CARGA MASIVA DE PRODUCTOS — Complete los datos desde la FILA 4 en adelante. Las primeras 3 filas NO se deben modificar.';
+        titCell.font = { bold: true, color: { argb: 'FF' + AZUL_OSCURO }, size: 11 };
+        titCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + AZUL_CLARO } };
+        titCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        ws.getRow(1).height = 36;
+
+        // ── Fila 2: Sub-instrucciones por columna ──
+        const instrucciones = [
+            'Ej: MED-001',
+            'Nombre completo del producto',
+            'Número de lote\n(Opcional)',
+            'Laboratorio fabricante\n(Opcional)',
+            'Formato:\nAÑO-MES-DÍA\n(Opcional)',
+            'UND / AMP / FRS\n/ CJ / KG / G\n/ BLT / TUB / SOB',
+            'Temp. mínima\nen °C\n(Opcional)',
+            'Temp. máxima\nen °C\n(Opcional)',
+            'Número de\nbultos\n(Opcional)',
+            'Número de\ncajas\n(Opcional)',
+            'Unidades\npor caja\n(Opcional)',
+            'Cantidad\nfraccionada\n(Opcional)',
+            '⭐ OBLIGATORIO\nTotal de\nunidades',
+            'Notas extra\n(Opcional)'
+        ];
+        const instrRow = ws.getRow(2);
+        instrRow.height = 52;
+        instrucciones.forEach((txt, i) => {
+            const cell = instrRow.getCell(i + 1);
+            cell.value = txt;
+            cell.font = { italic: true, color: { argb: 'FF555555' }, size: 8 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEEEEE' } };
+            cell.alignment = { horizontal: 'center', vertical: 'top', wrapText: true };
+            cell.border = { bottom: { style: 'thin', color: { argb: 'FFAAAAAA' } } };
+        });
+
+        // ── Fila 3: Encabezados principales ──
+        const columnas = [
+            { header: 'CÓDIGO\nPRODUCTO *', key: 'codigo', width: 16 },
+            { header: 'DESCRIPCIÓN\nDEL PRODUCTO *', key: 'descripcion', width: 36 },
+            { header: 'LOTE', key: 'lote', width: 16 },
+            { header: 'FABRICANTE', key: 'fabricante', width: 22 },
+            { header: 'FECHA DE\nVENCIMIENTO', key: 'fecha_vencimiento', width: 15 },
+            { header: 'UM\n(Unidad)', key: 'um', width: 10 },
+            { header: 'TEMP.\nMÍN °C', key: 'temperatura_min_c', width: 10 },
+            { header: 'TEMP.\nMÁX °C', key: 'temperatura_max_c', width: 10 },
+            { header: 'CANT.\nBULTOS', key: 'cantidad_bultos', width: 11 },
+            { header: 'CANT.\nCAJAS', key: 'cantidad_cajas', width: 11 },
+            { header: 'UNID.\nPOR CAJA', key: 'cantidad_por_caja', width: 11 },
+            { header: 'CANT.\nFRACCIÓN', key: 'cantidad_fraccion', width: 11 },
+            { header: '⭐ CANT.\nTOTAL *', key: 'cantidad_total', width: 13 },
+            { header: 'OBSERVACIONES', key: 'observaciones', width: 28 },
+        ];
+
+        ws.columns = columnas.map(c => ({ key: c.key, width: c.width }));
+
+        const headerRow = ws.getRow(3);
+        headerRow.height = 40;
+        columnas.forEach((col, i) => {
+            const cell = headerRow.getCell(i + 1);
+            cell.value = col.header;
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + AZUL_OSCURO } };
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+            cell.border = {
+                top: { style: 'thin' }, bottom: { style: 'medium' },
+                left: { style: 'thin' }, right: { style: 'thin' }
+            };
+        });
+
+        // ── Columnas obligatorias: resaltar con borde verde ──
+        [1, 2, 13].forEach(col => {
+            const cell = headerRow.getCell(col);
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + VERDE } };
+            cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+        });
+
+        // ── Filas de ejemplo ──
+        const ejemplos = [
+            ['MED-001', 'Amoxicilina 500mg x 24 cápsulas', 'L-2024-001', 'Laboratorio Grunenthal', '2026-12-31', 'UND', 2, 8, 2, 10, 50, 5, 505, 'Importación directa'],
+            ['MED-002', 'Paracetamol 1g ampolleta 10ml', 'L-2024-087', 'Laboratorio Bayer', '2027-06-15', 'AMP', 2, 8, 1, 5, 100, 0, 500, ''],
+            ['INS-003', 'Jeringa desechable 5ml con aguja', 'L-2024-120', 'Insumos Médicos SAC', '2028-03-20', 'UND', '', '', 3, 8, 25, 10, 210, 'Licitación N° 45'],
+        ];
+
+        ejemplos.forEach((fila, fi) => {
+            const row = ws.getRow(4 + fi);
+            row.height = 22;
+            fila.forEach((val, ci) => {
+                const cell = row.getCell(ci + 1);
+                cell.value = val === '' ? null : val;
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fi % 2 === 0 ? 'FFFFFFFF' : 'FF' + GRIS_CLARO } };
+                cell.border = {
+                    top: { style: 'hair' }, bottom: { style: 'hair' },
+                    left: { style: 'thin' }, right: { style: 'thin' }
+                };
+                cell.alignment = { vertical: 'middle', horizontal: ci >= 6 ? 'right' : 'left' };
+                // Columnas numéricas
+                if (ci >= 6 && ci <= 12 && val !== '') {
+                    cell.numFmt = '#,##0.00';
+                }
+            });
+        });
+
+        // ── Filas vacías para llenar (fila 7 a 60) ──
+        for (let r = 7; r <= 60; r++) {
+            const row = ws.getRow(r);
+            row.height = 20;
+            for (let c = 1; c <= 14; c++) {
+                const cell = row.getCell(c);
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: r % 2 === 0 ? 'FFFAFAFA' : 'FFFFFFFF' } };
+                cell.border = {
+                    top: { style: 'hair', color: { argb: 'FFDDDDDD' } },
+                    bottom: { style: 'hair', color: { argb: 'FFDDDDDD' } },
+                    left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+                    right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+                };
+                cell.alignment = { vertical: 'middle', horizontal: c >= 7 ? 'right' : 'left' };
+            }
+        }
+
+        // ── Validación: columna UM (F = col 6) dropdown ──
+        for (let r = 4; r <= 60; r++) {
+            ws.getCell(r, 6).dataValidation = {
+                type: 'list',
+                allowBlank: true,
+                formulae: ['"UND,AMP,FRS,BLT,TUB,SOB,CJ,KG,G"'],
+                showErrorMessage: true,
+                errorStyle: 'warning',
+                errorTitle: 'Valor no válido',
+                error: 'Seleccione UND, AMP, FRS, BLT, TUB, SOB, CJ, KG o G'
+            };
+        }
+
+        // ── Hoja de ayuda ──
+        const wsHelp = workbook.addWorksheet('📖 Instrucciones');
+        wsHelp.getColumn(1).width = 28;
+        wsHelp.getColumn(2).width = 55;
+
+        const ayuda = [
+            ['📋 INSTRUCCIONES DE USO', ''],
+            ['', ''],
+            ['¿Cómo llenar la plantilla?', 'Complete los datos desde la fila 4 de la hoja "Productos"'],
+            ['Columnas con ⭐', 'Son OBLIGATORIAS. Sin ellas el sistema no puede importar el producto.'],
+            ['CÓDIGO PRODUCTO', 'Código único. Ej: MED-001, INS-042'],
+            ['DESCRIPCIÓN', 'Nombre completo del producto tal como aparece en el sistema'],
+            ['LOTE', 'Número de lote del fabricante. Puede dejarse vacío.'],
+            ['FABRICANTE', 'Nombre del laboratorio o proveedor del producto'],
+            ['FECHA VENCIMIENTO', 'Formato AAAA-MM-DD. Ej: 2026-12-31'],
+            ['UM (Unidad Medida)', 'Seleccione de la lista: UND, AMP, FRS, BLT, TUB, SOB, CJ, KG, G'],
+            ['TEMP. MÍN / MÁX °C', 'Temperatura de almacenamiento en grados Celsius. Puede estar vacío.'],
+            ['CANT. BULTOS', 'Número de bultos recibidos'],
+            ['CANT. CAJAS', 'Número de cajas'],
+            ['UNID. POR CAJA', 'Unidades contenidas en cada caja'],
+            ['CANT. FRACCIÓN', 'Unidades sueltas fuera de caja completa'],
+            ['⭐ CANT. TOTAL', 'Total de unidades a ingresar al inventario. OBLIGATORIO.'],
+            ['OBSERVACIONES', 'Cualquier nota adicional sobre el producto'],
+            ['', ''],
+            ['⚠️ IMPORTANTE', 'NO modifique las primeras 3 filas (título, instrucciones, encabezados)'],
+            ['⚠️ IMPORTANTE', 'Guarde el archivo sin cambiar su formato (.xlsx)'],
+            ['⚠️ IMPORTANTE', 'El Sistema llenará automáticamente: Proveedor, N° Doc, Tipo Doc, etc.'],
+        ];
+
+        ayuda.forEach((fila, i) => {
+            const row = wsHelp.getRow(i + 1);
+            row.height = 22;
+            const c1 = row.getCell(1);
+            const c2 = row.getCell(2);
+            c1.value = fila[0];
+            c2.value = fila[1];
+            if (i === 0) {
+                c1.font = { bold: true, size: 14, color: { argb: 'FF' + AZUL_OSCURO } };
+            } else if (fila[0].startsWith('⭐') || fila[0].startsWith('⚠️')) {
+                c1.font = { bold: true, color: { argb: 'FFCC0000' } };
+                c2.font = { color: { argb: 'FFCC0000' } };
+            } else if (fila[0] && fila[0] !== '') {
+                c1.font = { bold: true, color: { argb: 'FF' + AZUL_OSCURO } };
+            }
+            c1.alignment = { vertical: 'middle' };
+            c2.alignment = { vertical: 'middle', wrapText: true };
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        reply.header('Content-Disposition', 'attachment; filename=plantilla_carga_masiva.xlsx');
         return reply.send(buffer);
     });
 }

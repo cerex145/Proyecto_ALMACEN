@@ -560,13 +560,6 @@ export const NotaIngresoForm = () => {
                     <h2 className="text-2xl font-bold text-slate-800">📥 Registro de Ingreso</h2>
                     <p className="text-slate-500">Recepción de mercadería y alta de lotes</p>
                 </div>
-                <Button
-                    type="button"
-                    onClick={() => setMostrarModalImportacion(true)}
-                    className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 font-semibold"
-                >
-                    📊 Importar CSV
-                </Button>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
