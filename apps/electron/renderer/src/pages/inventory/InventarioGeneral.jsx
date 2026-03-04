@@ -47,8 +47,8 @@ export const InventarioGeneral = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800 font-display">Vista de Inventario</h1>
-                    <p className="text-slate-500 mt-1">Stock calculado en tiempo real desde los lotes</p>
+                    <h1 className="text-3xl font-bold text-slate-800 font-display">Stock de Inventario</h1>
+                    <p className="text-slate-500 mt-1">Stock real calculado en tiempo real — se actualiza con cada Nota de Ingreso y Salida</p>
                 </div>
             </div>
 
@@ -210,11 +210,14 @@ export const InventarioGeneral = () => {
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                             Unidad
                                         </th>
-                                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                                            Stock Actual
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                            Lotes
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                            Próx. Vencimiento
                                         </th>
                                         <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                                            Stock Mínimo
+                                            Stock Actual
                                         </th>
                                         <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                             Estado
@@ -256,20 +259,33 @@ export const InventarioGeneral = () => {
                                                         {producto.um || producto.unidad || 'UND'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                    <span className={`text-sm font-semibold ${
-                                                        producto.stock_calculado <= 0 
-                                                            ? 'text-red-600' 
-                                                            : producto.stock_calculado <= producto.stock_minimo 
-                                                            ? 'text-amber-600' 
-                                                            : 'text-emerald-600'
-                                                    }`}>
-                                                        {producto.stock_calculado.toFixed(2)}
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
+                                                        {producto.total_lotes || 0}
                                                     </span>
                                                 </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {producto.proximo_vencimiento ? (
+                                                        <span className={`text-xs font-medium px-2 py-1 rounded-lg ${new Date(producto.proximo_vencimiento) < new Date(Date.now() + 30 * 86400000)
+                                                            ? 'bg-red-100 text-red-700'
+                                                            : new Date(producto.proximo_vencimiento) < new Date(Date.now() + 90 * 86400000)
+                                                                ? 'bg-amber-100 text-amber-700'
+                                                                : 'bg-green-100 text-green-700'
+                                                            }`}>
+                                                            {new Date(producto.proximo_vencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400">Sin lotes</span>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                    <span className="text-sm text-slate-600">
-                                                        {producto.stock_minimo || 0}
+                                                    <span className={`text-sm font-semibold ${producto.stock_calculado <= 0
+                                                        ? 'text-red-600'
+                                                        : producto.stock_calculado <= producto.stock_minimo
+                                                            ? 'text-amber-600'
+                                                            : 'text-emerald-600'
+                                                        }`}>
+                                                        {producto.stock_calculado.toFixed(2)}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-center">

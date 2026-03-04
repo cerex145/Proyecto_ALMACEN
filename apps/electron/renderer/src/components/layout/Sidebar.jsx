@@ -51,7 +51,6 @@ export const Sidebar = () => {
             <nav className="flex-1 space-y-1 overflow-y-auto pr-2 custom-scrollbar">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-2">Principal</div>
                 <MenuLink to="/" icon={<HomeIcon />} label="Dashboard" />
-                <MenuLink to="/inventario" icon={<BarChartIcon />} label="Vista de Inventario" />
                 <MenuLink to="/productos" icon={<BoxIcon />} label="Gestión de productos" />
                 <MenuLink to="/clientes/registro" icon={<UsersIcon />} label="Clientes" />
 
@@ -61,9 +60,10 @@ export const Sidebar = () => {
                 <MenuLink to="/recepcion/nueva" icon={<FileTextIcon />} label="Nueva Acta de Recepción" />
                 <MenuLink to="/recepcion/acta" icon={<HistoryIcon />} label="Historial Actas" />
                 <MenuLink to="/salidas/nuevo" icon={<ArrowUpIcon />} label="Nota de salida" />
-
+                <MenuLink to="/salidas/historial" icon={<HistoryIcon />} label="Historial de salidas" />
 
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-4 mt-8">Auditoría</div>
+                <MenuLink to="/inventario" icon={<BarChartIcon />} label="Stock de Inventario" />
                 <MenuLink to="/kardex" icon={<HistoryIcon />} label="Kardex" />
                 <MenuLink to="/ajustes" icon={<SettingsIcon />} label="Ajustes" />
             </nav>

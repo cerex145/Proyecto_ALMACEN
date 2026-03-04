@@ -805,6 +805,108 @@ async function productoRoutes(fastify, options) {
         });
     });
 
+    // GET /api/productos/inventario - Stock real calculado desde los lotes
+    fastify.get('/api/productos/inventario', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Vista de inventario: stock real calculado desde la suma de lotes disponibles',
+            querystring: {
+                type: 'object',
+                properties: {
+                    busqueda: { type: 'string' },
+                    categoria_ingreso: { type: 'string' },
+                    activo: { type: 'string', enum: ['true', 'false'] }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        data: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'integer' },
+                                    codigo: { type: 'string' },
+                                    descripcion: { type: 'string' },
+                                    proveedor: { type: 'string', nullable: true },
+                                    categoria_ingreso: { type: 'string', nullable: true },
+                                    um: { type: 'string', nullable: true },
+                                    unidad: { type: 'string', nullable: true },
+                                    registro_sanitario: { type: 'string', nullable: true },
+                                    stock_minimo: { type: 'number' },
+                                    stock_calculado: { type: 'number' },
+                                    total_lotes: { type: 'integer' },
+                                    proximo_vencimiento: { type: 'string', nullable: true },
+                                    activo: { type: 'boolean' }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        const { busqueda, categoria_ingreso, activo } = request.query;
+        const loteRepo = fastify.db.getRepository('Lote');
+
+        const qb = productoRepo.createQueryBuilder('producto');
+
+        if (busqueda) {
+            qb.andWhere(
+                '(producto.codigo LIKE :b OR producto.descripcion LIKE :b)',
+                { b: `%${busqueda}%` }
+            );
+        }
+        if (categoria_ingreso) {
+            qb.andWhere('producto.categoria_ingreso = :cat', { cat: categoria_ingreso });
+        }
+        if (activo !== undefined) {
+            qb.andWhere('producto.activo = :activo', { activo: activo === 'true' });
+        }
+
+        qb.orderBy('producto.descripcion', 'ASC');
+        const productos = await qb.getMany();
+
+        // Para cada producto, calcular stock real sumando lotes disponibles
+        const data = await Promise.all(productos.map(async (p) => {
+            const lotes = await loteRepo.find({
+                where: { producto_id: p.id },
+                order: { fecha_vencimiento: 'ASC' }
+            });
+
+            const stockCalculado = lotes.reduce(
+                (sum, l) => sum + (parseFloat(l.cantidad_disponible) || 0),
+                0
+            );
+
+            // Próximo vencimiento: el lote con stock disponible con fecha más próxima
+            const proximoLote = lotes.find(
+                l => (parseFloat(l.cantidad_disponible) || 0) > 0 && l.fecha_vencimiento
+            );
+
+            return {
+                id: p.id,
+                codigo: p.codigo,
+                descripcion: p.descripcion,
+                proveedor: p.proveedor || null,
+                categoria_ingreso: p.categoria_ingreso || null,
+                um: p.um || null,
+                unidad: p.unidad || null,
+                registro_sanitario: p.registro_sanitario || null,
+                stock_minimo: p.stock_minimo || 0,
+                stock_calculado: stockCalculado,
+                total_lotes: lotes.length,
+                proximo_vencimiento: proximoLote ? proximoLote.fecha_vencimiento : null,
+                activo: p.activo
+            };
+        }));
+
+        return { success: true, data };
+    });
+
     // GET /api/productos/exportar - Exportar a Excel
     fastify.get('/api/productos/exportar', {
         schema: {
