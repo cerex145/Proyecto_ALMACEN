@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
+import { ingresosService } from '../../services/ingresos.service';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
@@ -58,12 +59,15 @@ export const ActaRecepcionForm = () => {
 
     const [lastActaId, setLastActaId] = useState(null);
 
-    // Estados para la búsqueda por N° de Documento
-    const [numeroDocBusqueda, setNumeroDocBusqueda] = useState('');
-    const [buscandoDoc, setBuscandoDoc] = useState(false);
+    // Estados para notas de ingreso
+    const [notasIngreso, setNotasIngreso] = useState([]);
+    const [notaSeleccionada, setNotaSeleccionada] = useState('');
+    const [showModal, setShowModal] = useState(false);
+    const [notaParaCargar, setNotaParaCargar] = useState(null);
 
     useEffect(() => {
         loadClients();
+        loadNotasIngreso();
     }, []);
 
     useEffect(() => {
@@ -145,24 +149,37 @@ export const ActaRecepcionForm = () => {
         }
     }, [selectedLoteId, lotesDisponibles]);
 
-    const handleBuscarPorDocumento = async () => {
-        if (!numeroDocBusqueda) {
-            alert('Ingrese un número de documento para buscar');
+    const loadNotasIngreso = async () => {
+        try {
+            const result = await ingresosService.listar();
+            const notas = result.data || [];
+            setNotasIngreso(notas);
+        } catch (error) {
+            console.error('Error al cargar notas de ingreso:', error);
+            alert('Error al cargar las notas de ingreso');
+        }
+    };
+
+    const handleSeleccionarNota = (notaId) => {
+        if (!notaId) {
+            setNotaSeleccionada('');
             return;
         }
-        setBuscandoDoc(true);
+
+        const nota = notasIngreso.find(n => n.id === parseInt(notaId));
+        if (nota) {
+            setNotaParaCargar(nota);
+            setShowModal(true);
+        }
+    };
+
+    const handleConfirmarCargaNota = async () => {
+        if (!notaParaCargar) return;
+
+        setShowModal(false);
+        
         try {
-            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?numero_documento=${encodeURIComponent(numeroDocBusqueda)}`);
-            const result = await response.json();
-            const notas = result.data || [];
-
-            if (notas.length === 0) {
-                alert('No se encontró ninguna nota de ingreso con ese número de documento.');
-                setBuscandoDoc(false);
-                return;
-            }
-
-            let nota = notas[0];
+            let nota = notaParaCargar;
             if (nota && (!nota.detalles || nota.detalles.length === 0)) {
                 const notaResponse = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
                 if (notaResponse.ok) {
@@ -233,12 +250,18 @@ export const ActaRecepcionForm = () => {
             } else {
                 alert('Se cargaron los datos básicos, pero la nota de ingreso no tiene detalles de productos.');
             }
+
+            setNotaSeleccionada(nota.id.toString());
         } catch (error) {
-            console.error('Error al buscar nota de ingreso:', error);
-            alert('Ocurrió un error al buscar nota de ingreso.');
-        } finally {
-            setBuscandoDoc(false);
+            console.error('Error al cargar nota de ingreso:', error);
+            alert('Ocurrió un error al cargar la nota de ingreso.');
         }
+    };
+
+    const handleCancelarModal = () => {
+        setShowModal(false);
+        setNotaParaCargar(null);
+        setNotaSeleccionada('');
     };
 
     // Auto-cálculo de cantidad recibida
@@ -507,28 +530,63 @@ export const ActaRecepcionForm = () => {
             </div>
 
             <Card className="p-4 bg-blue-50 border-blue-200">
-                <div className="flex items-end gap-4">
-                    <div className="flex-1">
-                        <label className="label-premium text-blue-800">Autocompletar por N° de Documento de Ingreso</label>
-                        <input
-                            type="text"
-                            className="input-premium border-blue-300 focus:border-blue-500 focus:ring-blue-200"
-                            placeholder="Ingrese N° de Documento (ej. DOC-123)"
-                            value={numeroDocBusqueda}
-                            onChange={(e) => setNumeroDocBusqueda(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleBuscarPorDocumento()}
-                        />
-                    </div>
-                    <Button
-                        type="button"
-                        onClick={handleBuscarPorDocumento}
-                        disabled={buscandoDoc}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                <div className="space-y-2">
+                    <label className="label-premium text-blue-800 font-semibold">📥 Seleccione una Nota de Ingreso</label>
+                    <p className="text-sm text-blue-700 mb-3">Seleccione una nota de ingreso existente para cargar sus datos automáticamente</p>
+                    <select
+                        className="input-premium border-blue-300 focus:border-blue-500 focus:ring-blue-200 w-full"
+                        value={notaSeleccionada}
+                        onChange={(e) => handleSeleccionarNota(e.target.value)}
                     >
-                        {buscandoDoc ? 'Buscando...' : '🔍 Buscar y Cargar'}
-                    </Button>
+                        <option value="">-- Seleccione una nota de ingreso --</option>
+                        {notasIngreso.map(nota => (
+                            <option key={nota.id} value={nota.id}>
+                                {nota.numero_documento} - {nota.proveedor} - {new Date(nota.fecha).toLocaleDateString()}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </Card>
+
+            {/* Modal de Confirmación */}
+            {showModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleCancelarModal}>
+                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start gap-4 mb-4">
+                            <div className="text-4xl">❓</div>
+                            <div className="flex-1">
+                                <h3 className="text-xl font-bold text-slate-800 mb-2">Confirmar Carga de Nota de Ingreso</h3>
+                                <p className="text-slate-600">
+                                    ¿Está seguro que desea cargar los datos de la siguiente nota de ingreso?
+                                </p>
+                                {notaParaCargar && (
+                                    <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                        <p className="text-sm"><strong>Documento:</strong> {notaParaCargar.numero_documento}</p>
+                                        <p className="text-sm"><strong>Proveedor:</strong> {notaParaCargar.proveedor}</p>
+                                        <p className="text-sm"><strong>Fecha:</strong> {new Date(notaParaCargar.fecha).toLocaleDateString()}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            <Button
+                                type="button"
+                                onClick={handleCancelarModal}
+                                className="bg-slate-200 hover:bg-slate-300 text-slate-700"
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleConfirmarCargaNota}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                Sí, Cargar Nota
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                 {/* Información del Documento */}
