@@ -857,5 +857,4 @@ async function productoRoutes(fastify, options) {
         return reply.send(buffer);
     });
 }
-
 module.exports = productoRoutes;
