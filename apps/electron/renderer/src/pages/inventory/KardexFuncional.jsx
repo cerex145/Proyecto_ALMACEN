@@ -7,7 +7,10 @@ import { Button } from '../../components/common/Button';
 export const KardexFuncional = () => {
     const [movimientos, setMovimientos] = useState([]);
     const [loading, setLoading] = useState(false);
-    
+    const [clientes, setClientes] = useState([]);
+    const [loadingClientes, setLoadingClientes] = useState(false);
+    const [proveedores, setProveedores] = useState([]);
+
     // Filtros mejorados
     const [filtroProducto, setFiltroProducto] = useState('');
     const [filtroLote, setFiltroLote] = useState('');
@@ -15,6 +18,7 @@ export const KardexFuncional = () => {
     const [filtroTipo, setFiltroTipo] = useState('');
     const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
     const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+    const [filtroCliente, setFiltroCliente] = useState('');
 
     // Estadísticas
     const [stats, setStats] = useState({
@@ -25,21 +29,55 @@ export const KardexFuncional = () => {
     });
 
     useEffect(() => {
+        cargarClientes();
+        cargarProveedores();
         cargarKardex();
-    }, [filtroProducto, filtroLote, filtroDocumento, filtroTipo, filtroFechaDesde, filtroFechaHasta]);
+    }, []);
+
+    useEffect(() => {
+        cargarKardex();
+    }, [filtroProducto, filtroLote, filtroDocumento, filtroTipo, filtroFechaDesde, filtroFechaHasta, filtroCliente]);
+
+    const cargarClientes = async () => {
+        try {
+            setLoadingClientes(true);
+            const res = await fetch('http://localhost:3000/api/clientes?limit=500&activo=true');
+            const data = await res.json();
+            setClientes(data.data || []);
+        } catch (e) {
+            console.error('Error cargando clientes:', e);
+        } finally {
+            setLoadingClientes(false);
+        }
+    };
+
+    const cargarProveedores = async () => {
+        try {
+            // Cargar proveedores únicos desde las notas de ingreso
+            const res = await fetch('http://localhost:3000/api/ingresos?limit=500');
+            const data = await res.json();
+            const notasData = data.data || [];
+            const provSet = new Set();
+            notasData.forEach(n => { if (n.proveedor) provSet.add(n.proveedor); });
+            setProveedores([...provSet].sort());
+        } catch (e) {
+            console.error('Error cargando proveedores:', e);
+        }
+    };
 
     const cargarKardex = async () => {
         try {
             setLoading(true);
             let url = 'http://localhost:3000/api/kardex?limit=1000';
-            
+
             if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
             if (filtroLote) url += `&lote_numero=${encodeURIComponent(filtroLote)}`;
             if (filtroDocumento) url += `&documento_numero=${encodeURIComponent(filtroDocumento)}`;
             if (filtroTipo) url += `&tipo_movimiento=${filtroTipo}`;
             if (filtroFechaDesde) url += `&fecha_desde=${filtroFechaDesde}`;
             if (filtroFechaHasta) url += `&fecha_hasta=${filtroFechaHasta}`;
-            
+            if (filtroCliente) url += `&cliente_nombre=${encodeURIComponent(filtroCliente)}`;
+
             const response = await fetch(url);
             const result = await response.json();
             const data = result.data || [];
@@ -47,13 +85,13 @@ export const KardexFuncional = () => {
             setMovimientos(data);
 
             // Calcular estadísticas
-            const ingresos = data.filter(m => 
-                m.tipo_movimiento === 'INGRESO' || 
-                m.tipo_movimiento === 'AJUSTE_POSITIVO' || 
+            const ingresos = data.filter(m =>
+                m.tipo_movimiento === 'INGRESO' ||
+                m.tipo_movimiento === 'AJUSTE_POSITIVO' ||
                 m.tipo_movimiento === 'AJUSTE_POR_RECEPCION'
             );
-            const salidas = data.filter(m => 
-                m.tipo_movimiento === 'SALIDA' || 
+            const salidas = data.filter(m =>
+                m.tipo_movimiento === 'SALIDA' ||
                 m.tipo_movimiento === 'AJUSTE_NEGATIVO'
             );
 
@@ -77,6 +115,7 @@ export const KardexFuncional = () => {
         setFiltroTipo('');
         setFiltroFechaDesde('');
         setFiltroFechaHasta('');
+        setFiltroCliente('');
     };
 
     const getTipoMovimientoInfo = (tipo) => {
@@ -109,18 +148,18 @@ export const KardexFuncional = () => {
             </p>
 
             {/* Estadísticas */}
-            <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-                gap: '1rem', 
-                marginBottom: '2rem' 
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                gap: '1rem',
+                marginBottom: '2rem'
             }}>
-                <div style={{ 
-                    background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)', 
-                    color: 'white', 
-                    padding: '1.5rem', 
-                    borderRadius: '12px', 
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
+                <div style={{
+                    background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                    color: 'white',
+                    padding: '1.5rem',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }}>
                     <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '0.5rem' }}>Total Ingresos</div>
                     <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.totalIngresos.toFixed(2)}</div>
@@ -129,12 +168,12 @@ export const KardexFuncional = () => {
                     </div>
                 </div>
 
-                <div style={{ 
-                    background: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)', 
-                    color: 'white', 
-                    padding: '1.5rem', 
-                    borderRadius: '12px', 
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
+                <div style={{
+                    background: 'linear-gradient(135deg, #dc3545 0%, #e83e8c 100%)',
+                    color: 'white',
+                    padding: '1.5rem',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }}>
                     <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '0.5rem' }}>Total Salidas</div>
                     <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats.totalSalidas.toFixed(2)}</div>
@@ -143,12 +182,12 @@ export const KardexFuncional = () => {
                     </div>
                 </div>
 
-                <div style={{ 
-                    background: 'linear-gradient(135deg, #0b6aa2 0%, #17a2b8 100%)', 
-                    color: 'white', 
-                    padding: '1.5rem', 
-                    borderRadius: '12px', 
-                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)' 
+                <div style={{
+                    background: 'linear-gradient(135deg, #0b6aa2 0%, #17a2b8 100%)',
+                    color: 'white',
+                    padding: '1.5rem',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }}>
                     <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '0.5rem' }}>Balance Neto</div>
                     <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>
@@ -161,20 +200,20 @@ export const KardexFuncional = () => {
             </div>
 
             {/* Filtros Mejorados */}
-            <div style={{ 
-                background: 'var(--surface-color)', 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
-                marginBottom: '2rem', 
+            <div style={{
+                background: 'var(--surface-color)',
+                padding: '1.5rem',
+                borderRadius: '12px',
+                marginBottom: '2rem',
                 border: '1px solid var(--border-color)',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
             }}>
                 <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', color: 'var(--primary-color)' }}>
                     🔍 Filtros de Búsqueda
                 </h3>
-                <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                     gap: '1rem',
                     marginBottom: '1rem'
                 }}>
@@ -259,6 +298,48 @@ export const KardexFuncional = () => {
                             onChange={(e) => setFiltroFechaHasta(e.target.value)}
                         />
                     </div>
+
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500, fontSize: '0.9rem' }}>
+                            👤 Cliente / Proveedor
+                        </label>
+                        <select
+                            value={filtroCliente}
+                            onChange={(e) => setFiltroCliente(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '0.5rem',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                fontSize: '0.9rem',
+                                background: 'white'
+                            }}
+                        >
+                            <option value="">Todos los clientes/proveedores</option>
+                            {clientes.length > 0 && (
+                                <optgroup label="🏢 Clientes registrados">
+                                    {clientes.map(c => (
+                                        <option key={`c-${c.id}`} value={c.razon_social}>
+                                            {c.razon_social}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
+                            {proveedores.length > 0 && (
+                                <optgroup label="📦 Proveedores (Ingresos)">
+                                    {proveedores
+                                        .filter(p => !clientes.some(c => c.razon_social === p))
+                                        .map((p, i) => (
+                                            <option key={`p-${i}`} value={p}>{p}</option>
+                                        ))
+                                    }
+                                </optgroup>
+                            )}
+                        </select>
+                        {loadingClientes && (
+                            <span style={{ fontSize: '0.75rem', color: '#999' }}>Cargando...</span>
+                        )}
+                    </div>
                 </div>
                 <Button onClick={limpiarFiltros} variant="secondary">
                     🗑️ Limpiar Filtros
@@ -266,10 +347,10 @@ export const KardexFuncional = () => {
             </div>
 
             {/* Tabla de Movimientos */}
-            <div style={{ 
-                background: 'var(--surface-color)', 
-                padding: '2rem', 
-                borderRadius: '12px', 
+            <div style={{
+                background: 'var(--surface-color)',
+                padding: '2rem',
+                borderRadius: '12px',
                 border: '1px solid var(--border-color)',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
             }}>
@@ -285,7 +366,8 @@ export const KardexFuncional = () => {
                             <Table>
                                 <TableHead>
                                     <TableRow>
-                                        <TableHeader>Fecha</TableHeader>
+                                        <TableHeader>Fecha Ingreso</TableHeader>
+                                        <TableHeader>Fecha Salida</TableHeader>
                                         <TableHeader>Tipo</TableHeader>
                                         <TableHeader>Código</TableHeader>
                                         <TableHeader>Producto</TableHeader>
@@ -304,11 +386,26 @@ export const KardexFuncional = () => {
                                     {movimientos.map((mov, idx) => {
                                         const tipoInfo = getTipoMovimientoInfo(mov.tipo_movimiento);
                                         const esIngreso = ['INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION'].includes(mov.tipo_movimiento);
-                                        
+
                                         return (
                                             <TableRow key={idx}>
-                                                <TableCell style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                                                    {formatFecha(mov.created_at)}
+                                                <TableCell style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                                    {mov.fecha_ingreso ? (
+                                                        <span style={{ color: '#28a745', fontWeight: 600 }}>
+                                                            {formatFecha(mov.fecha_ingreso)}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: '#999' }}>—</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                                    {mov.fecha_salida ? (
+                                                        <span style={{ color: '#dc3545', fontWeight: 600 }}>
+                                                            {formatFecha(mov.fecha_salida)}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: '#999' }}>—</span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge variant={tipoInfo.variant}>
@@ -328,24 +425,24 @@ export const KardexFuncional = () => {
                                                 <TableCell style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>
                                                     {mov.documento_numero || '-'}
                                                 </TableCell>
-                                                <TableCell style={{ 
-                                                    textAlign: 'right', 
-                                                    color: '#28a745', 
+                                                <TableCell style={{
+                                                    textAlign: 'right',
+                                                    color: '#28a745',
                                                     fontWeight: 'bold',
                                                     fontSize: '0.95rem'
                                                 }}>
                                                     {esIngreso ? Number(mov.cantidad).toFixed(2) : '-'}
                                                 </TableCell>
-                                                <TableCell style={{ 
-                                                    textAlign: 'right', 
-                                                    color: '#dc3545', 
+                                                <TableCell style={{
+                                                    textAlign: 'right',
+                                                    color: '#dc3545',
                                                     fontWeight: 'bold',
                                                     fontSize: '0.95rem'
                                                 }}>
                                                     {!esIngreso ? Number(mov.cantidad).toFixed(2) : '-'}
                                                 </TableCell>
-                                                <TableCell style={{ 
-                                                    textAlign: 'right', 
+                                                <TableCell style={{
+                                                    textAlign: 'right',
                                                     fontWeight: 'bold',
                                                     backgroundColor: Number(mov.saldo) > 0 ? '#d4edda' : '#f8d7da',
                                                     color: Number(mov.saldo) > 0 ? '#155724' : '#721c24',

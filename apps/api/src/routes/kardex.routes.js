@@ -111,7 +111,7 @@ async function kardexRoutes(fastify, options) {
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 p.um as unidad_medida,
-                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre,
+                COALESCE(ni.proveedor, c.razon_social, k.documento_numero) as cliente_nombre,
                 CASE 
                     WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN k.created_at
                     ELSE NULL
@@ -122,8 +122,8 @@ async function kardexRoutes(fastify, options) {
                 END as fecha_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
-            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POR_RECEPCION')
-            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id AND k.tipo_movimiento = 'SALIDA'
+            LEFT JOIN notas_ingreso ni ON k.documento_tipo = 'NOTA_INGRESO' AND k.referencia_id = ni.id
+            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id
             LEFT JOIN clientes c ON ns.cliente_id = c.id
             WHERE 1=1
         `;
