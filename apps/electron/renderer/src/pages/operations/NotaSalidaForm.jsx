@@ -646,30 +646,6 @@ export const NotaSalidaForm = () => {
                 </div>
             </div>
 
-            <Card className="p-4 bg-purple-50 border-purple-200">
-                <div className="flex items-end gap-4">
-                    <div className="flex-1">
-                        <label className="label-premium text-purple-800">Autocompletar por N° de Documento de Ingreso</label>
-                        <input
-                            type="text"
-                            className="input-premium border-purple-300 focus:border-purple-500 focus:ring-purple-200"
-                            placeholder="Ingrese N° de Documento (ej. DOC-123)"
-                            value={numeroDocBusqueda}
-                            onChange={(e) => setNumeroDocBusqueda(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleBuscarPorDocumento()}
-                        />
-                    </div>
-                    <Button
-                        type="button"
-                        onClick={handleBuscarPorDocumento}
-                        disabled={buscandoDoc}
-                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                        {buscandoDoc ? 'Buscando...' : '🔍 Buscar y Cargar'}
-                    </Button>
-                </div>
-            </Card>
-
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                 <Card className="p-6">
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Nota de Salida Individual</h3>
@@ -711,99 +687,106 @@ export const NotaSalidaForm = () => {
 
                 {/* Sección de Notas de Ingreso */}
                 {selectedClient && (
-                    <Card className="p-6 bg-gradient-to-br from-purple-50 to-blue-50 border-purple-200">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-purple-800">📦 Notas de Ingreso del Cliente</h3>
-                            <Button
-                                type="button"
-                                onClick={() => setMostrarNotasIngreso(!mostrarNotasIngreso)}
-                                variant="secondary"
-                                className="text-sm"
-                            >
-                                {mostrarNotasIngreso ? '▼ Ocultar' : '▶ Mostrar'}
-                            </Button>
-                        </div>
+                    <Card className="p-6 bg-linear-to-br from-purple-50 to-blue-50 border-purple-200 border-2">
+                        <h3 className="text-xl font-bold text-purple-900 mb-5 flex items-center gap-3 pb-3 border-b-2 border-purple-200">
+                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Selecciona Nota de Ingreso
+                            {notasIngreso.length > 0 && (
+                                <span className="ml-auto bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                                    {notasIngreso.length} disponible(s)
+                                </span>
+                            )}
+                        </h3>
 
-                        {mostrarNotasIngreso && (
-                            <div className="space-y-4">
-                                {notasIngreso.length === 0 ? (
-                                    <div className="text-center py-8 text-slate-500">
-                                        No hay notas de ingreso para este cliente
-                                    </div>
-                                ) : (
-                                    notasIngreso.map(nota => (
-                                        <Card key={nota.id} className="p-4 bg-white border-purple-200">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <div>
-                                                    <h4 className="font-bold text-slate-700">
-                                                        Nota: {nota.numero_ingreso} - Fecha: {new Date(nota.fecha).toLocaleDateString('es-PE')}
+                        <div className="space-y-3">
+                            {notasIngreso.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500">
+                                    <p className="text-lg">📭 No hay notas de ingreso para este cliente</p>
+                                    <p className="text-sm mt-2">Registra una nota de ingreso primero para poder crear salidas</p>
+                                </div>
+                            ) : (
+                                notasIngreso.map(nota => (
+                                        <Card key={nota.id} className="p-5 bg-white border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all">
+                                        <div className="flex items-start justify-between mb-4 pb-4 border-b-2 border-slate-100">
+                                            <div className="flex-1">
+                                                <div className="flex items-baseline gap-3">
+                                                    <h4 className="text-lg font-bold text-slate-800">
+                                                        {nota.numero_ingreso}
                                                     </h4>
-                                                    <p className="text-xs text-slate-500">
-                                                        {nota.detalles?.length || 0} productos
-                                                    </p>
+                                                    <span className="text-sm text-slate-600">
+                                                        📅 {new Date(nota.fecha).toLocaleDateString('es-PE')}
+                                                    </span>
                                                 </div>
-                                                <Button
-                                                    type="button"
-                                                    onClick={() => handleSelectTodaNota(nota.id)}
-                                                    className="bg-purple-600 hover:bg-purple-700 text-white text-sm"
-                                                >
-                                                    ✓ Seleccionar Todo
-                                                </Button>
+                                                <p className="text-sm text-slate-500 mt-1">
+                                                    📦 {nota.detalles?.length || 0} producto(s) disponible(s)
+                                                </p>
                                             </div>
+                                            <Button
+                                                type="button"
+                                                onClick={() => handleSelectTodaNota(nota.id)}
+                                                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm whitespace-nowrap"
+                                            >
+                                                ✓ Todo
+                                            </Button>
+                                        </div>
 
-                                            {nota.detalles && nota.detalles.length > 0 && (
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-xs">
-                                                        <thead className="bg-slate-50">
-                                                            <tr>
-                                                                <th className="px-2 py-2 text-left">Sel.</th>
-                                                                <th className="px-2 py-2 text-left">Código</th>
-                                                                <th className="px-2 py-2 text-left">Producto</th>
-                                                                <th className="px-2 py-2 text-left">Lote</th>
-                                                                <th className="px-2 py-2 text-left">Vencimiento</th>
-                                                                <th className="px-2 py-2 text-left">UM</th>
-                                                                <th className="px-2 py-2 text-right">Disponible</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y">
-                                                            {nota.detalles.map(detalle => {
-                                                                const key = `${nota.id}-${detalle.id}`;
-                                                                const isSelected = selectedProductosFromNota[key];
-                                                                const disponible = getDetalleDisponible(detalle);
-                                                                const total = Number(detalle.cantidad_total || detalle.cantidad || 0);
-                                                                return (
-                                                                    <tr key={detalle.id} className={isSelected ? 'bg-purple-50' : 'hover:bg-slate-50'}>
-                                                                        <td className="px-2 py-2">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                checked={isSelected || false}
-                                                                                onChange={() => handleToggleProductoFromNota(nota.id, detalle)}
-                                                                                disabled={disponible <= 0}
-                                                                                className="w-4 h-4 text-purple-600 rounded"
-                                                                            />
-                                                                        </td>
-                                                                        <td className="px-2 py-2 font-mono">{detalle.producto?.codigo || '-'}</td>
-                                                                        <td className="px-2 py-2 font-medium">{detalle.producto?.descripcion || '-'}</td>
-                                                                        <td className="px-2 py-2">{detalle.lote_numero || '-'}</td>
-                                                                        <td className="px-2 py-2">
-                                                                            {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
-                                                                        </td>
-                                                                        <td className="px-2 py-2">{detalle.um || detalle.producto?.um || '-'}</td>
-                                                                        <td className="px-2 py-2 text-right font-semibold text-blue-600">
-                                                                            {disponible} / {total}
-                                                                        </td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
+                                        {nota.detalles && nota.detalles.length > 0 && (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-xs">
+                                                    <thead className="bg-purple-50">
+                                                        <tr className="border-b border-purple-200">
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">✓</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Código</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Producto</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Lote</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Vencimiento</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">UM</th>
+                                                            <th className="px-3 py-2 text-right font-semibold text-purple-800">Disp.</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {nota.detalles.map(detalle => {
+                                                            const key = `${nota.id}-${detalle.id}`;
+                                                            const isSelected = selectedProductosFromNota[key];
+                                                            const disponible = getDetalleDisponible(detalle);
+                                                            const total = Number(detalle.cantidad_total || detalle.cantidad || 0);
+                                                            return (
+                                                                <tr key={detalle.id} className={`${isSelected ? 'bg-purple-50 border-l-4 border-l-purple-600' : 'hover:bg-slate-50'}`}>
+                                                                    <td className="px-3 py-2 text-center">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isSelected || false}
+                                                                            onChange={() => handleToggleProductoFromNota(nota.id, detalle)}
+                                                                            disabled={disponible <= 0}
+                                                                            className="w-4 h-4 text-purple-600 rounded cursor-pointer"
+                                                                        />
+                                                                    </td>
+                                                                    <td className="px-3 py-2 font-mono text-slate-700">{detalle.producto?.codigo || '-'}</td>
+                                                                    <td className="px-3 py-2 font-medium text-slate-800">{detalle.producto?.descripcion || '-'}</td>
+                                                                    <td className="px-3 py-2 text-slate-700">{detalle.lote_numero || '-'}</td>
+                                                                    <td className="px-3 py-2">
+                                                                        {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
+                                                                    </td>
+                                                                    <td className="px-3 py-2">{detalle.um || detalle.producto?.um || '-'}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold">
+                                                                        <span className={disponible === 0 ? 'text-red-600' : 'text-green-600'}>
+                                                                            {disponible}
+                                                                        </span>
+                                                                        <span className="text-slate-400 ml-1">{total}</span>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
                                         </Card>
                                     ))
-                                )}
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </Card>
                 )}
 
