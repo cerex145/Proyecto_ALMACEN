@@ -111,13 +111,17 @@ async function kardexRoutes(fastify, options) {
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 p.um as unidad_medida,
-                COALESCE(ni.proveedor, c.razon_social, k.documento_numero) as cliente_nombre,
+                ni.proveedor as proveedor_ingreso,
+                c.razon_social as cliente_salida,
+                COALESCE(ni.proveedor, c.razon_social, ni.numero_ingreso, ns.numero_salida, k.documento_numero) as cliente_nombre,
+                ni.fecha as fecha_nota_ingreso,
+                ns.fecha as fecha_nota_salida,
                 CASE 
-                    WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN k.created_at
+                    WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN COALESCE(ni.fecha, k.created_at)
                     ELSE NULL
                 END as fecha_ingreso,
                 CASE 
-                    WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO') THEN k.created_at
+                    WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO') THEN COALESCE(ns.fecha, k.created_at)
                     ELSE NULL
                 END as fecha_salida
             FROM kardex k
@@ -195,14 +199,14 @@ async function kardexRoutes(fastify, options) {
         const data = movimientos.map(row => ({
             id: row.id,
             producto_id: row.producto_id,
-            lote_numero: row.lote_numero,
+            lote_numero: row.lote_numero || 'N/A',
             tipo_movimiento: row.tipo_movimiento,
             cantidad: Number(row.cantidad),
             saldo: Number(row.saldo),
             documento_tipo: row.documento_tipo,
             documento_numero: row.documento_numero,
             referencia_id: row.referencia_id,
-            observaciones: row.observaciones,
+            observaciones: row.observaciones || '-',
             cliente_nombre: row.cliente_nombre || 'N/A',
             created_at: row.created_at,
             fecha_ingreso: row.fecha_ingreso,
@@ -212,7 +216,9 @@ async function kardexRoutes(fastify, options) {
                 id: row.producto_id,
                 codigo: row.codigo_producto || 'N/A',
                 descripcion: row.descripcion_producto || 'N/A'
-            }
+            },
+            proveedor: row.proveedor_ingreso || null,
+            cliente: row.cliente_salida || null
         }));
 
         return {

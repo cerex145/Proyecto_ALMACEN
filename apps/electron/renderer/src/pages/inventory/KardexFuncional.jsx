@@ -412,13 +412,23 @@ export const KardexFuncional = () => {
                                                         {tipoInfo.label}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell style={{ fontWeight: 'bold', color: '#0b6aa2' }}>
-                                                    {mov.producto?.codigo || 'N/A'}
+                                                <TableCell style={{ fontWeight: 'bold', color: '#0b6aa2', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                                                    <span style={{ backgroundColor: '#e7f3ff', padding: '0.25rem 0.5rem', borderRadius: '3px' }}>
+                                                        {mov.producto?.codigo || 'N/A'}
+                                                    </span>
                                                 </TableCell>
-                                                <TableCell style={{ maxWidth: '250px' }}>
-                                                    {mov.producto?.descripcion || 'N/A'}
+                                                <TableCell style={{ maxWidth: '250px', fontSize: '0.9rem' }}>
+                                                    <strong>{mov.producto?.descripcion || 'N/A'}</strong>
                                                 </TableCell>
-                                                <TableCell>{mov.lote_numero || '-'}</TableCell>
+                                                <TableCell style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#666' }}>
+                                                    {mov.lote_numero ? (
+                                                        <span style={{ backgroundColor: '#fff3cd', padding: '0.25rem 0.5rem', borderRadius: '3px' }}>
+                                                            {mov.lote_numero}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: '#999' }}>—</span>
+                                                    )}
+                                                </TableCell>
                                                 <TableCell style={{ fontSize: '0.85rem' }}>
                                                     {mov.documento_tipo || '-'}
                                                 </TableCell>
@@ -454,7 +464,17 @@ export const KardexFuncional = () => {
                                                     {mov.unidad_medida || 'UND'}
                                                 </TableCell>
                                                 <TableCell style={{ fontSize: '0.85rem' }}>
-                                                    {mov.cliente_nombre || '-'}
+                                                    <div>
+                                                        {esIngreso ? (
+                                                            <span style={{ color: '#17a2b8' }}>
+                                                                <strong>📦 Proveedor:</strong> {mov.cliente_nombre || '-'}
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{ color: '#fd7e14' }}>
+                                                                <strong>👤 Cliente:</strong> {mov.cliente_nombre || '-'}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell style={{ fontSize: '0.85rem', maxWidth: '200px' }}>
                                                     {mov.observaciones || '-'}
