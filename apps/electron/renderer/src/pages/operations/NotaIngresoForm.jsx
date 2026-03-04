@@ -58,6 +58,13 @@ export const NotaIngresoForm = () => {
     const [archivoCSV, setArchivoCSV] = useState(null);
     const [erroresImportacion, setErroresImportacion] = useState([]);
 
+    // Estados para carga masiva por número de documento
+    const [numeroDocumentoMasivo, setNumeroDocumentoMasivo] = useState('');
+    const [productosMasivos, setProductosMasivos] = useState([]);
+    const [productosMasivosSeleccionados, setProductosMasivosSeleccionados] = useState({});
+    const [buscandoMasivo, setBuscandoMasivo] = useState(false);
+    const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
+
     useEffect(() => {
         loadData();
     }, []);
@@ -316,6 +323,120 @@ export const NotaIngresoForm = () => {
         setLote('');
         setVencimiento('');
         setPrecio('');
+    };
+
+    const handleBuscarProductosMasivos = async () => {
+        if (!numeroDocumentoMasivo.trim()) {
+            alert('Ingrese un número de documento para buscar');
+            return;
+        }
+
+        setBuscandoMasivo(true);
+        try {
+            const filters = { numero_documento: numeroDocumentoMasivo.trim() };
+            const productosEncontrados = await productService.getProducts(filters);
+            const productos = Array.isArray(productosEncontrados) ? productosEncontrados : [];
+
+            if (productos.length === 0) {
+                alert(`No se encontraron productos con el número de documento: ${numeroDocumentoMasivo}`);
+                setBuscandoMasivo(false);
+                return;
+            }
+
+            setProductosMasivos(productos);
+            setMostrarModalMasivo(true);
+            setProductosMasivosSeleccionados({});
+        } catch (error) {
+            console.error('Error buscando productos:', error);
+            alert('Error al buscar productos por número de documento');
+        } finally {
+            setBuscandoMasivo(false);
+        }
+    };
+
+    const handleToggleProductoMasivo = (productoId) => {
+        setProductosMasivosSeleccionados(prev => ({
+            ...prev,
+            [productoId]: !prev[productoId]
+        }));
+    };
+
+    const handleSeleccionarTodosMasivos = () => {
+        const todosSeleccionados = {};
+        productosMasivos.forEach(p => {
+            todosSeleccionados[p.id] = true;
+        });
+        setProductosMasivosSeleccionados(todosSeleccionados);
+    };
+
+    const handleDeseleccionarTodosMasivos = () => {
+        setProductosMasivosSeleccionados({});
+    };
+
+    const handleAgregarProductosMasivos = () => {
+        const idsSeleccionados = Object.keys(productosMasivosSeleccionados).filter(
+            id => productosMasivosSeleccionados[id]
+        );
+
+        if (idsSeleccionados.length === 0) {
+            alert('Seleccione al menos un producto para agregar');
+            return;
+        }
+
+        let agregados = 0;
+        idsSeleccionados.forEach(id => {
+            const producto = productosMasivos.find(p => p.id === parseInt(id));
+            if (!producto) return;
+
+            // Verificar si tiene lote y vencimiento
+            if (!producto.lote || !producto.fecha_vencimiento) {
+                console.warn(`Producto ${producto.codigo} no tiene lote o vencimiento`);
+                return;
+            }
+
+            // Verificar si ya existe
+            const existingIndex = fields.findIndex(
+                field => Number(field.producto_id) === Number(producto.id) && field.lote_numero === producto.lote
+            );
+
+            if (existingIndex >= 0) {
+                // Ya existe, actualizar cantidad
+                const existing = fields[existingIndex];
+                update(existingIndex, {
+                    ...existing,
+                    cantidad: Number(existing.cantidad || 0) + Number(producto.cantidad_total || 0),
+                    cantidad_total: Number(existing.cantidad_total || 0) + Number(producto.cantidad_total || 0)
+                });
+            } else {
+                // Agregar nuevo
+                append({
+                    producto_id: producto.id,
+                    producto_codigo: producto.codigo || '',
+                    producto_nombre: producto.descripcion || '',
+                    cantidad: parseFloat(producto.cantidad_total || 0),
+                    lote_numero: producto.lote || '',
+                    fecha_vencimiento: producto.fecha_vencimiento || '',
+                    um: producto.um || producto.unidad || '',
+                    fabricante: producto.fabricante || '',
+                    temperatura_min: producto.temperatura_min_c || '',
+                    temperatura_max: producto.temperatura_max_c || '',
+                    cantidad_bultos: parseFloat(producto.cantidad_bultos || 0),
+                    cantidad_cajas: parseFloat(producto.cantidad_cajas || 0),
+                    cantidad_por_caja: parseFloat(producto.cantidad_por_caja || 0),
+                    cantidad_fraccion: parseFloat(producto.cantidad_fraccion || 0),
+                    cantidad_total: parseFloat(producto.cantidad_total || 0),
+                    precio_unitario: 0,
+                    detalle_calculo: `Bultos: ${producto.cantidad_bultos || 0}, Cajas: ${producto.cantidad_cajas || 0}, Und/Caja: ${producto.cantidad_por_caja || 0}, Frac: ${producto.cantidad_fraccion || 0}`
+                });
+            }
+            agregados++;
+        });
+
+        alert(`✅ Se agregaron ${agregados} producto(s) a la nota de ingreso`);
+        setMostrarModalMasivo(false);
+        setProductosMasivos([]);
+        setProductosMasivosSeleccionados({});
+        setNumeroDocumentoMasivo('');
     };
 
     const handleToggleDetalle = (id) => {
@@ -710,6 +831,45 @@ export const NotaIngresoForm = () => {
                         </Button>
                     </div>
 
+                    {/* Carga Masiva por Número de Documento */}
+                    <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
+                        <h4 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            Carga Masiva por N° de Documento
+                        </h4>
+                        <div className="flex gap-3">
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    value={numeroDocumentoMasivo}
+                                    onChange={(e) => setNumeroDocumentoMasivo(e.target.value)}
+                                    className="input-premium"
+                                    placeholder="Ej: 110, F001-000213, etc."
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleBuscarProductosMasivos();
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={handleBuscarProductosMasivos}
+                                variant="primary"
+                                disabled={buscandoMasivo}
+                                className="bg-purple-600 hover:bg-purple-700"
+                            >
+                                {buscandoMasivo ? 'Buscando...' : 'Buscar Productos'}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-purple-600 mt-2">
+                            💡 Ingrese un número de documento para cargar todos los productos asociados a ese documento.
+                        </p>
+                    </div>
+
                     <h3 className="text-lg font-semibold text-blue-800 mb-4">Detalle de Productos (Lotes)</h3>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                         <div className="md:col-span-2">
@@ -1069,6 +1229,138 @@ PROD002,LOTE-2024-002,500`}
                             {!selectedClient && (
                                 <p className="text-sm text-orange-600 text-center">⚠️ Primero selecciona un cliente para poder importar productos</p>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Carga Masiva */}
+            {mostrarModalMasivo && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setMostrarModalMasivo(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Productos Encontrados ({productosMasivos.length})
+                            </h3>
+                            <button
+                                onClick={() => setMostrarModalMasivo(false)}
+                                className="text-white hover:text-purple-200 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4 pb-3 border-b">
+                                <p className="text-sm text-slate-600">
+                                    Seleccione los productos que desea agregar a la nota de ingreso
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        onClick={handleSeleccionarTodosMasivos}
+                                        variant="secondary"
+                                        className="text-sm"
+                                    >
+                                        ✓ Seleccionar todos
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={handleDeseleccionarTodosMasivos}
+                                        variant="secondary"
+                                        className="text-sm"
+                                    >
+                                        ✗ Deseleccionar todos
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="overflow-auto max-h-[50vh] border rounded-lg">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-100 sticky top-0">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left w-12">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={productosMasivos.length > 0 && Object.keys(productosMasivosSeleccionados).filter(id => productosMasivosSeleccionados[id]).length === productosMasivos.length}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            handleSeleccionarTodosMasivos();
+                                                        } else {
+                                                            handleDeseleccionarTodosMasivos();
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4"
+                                                />
+                                            </th>
+                                            <th className="px-4 py-3 text-left">Código</th>
+                                            <th className="px-4 py-3 text-left">Producto</th>
+                                            <th className="px-4 py-3 text-left">Lote</th>
+                                            <th className="px-4 py-3 text-left">Vencimiento</th>
+                                            <th className="px-4 py-3 text-left">Cantidad</th>
+                                            <th className="px-4 py-3 text-left">UM</th>
+                                            <th className="px-4 py-3 text-left">Fabricante</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {productosMasivos.map((producto) => (
+                                            <tr
+                                                key={producto.id}
+                                                className={`border-b hover:bg-purple-50 transition-colors ${productosMasivosSeleccionados[producto.id] ? 'bg-purple-50' : ''}`}
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={productosMasivosSeleccionados[producto.id] || false}
+                                                        onChange={() => handleToggleProductoMasivo(producto.id)}
+                                                        className="w-4 h-4"
+                                                    />
+                                                </td>
+                                                <td className="px-4 py-3 font-mono text-xs">{producto.codigo}</td>
+                                                <td className="px-4 py-3">{producto.descripcion}</td>
+                                                <td className="px-4 py-3 font-mono text-xs">{producto.lote || '-'}</td>
+                                                <td className="px-4 py-3 text-xs">
+                                                    {producto.fecha_vencimiento ? new Date(producto.fecha_vencimiento).toLocaleDateString() : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-semibold">{producto.cantidad_total || 0}</td>
+                                                <td className="px-4 py-3">{producto.um || producto.unidad || '-'}</td>
+                                                <td className="px-4 py-3 text-xs">{producto.fabricante || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex justify-between items-center mt-6 pt-4 border-t">
+                                <p className="text-sm text-slate-600">
+                                    <span className="font-semibold text-purple-600">
+                                        {Object.keys(productosMasivosSeleccionados).filter(id => productosMasivosSeleccionados[id]).length}
+                                    </span> producto(s) seleccionado(s)
+                                </p>
+                                <div className="flex gap-3">
+                                    <Button
+                                        type="button"
+                                        onClick={() => setMostrarModalMasivo(false)}
+                                        variant="secondary"
+                                    >
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        onClick={handleAgregarProductosMasivos}
+                                        variant="primary"
+                                        className="bg-purple-600 hover:bg-purple-700"
+                                        disabled={Object.keys(productosMasivosSeleccionados).filter(id => productosMasivosSeleccionados[id]).length === 0}
+                                    >
+                                        Agregar Seleccionados
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
