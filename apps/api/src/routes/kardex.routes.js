@@ -52,15 +52,17 @@ async function kardexRoutes(fastify, options) {
     fastify.get('/api/kardex', {
         schema: {
             tags: ['Kardex'],
-            description: 'Listar movimientos de kardex con filtros y paginación',
+            description: 'Listar movimientos de kardex con filtros y paginación mejorados',
             querystring: {
                 type: 'object',
                 properties: {
                     producto_id: { type: 'integer', description: 'Filtrar por ID de producto' },
-                    producto_nombre: { type: 'string', description: 'Filtrar por nombre o código de producto' },
+                    producto_codigo: { type: 'string', description: 'Filtrar por código de producto' },
+                    producto_nombre: { type: 'string', description: 'Filtrar por nombre o descripción de producto' },
+                    lote_numero: { type: 'string', description: 'Filtrar por número de lote' },
+                    documento_numero: { type: 'string', description: 'Filtrar por número de documento' },
                     cliente_nombre: { type: 'string', description: 'Filtrar por nombre de cliente o proveedor' },
-                    lote_id: { type: 'string', description: 'Filtrar por número de lote' },
-                    tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE'], description: 'Tipo de movimiento' },
+                    tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'], description: 'Tipo de movimiento' },
                     fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio' },
                     fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin' },
                     page: { type: 'integer', minimum: 1, default: 1 },
@@ -83,9 +85,11 @@ async function kardexRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             producto_id,
+            producto_codigo,
             producto_nombre,
+            lote_numero,
+            documento_numero,
             cliente_nombre,
-            lote_id,
             tipo_movimiento,
             fecha_desde,
             fecha_hasta,
@@ -106,10 +110,19 @@ async function kardexRoutes(fastify, options) {
                 k.cantidad, k.saldo, k.documento_tipo, k.documento_numero,
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
-                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre
+                p.um as unidad_medida,
+                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre,
+                CASE 
+                    WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN k.created_at
+                    ELSE NULL
+                END as fecha_ingreso,
+                CASE 
+                    WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO') THEN k.created_at
+                    ELSE NULL
+                END as fecha_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
-            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento = 'INGRESO'
+            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POR_RECEPCION')
             LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id AND k.tipo_movimiento = 'SALIDA'
             LEFT JOIN clientes c ON ns.cliente_id = c.id
             WHERE 1=1
@@ -122,9 +135,19 @@ async function kardexRoutes(fastify, options) {
             params.push(Number(producto_id));
         }
 
+        if (producto_codigo) {
+            sql += ` AND p.codigo LIKE ?`;
+            params.push(`%${producto_codigo}%`);
+        }
+
         if (producto_nombre) {
             sql += ` AND (p.descripcion LIKE ? OR p.codigo LIKE ?)`;
             params.push(`%${producto_nombre}%`, `%${producto_nombre}%`);
+        }
+
+        if (documento_numero) {
+            sql += ` AND k.documento_numero LIKE ?`;
+            params.push(`%${documento_numero}%`);
         }
 
         if (cliente_nombre) {
@@ -132,9 +155,9 @@ async function kardexRoutes(fastify, options) {
             params.push(`%${cliente_nombre}%`);
         }
 
-        if (lote_id) {
+        if (lote_numero) {
             sql += ` AND k.lote_numero LIKE ?`;
-            params.push(`%${lote_id}%`);
+            params.push(`%${lote_numero}%`);
         }
 
         if (tipo_movimiento) {
@@ -182,6 +205,9 @@ async function kardexRoutes(fastify, options) {
             observaciones: row.observaciones,
             cliente_nombre: row.cliente_nombre || 'N/A',
             created_at: row.created_at,
+            fecha_ingreso: row.fecha_ingreso,
+            fecha_salida: row.fecha_salida,
+            unidad_medida: row.unidad_medida || 'UND',
             producto: {
                 id: row.producto_id,
                 codigo: row.codigo_producto || 'N/A',
