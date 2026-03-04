@@ -57,6 +57,11 @@ export const NotaSalidaForm = () => {
     const [numeroDocBusqueda, setNumeroDocBusqueda] = useState('');
     const [buscandoDoc, setBuscandoDoc] = useState(false);
 
+    // Estados para modal de edición de cantidades
+    const [mostrarModalEdicionCantidades, setMostrarModalEdicionCantidades] = useState(false);
+    const [detallesAEditar, setDetallesAEditar] = useState([]);
+    const [cantidadesEditadas, setCantidadesEditadas] = useState({});
+
     const normalizeDateInput = (value) => {
         if (!value) {
             return '';
@@ -202,7 +207,15 @@ export const NotaSalidaForm = () => {
             );
 
             const notasConSaldo = notasConDetalles.filter((nota) => (nota.detalles || []).length > 0);
-            setNotasIngreso(notasConSaldo);
+            
+            // Ordenar descendente por fecha (últimas primero)
+            const notasOrdenadas = notasConSaldo.sort((a, b) => {
+                const fechaA = new Date(a.fecha || 0).getTime();
+                const fechaB = new Date(b.fecha || 0).getTime();
+                return fechaB - fechaA;
+            });
+            
+            setNotasIngreso(notasOrdenadas);
         } catch (error) {
             console.error('Error loading notas de ingreso:', error);
             setNotasIngreso([]);
@@ -328,55 +341,18 @@ export const NotaSalidaForm = () => {
             return;
         }
 
-        // Agregar todos los productos de la nota
+        // Abrir modal con todos los productos de la nota
         const disponibles = nota.detalles.filter((detalle) => getDetalleDisponible(detalle) > 0);
+        setDetallesAEditar(disponibles);
+        
+        // Inicializar cantidades con los disponibles
+        const cantidadesInicial = {};
         disponibles.forEach(detalle => {
-            if (detalle.producto_id) {
-                handleAgregarProductoDesdeNota(notaId, detalle);
-            }
+            const disponible = getDetalleDisponible(detalle);
+            cantidadesInicial[detalle.id] = disponible;
         });
-
-        alert(`✅ Se agregaron ${disponibles.length} productos de la nota de ingreso`);
-    };
-
-    const handleAgregarProductoDesdeNota = (notaId, detalle) => {
-        const key = `${notaId}-${detalle.id}`;
-        const disponible = getDetalleDisponible(detalle);
-        if (disponible <= 0) {
-            alert('Este detalle ya no tiene saldo disponible');
-            return;
-        }
-
-        // Verificar si ya existe este producto con el mismo lote
-        const existingIndex = fields.findIndex(
-            f => Number(f.producto_id) === Number(detalle.producto_id) &&
-                f.lote_numero === detalle.lote_numero
-        );
-
-        if (existingIndex >= 0) {
-            alert('Este detalle ya fue agregado a la nota de salida');
-        } else {
-            // Agregar nuevo producto
-            append({
-                producto_id: Number(detalle.producto_id),
-                producto_codigo: detalle.producto?.codigo || '',
-                producto_nombre: detalle.producto?.descripcion || '',
-                lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
-                lote_numero: detalle.lote_numero || '',
-                fecha_vencimiento: detalle.fecha_vencimiento || '',
-                um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
-                fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
-                temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
-                temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
-                cant_bulto: Number(detalle.cantidad_bultos || 0),
-                cant_caja: Number(detalle.cantidad_cajas || 0),
-                cant_por_caja: Number(detalle.cantidad_por_caja || 0),
-                cant_fraccion: Number(detalle.cantidad_fraccion || 0),
-                cant_total: disponible,
-                cantidad: disponible,
-                cantidad_disponible: disponible
-            });
-        }
+        setCantidadesEditadas(cantidadesInicial);
+        setMostrarModalEdicionCantidades(true);
     };
 
     const handleToggleProductoFromNota = (notaId, detalle) => {
@@ -397,10 +373,80 @@ export const NotaSalidaForm = () => {
                 return newSelected;
             });
         } else {
-            // Seleccionar y agregar
-            setSelectedProductosFromNota(prev => ({ ...prev, [key]: true }));
-            handleAgregarProductoDesdeNota(notaId, detalle);
+            // Seleccionar - abrir modal de edición
+            setDetallesAEditar([detalle]);
+            const disponible = getDetalleDisponible(detalle);
+            setCantidadesEditadas({ [detalle.id]: disponible });
+            setMostrarModalEdicionCantidades(true);
         }
+    };
+
+    const handleConfirmarCantidades = () => {
+        // Agregar los productos editados a la nota de salida
+        let agregados = 0;
+        
+        detallesAEditar.forEach(detalle => {
+            const cantidadSalida = Number(cantidadesEditadas[detalle.id]) || 0;
+            
+            if (cantidadSalida <= 0) {
+                return; // Saltar si cantidad es 0
+            }
+            
+            // Verificar si ya existe este producto con el mismo lote
+            const existingIndex = fields.findIndex(
+                f => Number(f.producto_id) === Number(detalle.producto_id) &&
+                    f.lote_numero === detalle.lote_numero
+            );
+
+            if (existingIndex >= 0) {
+                // Actualizar cantidad del existente
+                const existing = fields[existingIndex];
+                update(existingIndex, {
+                    ...existing,
+                    cant_total: (Number(existing.cant_total) || 0) + cantidadSalida,
+                    cantidad: (Number(existing.cantidad) || 0) + cantidadSalida
+                });
+            } else {
+                // Agregar nuevo producto
+                append({
+                    producto_id: Number(detalle.producto_id),
+                    producto_codigo: detalle.producto?.codigo || '',
+                    producto_nombre: detalle.producto?.descripcion || '',
+                    lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
+                    lote_numero: detalle.lote_numero || '',
+                    fecha_vencimiento: detalle.fecha_vencimiento || '',
+                    um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
+                    fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
+                    temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
+                    temperatura_max: detalle.temperatura_max_c || detalle.producto?.temperatura_max_c || '',
+                    cant_bulto: Number(detalle.cantidad_bultos || 0),
+                    cant_caja: Number(detalle.cantidad_cajas || 0),
+                    cant_por_caja: Number(detalle.cantidad_por_caja || 0),
+                    cant_fraccion: Number(detalle.cantidad_fraccion || 0),
+                    cant_total: cantidadSalida,
+                    cantidad: cantidadSalida,
+                    cantidad_disponible: getDetalleDisponible(detalle)
+                });
+            }
+            agregados++;
+        });
+        
+        if (agregados > 0) {
+            alert(`✅ Se agregaron ${agregados} producto(s) a la nota de salida`);
+        }
+        
+        setMostrarModalEdicionCantidades(false);
+        setDetallesAEditar([]);
+        setCantidadesEditadas({});
+        setSelectedProductosFromNota({});
+    };
+
+    const handleCambiarCantidad = (detalleId, nuevaCantidad) => {
+        const cantidad = Math.max(0, Number(nuevaCantidad) || 0);
+        setCantidadesEditadas(prev => ({
+            ...prev,
+            [detalleId]: cantidad
+        }));
     };
 
     const handleAddLine = () => {
@@ -1102,6 +1148,124 @@ export const NotaSalidaForm = () => {
                     </Button>
                 </div>
             </form>
+
+            {/* Modal de Edición de Cantidades */}
+            {mostrarModalEdicionCantidades && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setMostrarModalEdicionCantidades(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v14a2 2 0 11-4 0V4z" />
+                                </svg>
+                                Editar Cantidades de Salida
+                            </h3>
+                            <button
+                                onClick={() => setMostrarModalEdicionCantidades(false)}
+                                className="text-white hover:text-blue-200 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-auto max-h-[calc(80vh-140px)]">
+                            <p className="text-sm text-slate-600 mb-4">
+                                Ajusta las cantidades que deseas que salgan. Los valores no pueden exceder lo disponible.
+                            </p>
+
+                            <div className="space-y-4">
+                                {detallesAEditar.map((detalle) => {
+                                    const disponible = getDetalleDisponible(detalle);
+                                    const cantidad = cantidadesEditadas[detalle.id] || 0;
+
+                                    return (
+                                        <div key={detalle.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-700">Producto</p>
+                                                    <p className="text-sm text-slate-600">{detalle.producto?.descripcion || '-'}</p>
+                                                    <p className="text-xs text-slate-500 mt-1">Código: <span className="font-mono">{detalle.producto?.codigo || '-'}</span></p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-slate-700">Lote</p>
+                                                    <p className="text-sm text-slate-600">{detalle.lote_numero || '-'}</p>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        Vencimiento: {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                                        Cantidad Disponible
+                                                    </label>
+                                                    <div className="text-2xl font-bold text-blue-600">
+                                                        {disponible}
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        Total en stock: {detalle.cantidad_total || 0}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                                        Cantidad a Salir
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max={disponible}
+                                                        step="0.01"
+                                                        value={cantidad}
+                                                        onChange={(e) => handleCambiarCantidad(detalle.id, e.target.value)}
+                                                        className="input-premium text-lg font-bold text-right"
+                                                        autoFocus
+                                                    />
+                                                    {cantidad > disponible && (
+                                                        <p className="text-xs text-red-600 mt-1">⚠️ Supera el disponible</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-3 pt-3 border-t border-slate-200">
+                                                <p className="text-xs text-slate-600">
+                                                    <span className="font-semibold">UM:</span> {detalle.um || detalle.producto?.um || '-'} | 
+                                                    <span className="font-semibold ml-2">Fabricante:</span> {detalle.fabricante || detalle.producto?.fabricante || '-'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-between items-center">
+                            <p className="text-sm text-slate-600">
+                                <span className="font-semibold text-slate-800">{detallesAEditar.length}</span> producto(s) a procesar
+                            </p>
+                            <div className="flex gap-3">
+                                <Button
+                                    type="button"
+                                    onClick={() => setMostrarModalEdicionCantidades(false)}
+                                    variant="secondary"
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={handleConfirmarCantidades}
+                                    variant="primary"
+                                    className="bg-green-600 hover:bg-green-700"
+                                >
+                                    ✅ Confirmar y Agregar
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
