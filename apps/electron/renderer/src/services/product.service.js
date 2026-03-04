@@ -52,6 +52,12 @@ export const productService = {
         return response.data;
     },
 
+    // Inventario General
+    getInventario: async (filters = {}) => {
+        const response = await api.get('/productos/inventario', { params: filters });
+        return response.data.data || [];
+    },
+
     // Lotes
     getLotesByProduct: async (productId) => {
         const response = await api.get(`/lotes/producto/${productId}`);
