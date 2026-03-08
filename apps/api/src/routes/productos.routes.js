@@ -11,6 +11,11 @@ const ProductoSchema = {
         tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
         numero_documento: { type: 'string', nullable: true },
         registro_sanitario: { type: 'string', nullable: true },
+        r_i: { type: 'string', nullable: true },
+        codigo_gln: { type: 'string', nullable: true },
+        proveedor_ruc: { type: 'string', nullable: true },
+        fecha_ingreso: { type: 'string', format: 'date', nullable: true },
+        codigo_interno: { type: 'string', nullable: true },
         lote: { type: 'string', nullable: true },
         fabricante: { type: 'string', nullable: true },
         categoria_ingreso: { type: 'string', nullable: true },
@@ -19,8 +24,7 @@ const ProductoSchema = {
         unidad: { type: 'string', nullable: true },
         unidad_otro: { type: 'string', nullable: true },
         um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
-        temperatura_min_c: { type: 'number', nullable: true },
-        temperatura_max_c: { type: 'number', nullable: true },
+        temperatura: { type: 'number', nullable: true },
         cantidad_bultos: { type: 'number' },
         cantidad_cajas: { type: 'number' },
         cantidad_por_caja: { type: 'number' },
@@ -201,6 +205,82 @@ async function productoRoutes(fastify, options) {
         };
     });
 
+    // GET /api/productos/plantilla - Descargar plantilla de importación
+    fastify.get('/api/productos/plantilla', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Descargar plantilla Excel para importación masiva de productos',
+            response: {
+                200: { type: 'string', format: 'binary' }
+            }
+        }
+    }, async (request, reply) => {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Plantilla');
+
+        // Título e instrucciones
+        worksheet.mergeCells('A1', 'N1');
+        worksheet.getCell('A1').value = 'PLANTILLA DE IMPORTACIÓN DE PRODUCTOS';
+        worksheet.getCell('A1').font = { bold: true, size: 14 };
+        worksheet.getCell('A1').alignment = { horizontal: 'center' };
+
+        worksheet.mergeCells('A2', 'N2');
+        worksheet.getCell('A2').value = 'Instrucciones: Llenar los datos desde la fila 4. Los campos Código, Descripción y Cant. Total son obligatorios.';
+        worksheet.getCell('A2').font = { italic: true };
+        worksheet.getCell('A2').alignment = { horizontal: 'center' };
+
+        // Encabezados en la fila 3
+        const row3 = worksheet.getRow(3);
+        const columnas = [
+            { header: 'Cod. Producto*', key: 'codigo', width: 15 },
+            { header: 'Producto*', key: 'descripcion', width: 40 },
+            { header: 'Lote', key: 'lote', width: 15 },
+            { header: 'Registro Sanitario', key: 'registro_sanitario', width: 25 },
+            { header: 'R/I', key: 'r_i', width: 15 },
+            { header: 'Código GLN', key: 'codigo_gln', width: 20 },
+            { header: 'Proveedor', key: 'proveedor_ruc', width: 15 },
+            { header: 'Razón Social', key: 'proveedor', width: 35 },
+            { header: 'Fecha Ingreso', key: 'fecha_ingreso', width: 20 },
+            { header: 'Fecha Vencimiento', key: 'fecha_vencimiento', width: 20 },
+            { header: 'T. Documento', key: 'tipo_documento', width: 15 },
+            { header: 'N° de Documento', key: 'numero_documento', width: 20 },
+            { header: 'Código Interno', key: 'codigo_interno', width: 20 },
+            { header: 'Unidad', key: 'unidad', width: 15 },
+            { header: 'UM', key: 'um', width: 15 },
+            { header: 'Cant. Bultos', key: 'cantidad_bultos', width: 15 },
+            { header: 'Cant. Cajas', key: 'cantidad_cajas', width: 15 },
+            { header: 'Cant. por Caja', key: 'cantidad_por_caja', width: 15 },
+            { header: 'Cant. Fracción', key: 'cantidad_fraccion', width: 15 },
+            { header: 'Cantidad Total*', key: 'cantidad_total', width: 15 },
+            { header: 'Fabricante', key: 'fabricante', width: 25 },
+            { header: 'Procedencia', key: 'procedencia', width: 20 },
+            { header: 'Observaciones', key: 'observaciones', width: 40 }
+        ];
+
+        columnas.forEach((col, i) => {
+            const cell = row3.getCell(i + 1);
+            cell.value = col.header;
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo-600
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+            worksheet.getColumn(i + 1).width = col.width;
+        });
+
+        // Algunas filas de ejemplo (Opcional)
+        // worksheet.addRow(['PROD-001', 'Paracetamol 500mg', 'L-2023', 'Laboratorio A', '2025-12-31', 'CAJ', 15, 25, 1, 10, 100, 0, 1000, 'Sin observaciones']);
+
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        reply.header('Content-Disposition', 'attachment; filename=plantilla_productos.xlsx');
+        return reply.send(buffer);
+    });
+
     // GET /api/productos/:id - Obtener un producto
     fastify.get('/api/productos/:id', {
         schema: {
@@ -245,6 +325,11 @@ async function productoRoutes(fastify, options) {
                     tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
                     numero_documento: { type: 'string', nullable: true },
                     registro_sanitario: { type: 'string', nullable: true },
+                    r_i: { type: 'string', nullable: true },
+                    codigo_gln: { type: 'string', nullable: true },
+                    proveedor_ruc: { type: 'string', nullable: true },
+                    fecha_ingreso: { type: 'string', format: 'date', nullable: true },
+                    codigo_interno: { type: 'string', nullable: true },
                     lote: { type: 'string', nullable: true },
                     fabricante: { type: 'string', nullable: true },
                     categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'], nullable: true },
@@ -253,8 +338,7 @@ async function productoRoutes(fastify, options) {
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
                     um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
-                    temperatura_min_c: { type: 'number', nullable: true },
-                    temperatura_max_c: { type: 'number', nullable: true },
+                    temperatura: { type: 'number', nullable: true },
                     cantidad_bultos: { type: 'number', nullable: true },
                     cantidad_cajas: { type: 'number', nullable: true },
                     cantidad_por_caja: { type: 'number', nullable: true },
@@ -277,6 +361,11 @@ async function productoRoutes(fastify, options) {
             tipo_documento,
             numero_documento,
             registro_sanitario,
+            r_i,
+            codigo_gln,
+            proveedor_ruc,
+            fecha_ingreso,
+            codigo_interno,
             lote,
             fabricante,
             categoria_ingreso,
@@ -285,8 +374,7 @@ async function productoRoutes(fastify, options) {
             unidad,
             unidad_otro,
             um,
-            temperatura_min_c,
-            temperatura_max_c,
+            temperatura,
             cantidad_bultos,
             cantidad_cajas,
             cantidad_por_caja,
@@ -329,6 +417,11 @@ async function productoRoutes(fastify, options) {
             tipo_documento: tipo_documento || null,
             numero_documento: numero_documento || null,
             registro_sanitario: registro_sanitario || null,
+            r_i: r_i || null,
+            codigo_gln: codigo_gln || null,
+            proveedor_ruc: proveedor_ruc || null,
+            fecha_ingreso: fecha_ingreso || null,
+            codigo_interno: codigo_interno || null,
             lote: lote || null,
             fabricante: fabricante || null,
             categoria_ingreso,
@@ -337,8 +430,7 @@ async function productoRoutes(fastify, options) {
             unidad: unidad || 'UND',
             unidad_otro: unidad_otro || null,
             um: um !== undefined ? um : null,
-            temperatura_min_c: temperatura_min_c !== undefined ? temperatura_min_c : null,
-            temperatura_max_c: temperatura_max_c !== undefined ? temperatura_max_c : null,
+            temperatura: temperatura !== undefined ? temperatura : 25,
             cantidad_bultos: cantidad_bultos || 0,
             cantidad_cajas: cantidad_cajas || 0,
             cantidad_por_caja: cantidad_por_caja || 0,
@@ -379,6 +471,11 @@ async function productoRoutes(fastify, options) {
                     tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
                     numero_documento: { type: 'string', nullable: true },
                     registro_sanitario: { type: 'string', nullable: true },
+                    r_i: { type: 'string', nullable: true },
+                    codigo_gln: { type: 'string', nullable: true },
+                    proveedor_ruc: { type: 'string', nullable: true },
+                    fecha_ingreso: { type: 'string', format: 'date', nullable: true },
+                    codigo_interno: { type: 'string', nullable: true },
                     lote: { type: 'string', nullable: true },
                     fabricante: { type: 'string', nullable: true },
                     categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'], nullable: true },
@@ -387,8 +484,7 @@ async function productoRoutes(fastify, options) {
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
                     um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
-                    temperatura_min_c: { type: 'number', nullable: true },
-                    temperatura_max_c: { type: 'number', nullable: true },
+                    temperatura: { type: 'number', nullable: true },
                     cantidad_bultos: { type: 'number', nullable: true },
                     cantidad_cajas: { type: 'number', nullable: true },
                     cantidad_por_caja: { type: 'number', nullable: true },
@@ -413,6 +509,11 @@ async function productoRoutes(fastify, options) {
             tipo_documento,
             numero_documento,
             registro_sanitario,
+            r_i,
+            codigo_gln,
+            proveedor_ruc,
+            fecha_ingreso,
+            codigo_interno,
             lote,
             fabricante,
             categoria_ingreso,
@@ -421,8 +522,7 @@ async function productoRoutes(fastify, options) {
             unidad,
             unidad_otro,
             um,
-            temperatura_min_c,
-            temperatura_max_c,
+            temperatura,
             cantidad_bultos,
             cantidad_cajas,
             cantidad_por_caja,
@@ -462,6 +562,11 @@ async function productoRoutes(fastify, options) {
         if (tipo_documento !== undefined) producto.tipo_documento = tipo_documento || null;
         if (numero_documento !== undefined) producto.numero_documento = numero_documento || null;
         if (registro_sanitario !== undefined) producto.registro_sanitario = registro_sanitario || null;
+        if (r_i !== undefined) producto.r_i = r_i || null;
+        if (codigo_gln !== undefined) producto.codigo_gln = codigo_gln || null;
+        if (proveedor_ruc !== undefined) producto.proveedor_ruc = proveedor_ruc || null;
+        if (fecha_ingreso !== undefined) producto.fecha_ingreso = fecha_ingreso || null;
+        if (codigo_interno !== undefined) producto.codigo_interno = codigo_interno || null;
         if (lote !== undefined) producto.lote = lote || null;
         if (fabricante !== undefined) producto.fabricante = fabricante || null;
         if (categoria_ingreso) producto.categoria_ingreso = categoria_ingreso;
@@ -470,8 +575,7 @@ async function productoRoutes(fastify, options) {
         if (unidad !== undefined) producto.unidad = unidad || 'UND';
         if (unidad_otro !== undefined) producto.unidad_otro = unidad_otro || null;
         if (um !== undefined) producto.um = um || null;
-        if (temperatura_min_c !== undefined) producto.temperatura_min_c = temperatura_min_c;
-        if (temperatura_max_c !== undefined) producto.temperatura_max_c = temperatura_max_c;
+        if (temperatura !== undefined) producto.temperatura = temperatura;
         if (cantidad_bultos !== undefined) producto.cantidad_bultos = cantidad_bultos;
         if (cantidad_cajas !== undefined) producto.cantidad_cajas = cantidad_cajas;
         if (cantidad_por_caja !== undefined) producto.cantidad_por_caja = cantidad_por_caja;
@@ -544,22 +648,31 @@ async function productoRoutes(fastify, options) {
 
         // Mapeo por POSICIÓN de columna (independiente del nombre del encabezado)
         const COLUMNAS = [
-            'codigo',            // A - col 1
-            'descripcion',       // B - col 2
-            'lote',              // C - col 3
-            'fabricante',        // D - col 4
-            'fecha_vencimiento', // E - col 5
-            'um',                // F - col 6
-            'temperatura_min_c', // G - col 7
-            'temperatura_max_c', // H - col 8
-            'cantidad_bultos',   // I - col 9
-            'cantidad_cajas',    // J - col 10
-            'cantidad_por_caja', // K - col 11
-            'cantidad_fraccion', // L - col 12
-            'cantidad_total',    // M - col 13
-            'observaciones',     // N - col 14
+            'codigo',              // A - col 1 (Cod. Producto)
+            'descripcion',         // B - col 2 (Producto)
+            'lote',                // C - col 3
+            'registro_sanitario',  // D - col 4
+            'r_i',                 // E - col 5
+            'codigo_gln',          // F - col 6
+            'proveedor_ruc',       // G - col 7
+            'proveedor',           // H - col 8 (Razón Social)
+            'fecha_ingreso',       // I - col 9
+            'fecha_vencimiento',   // J - col 10
+            'tipo_documento',      // K - col 11
+            'numero_documento',    // L - col 12
+            'codigo_interno',      // M - col 13
+            'unidad',              // N - col 14
+            'um',                  // O - col 15
+            'cantidad_bultos',     // P - col 16
+            'cantidad_cajas',      // Q - col 17
+            'cantidad_por_caja',   // R - col 18
+            'cantidad_fraccion',   // S - col 19
+            'cantidad_total',      // T - col 20
+            'fabricante',          // U - col 21
+            'procedencia',         // V - col 22
+            'observaciones'        // W - col 23
         ];
-        const NUMERICAS = ['temperatura_min_c', 'temperatura_max_c', 'cantidad_bultos', 'cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion', 'cantidad_total'];
+        const NUMERICAS = ['cantidad_bultos', 'cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion', 'cantidad_total'];
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer);

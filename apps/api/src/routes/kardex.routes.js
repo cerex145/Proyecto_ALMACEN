@@ -7,24 +7,33 @@ const KardexMovimientoSchema = {
         id: { type: 'integer' },
         producto_id: { type: 'integer' },
         lote_numero: { type: 'string', nullable: true },
-        tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE', 'AJUSTE_POR_RECEPCION'] },
+        tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'] },
         cantidad: { type: 'number' },
         saldo: { type: 'number' },
-        documento_tipo: { type: 'string' },
-        documento_numero: { type: 'string' },
+        documento_tipo: { type: 'string', nullable: true },
+        documento_numero: { type: 'string', nullable: true },
         referencia_id: { type: 'integer', nullable: true },
         observaciones: { type: 'string', nullable: true },
         created_at: { type: 'string', format: 'date-time' },
+        // Campos adicionales del JOIN
+        cliente_nombre: { type: 'string', nullable: true },
+        proveedor: { type: 'string', nullable: true },
+        cliente: { type: 'string', nullable: true },
+        fecha_ingreso: { type: 'string', nullable: true },
+        fecha_salida: { type: 'string', nullable: true },
+        unidad_medida: { type: 'string', nullable: true },
         producto: {
             type: 'object',
+            nullable: true,
             properties: {
                 id: { type: 'integer' },
-                codigo: { type: 'string' },
-                descripcion: { type: 'string' }
+                codigo: { type: 'string', nullable: true },
+                descripcion: { type: 'string', nullable: true }
             }
         }
     }
 };
+
 
 const PaginationSchema = {
     type: 'object',
@@ -113,7 +122,7 @@ async function kardexRoutes(fastify, options) {
                 p.um as unidad_medida,
                 ni.proveedor as proveedor_ingreso,
                 c.razon_social as cliente_salida,
-                COALESCE(ni.proveedor, c.razon_social, ni.numero_ingreso, ns.numero_salida, k.documento_numero) as cliente_nombre,
+                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre,
                 ni.fecha as fecha_nota_ingreso,
                 ns.fecha as fecha_nota_salida,
                 CASE 
@@ -126,8 +135,16 @@ async function kardexRoutes(fastify, options) {
                 END as fecha_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
-            LEFT JOIN notas_ingreso ni ON k.documento_tipo = 'NOTA_INGRESO' AND k.referencia_id = ni.id
-            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id
+            LEFT JOIN notas_ingreso ni ON k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
+                AND (
+                    (k.referencia_id IS NOT NULL AND k.referencia_id = ni.id)
+                    OR (k.referencia_id IS NULL AND k.documento_numero IS NOT NULL AND k.documento_numero = ni.numero_ingreso)
+                )
+            LEFT JOIN notas_salida ns ON k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+                AND (
+                    (k.referencia_id IS NOT NULL AND k.referencia_id = ns.id)
+                    OR (k.referencia_id IS NULL AND k.documento_numero IS NOT NULL AND k.documento_numero = ns.numero_salida)
+                )
             LEFT JOIN clientes c ON ns.cliente_id = c.id
             WHERE 1=1
         `;

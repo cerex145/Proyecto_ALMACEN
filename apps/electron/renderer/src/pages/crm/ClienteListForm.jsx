@@ -8,6 +8,7 @@ import { Badge } from '../../components/common/Badge';
 export const ClienteListForm = () => {
     const [clientes, setClientes] = useState([]);
     const [formData, setFormData] = useState({
+        codigo: '',
         numero_ruc: '',
         razon_social: '',
         persona_contacto: '',
@@ -57,12 +58,12 @@ export const ClienteListForm = () => {
         try {
             setLoading(true);
             const method = editId ? 'PUT' : 'POST';
-            const url = editId 
+            const url = editId
                 ? `http://localhost:3000/api/clientes/${editId}`
                 : 'http://localhost:3000/api/clientes';
 
             const payload = {
-                codigo: formData.numero_ruc || formData.razon_social,
+                codigo: formData.codigo,
                 razon_social: formData.razon_social,
                 cuit: formData.numero_ruc,
                 direccion: formData.direccion,
@@ -93,6 +94,7 @@ export const ClienteListForm = () => {
 
             if (response.ok) {
                 setFormData({
+                    codigo: '',
                     numero_ruc: '',
                     razon_social: '',
                     persona_contacto: '',
@@ -119,12 +121,13 @@ export const ClienteListForm = () => {
 
     const handleEdit = (cliente) => {
         setFormData({
-            numero_ruc: cliente.cuit || cliente.codigo || '',
+            codigo: cliente.codigo || '',
+            numero_ruc: cliente.cuit || '',
             razon_social: cliente.razon_social,
-            persona_contacto: cliente.persona_contacto,
-            email: cliente.email,
-            telefono: cliente.telefono,
-            direccion: cliente.direccion,
+            persona_contacto: cliente.persona_contacto || '',
+            email: cliente.email || '',
+            telefono: cliente.telefono || '',
+            direccion: cliente.direccion || '',
             distrito: cliente.distrito || '',
             provincia: cliente.provincia || '',
             departamento: cliente.departamento || '',
@@ -157,6 +160,13 @@ export const ClienteListForm = () => {
             <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', marginBottom: '2rem', border: '1px solid var(--border-color)' }}>
                 <h3 style={{ marginTop: 0 }}>{editId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
                 <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                    <Input
+                        name="codigo"
+                        placeholder="Código de Cliente"
+                        value={formData.codigo}
+                        onChange={handleChange}
+                        required
+                    />
                     <Input
                         name="numero_ruc"
                         placeholder="RUC"
@@ -248,7 +258,7 @@ export const ClienteListForm = () => {
                         {editId && (
                             <Button type="button" variant="secondary" onClick={() => {
                                 setEditId(null);
-                                setFormData({ numero_ruc: '', razon_social: '', persona_contacto: '', email: '', telefono: '', direccion: '', distrito: '', provincia: '', departamento: '', categoria_riesgo: 'Bajo', estado: 'Activo' });
+                                setFormData({ codigo: '', numero_ruc: '', razon_social: '', persona_contacto: '', email: '', telefono: '', direccion: '', distrito: '', provincia: '', departamento: '', categoria_riesgo: 'Bajo', estado: 'Activo' });
                             }}>
                                 Cancelar
                             </Button>

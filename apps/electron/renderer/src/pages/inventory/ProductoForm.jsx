@@ -72,6 +72,11 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
                 registro_sanitario: data.registro_sanitario || null,
+                r_i: data.r_i || null,
+                codigo_gln: data.codigo_gln || null,
+                proveedor_ruc: data.proveedor_ruc || data.ruc_cliente || null,
+                fecha_ingreso: data.fecha_ingreso || null,
+                codigo_interno: data.codigo_interno || null,
                 lote: data.lote || null,
                 fabricante: data.fabricante || null,
                 procedencia: data.procedencia || null,
@@ -79,8 +84,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                 unidad: data.unidad || 'UND',
                 unidad_otro: data.unidad === 'OTRO' ? (data.unidad_otro || null) : null,
                 um: data.um ? data.um : null,
-                temperatura_min_c: data.temperatura_min_c !== '' && data.temperatura_min_c !== undefined ? Number(data.temperatura_min_c) : null,
-                temperatura_max_c: data.temperatura_max_c !== '' && data.temperatura_max_c !== undefined ? Number(data.temperatura_max_c) : null,
+                temperatura: 25.0,
                 cantidad_bultos: data.cantidad_bultos !== '' && data.cantidad_bultos !== undefined ? Number(data.cantidad_bultos) : 0,
                 cantidad_cajas: data.cantidad_cajas !== '' && data.cantidad_cajas !== undefined ? Number(data.cantidad_cajas) : 0,
                 cantidad_por_caja: data.cantidad_por_caja !== '' && data.cantidad_por_caja !== undefined ? Number(data.cantidad_por_caja) : 0,
@@ -201,6 +205,22 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                     {errors.descripcion && <span className="text-red-500 text-xs">Requerido</span>}
                                 </div>
                                 <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">R/I</label>
+                                    <input {...register('r_i')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Código GLN</label>
+                                    <input {...register('codigo_gln')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Código Interno</label>
+                                    <input {...register('codigo_interno')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de Ingreso</label>
+                                    <input {...register('fecha_ingreso')} type="date" className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
+                                </div>
+                                <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Lote</label>
                                     <input
                                         {...register('lote')}
@@ -267,12 +287,8 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura mínima (°C)</label>
-                                    <input {...register('temperatura_min_c')} type="number" step="0.01" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura máxima (°C)</label>
-                                    <input {...register('temperatura_max_c')} type="number" step="0.01" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura (°C)</label>
+                                    <input value="25" readOnly className="w-full h-9 rounded border-gray-300 bg-gray-50 border px-2 text-sm text-gray-500" />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Cantidad de Bultos</label>

@@ -143,8 +143,7 @@ export const ProductoList = () => {
                                                 <div><span className="font-semibold">Vencimiento:</span> {product.fecha_vencimiento ? new Date(product.fecha_vencimiento).toLocaleDateString() : '-'}</div>
                                                 <div><span className="font-semibold">Unidad:</span> {product.unidad || 'UND'}{product.unidad === 'OTRO' && product.unidad_otro ? ` (${product.unidad_otro})` : ''}</div>
                                                 <div><span className="font-semibold">UM:</span> {product.um || '-'}</div>
-                                                <div><span className="font-semibold">Temp. Min (°C):</span> {product.temperatura_min_c ?? '-'}</div>
-                                                <div><span className="font-semibold">Temp. Max (°C):</span> {product.temperatura_max_c ?? '-'}</div>
+                                                <div><span className="font-semibold">Temperatura (°C):</span> {product.temperatura ?? '25'}</div>
                                                 <div><span className="font-semibold">Por Caja:</span> {product.cantidad_por_caja ?? 0}</div>
                                                 <div><span className="font-semibold">Stock:</span> {product.stock_actual ?? 0}</div>
                                                 <div><span className="font-semibold">Categoría Ingreso:</span> {product.categoria_ingreso || '-'}</div>

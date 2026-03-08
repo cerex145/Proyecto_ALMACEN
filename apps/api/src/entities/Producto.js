@@ -60,6 +60,30 @@ module.exports = new EntitySchema({
             length: 200,
             nullable: true
         },
+        r_i: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        codigo_gln: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        proveedor_ruc: {
+            type: 'varchar',
+            length: 20,
+            nullable: true
+        },
+        fecha_ingreso: {
+            type: 'date',
+            nullable: true
+        },
+        codigo_interno: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
         fecha_vencimiento: {
             type: 'date',
             nullable: true
@@ -79,16 +103,11 @@ module.exports = new EntitySchema({
             enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'],
             nullable: true
         },
-        temperatura_min_c: {
+        temperatura: {
             type: 'decimal',
             precision: 6,
             scale: 2,
-            nullable: true
-        },
-        temperatura_max_c: {
-            type: 'decimal',
-            precision: 6,
-            scale: 2,
+            default: 25.00,
             nullable: true
         },
         cantidad_bultos: {

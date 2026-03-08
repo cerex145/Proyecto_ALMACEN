@@ -70,7 +70,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
     const [manualRows, setManualRows] = useState([]);
     const [manualForm, setManualForm] = useState({
         codigo: '', descripcion: '', lote: '', fabricante: '',
-        fecha_vencimiento: '', um: '',
+        fecha_vencimiento: '', um: '', r_i: '', codigo_gln: '',
+        fecha_ingreso: '', codigo_interno: '',
         temperatura_min_c: '', temperatura_max_c: '',
         cantidad_bultos: '0', cantidad_cajas: '0',
         cantidad_por_caja: '0', cantidad_fraccion: '0',
@@ -135,25 +136,31 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
 
 
     // ── Validar campos globales comunes ──
-    const validarGlobales = () => {
-        if (!numeroDocumento.trim()) { alert('El Número de Documento es obligatorio.'); return false; }
+    const validarGlobales = (filas) => {
+        const globalVacio = !numeroDocumento || !numeroDocumento.trim();
+        const filasIncompletas = filas.some(f => !f.numero_documento || !String(f.numero_documento).trim());
+
+        if (globalVacio && filasIncompletas) {
+            alert('El Número de Documento es obligatorio (puedes llenarlo en el panel izquierdo o directamente en cada fila del archivo Excel).');
+            return false;
+        }
         return true;
     };
 
     // ── Guardar productos del CSV ──
     const handleGuardarCSV = async () => {
-        if (!validarGlobales()) return;
+        if (!validarGlobales(previewRows)) return;
         if (previewRows.length === 0) { alert('No hay productos válidos en el archivo.'); return; }
 
         const globales = {
             proveedor: proveedor || razonSocial,
             tipo_documento: tipoDocumento || null,
-            numero_documento: numeroDocumento,
+            numero_documento: numeroDocumento || null,
             registro_sanitario: registroSanitario || null,
             categoria_ingreso: categoriaIngreso || null,
         };
 
-        const productos = previewRows.map(p => ({ ...globales, ...p }));
+        const productos = previewRows.map(p => ({ ...globales, ...p, temperatura: 25.0 }));
 
         try {
             setUploading(true);
@@ -191,7 +198,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         setManualRows(prev => [...prev, { ...manualForm, id: Date.now() }]);
         setManualForm({
             codigo: '', descripcion: '', lote: '', fabricante: '',
-            fecha_vencimiento: '', um: '',
+            fecha_vencimiento: '', um: '', r_i: '', codigo_gln: '',
+            fecha_ingreso: '', codigo_interno: '',
             temperatura_min_c: '', temperatura_max_c: '',
             cantidad_bultos: '0', cantidad_cajas: '0',
             cantidad_por_caja: '0', cantidad_fraccion: '0',
@@ -201,13 +209,13 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
 
     // ── Guardar carga manual ──
     const handleGuardarManual = async () => {
-        if (!validarGlobales()) return;
+        if (!validarGlobales(manualRows)) return;
         if (manualRows.length === 0) { alert('Agregue al menos un producto.'); return; }
 
         const globales = {
             proveedor: proveedor || razonSocial,
             tipo_documento: tipoDocumento || null,
-            numero_documento: numeroDocumento,
+            numero_documento: numeroDocumento || null,
             registro_sanitario: registroSanitario || null,
             categoria_ingreso: categoriaIngreso || null,
         };
@@ -223,9 +231,12 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     lote: row.lote || null,
                     fabricante: row.fabricante || null,
                     fecha_vencimiento: row.fecha_vencimiento || null,
+                    r_i: row.r_i || null,
+                    codigo_gln: row.codigo_gln || null,
+                    fecha_ingreso: row.fecha_ingreso || null,
+                    codigo_interno: row.codigo_interno || null,
                     um: row.um || null,
-                    temperatura_min_c: row.temperatura_min_c !== '' ? Number(row.temperatura_min_c) : null,
-                    temperatura_max_c: row.temperatura_max_c !== '' ? Number(row.temperatura_max_c) : null,
+                    temperatura: 25.0,
                     cantidad_bultos: Number(row.cantidad_bultos || 0),
                     cantidad_cajas: Number(row.cantidad_cajas || 0),
                     cantidad_por_caja: Number(row.cantidad_por_caja || 0),
@@ -358,7 +369,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
 
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">
-                                    Número de Documento <span className="text-red-500">*</span>
+                                    Número de Documento
                                 </label>
                                 <input
                                     value={numeroDocumento}
@@ -509,7 +520,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             <Button
                                                 type="button"
                                                 onClick={handleGuardarCSV}
-                                                disabled={uploading || !numeroDocumento}
+                                                disabled={uploading}
                                                 className="bg-green-600 hover:bg-green-700 text-white min-w-[220px] h-11 text-base font-bold shadow-lg shadow-green-500/20"
                                             >
                                                 {uploading ? '⏳ Guardando...' : `✅ Guardar ${previewRows.length} productos`}
@@ -533,6 +544,10 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             { key: 'lote', label: 'Lote', placeholder: 'L-2024-001' },
                                             { key: 'fabricante', label: 'Fabricante', placeholder: 'Laboratorio...' },
                                             { key: 'fecha_vencimiento', label: 'F. Vencimiento', type: 'date' },
+                                            { key: 'r_i', label: 'R/I' },
+                                            { key: 'codigo_gln', label: 'Código GLN' },
+                                            { key: 'fecha_ingreso', label: 'Fecha Ingreso', type: 'date' },
+                                            { key: 'codigo_interno', label: 'Cod. Interno' },
                                         ].map(({ key, label, placeholder, type, span }) => (
                                             <div key={key} className={span ? `col-span-${span}` : ''}>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
@@ -560,16 +575,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Temp. Min °C</label>
-                                            <input type="number" step="0.01" value={manualForm.temperatura_min_c}
-                                                onChange={e => setManualForm(p => ({ ...p, temperatura_min_c: e.target.value }))}
-                                                className="w-full h-9 rounded border border-gray-300 text-sm px-2" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Temp. Max °C</label>
-                                            <input type="number" step="0.01" value={manualForm.temperatura_max_c}
-                                                onChange={e => setManualForm(p => ({ ...p, temperatura_max_c: e.target.value }))}
-                                                className="w-full h-9 rounded border border-gray-300 text-sm px-2" />
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura (°C)</label>
+                                            <input value="25" readOnly className="w-full h-9 rounded border border-gray-300 bg-gray-50 px-2 text-sm text-gray-500" />
                                         </div>
 
                                         {/* Cantidades */}
@@ -646,7 +653,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             <Button
                                                 type="button"
                                                 onClick={handleGuardarManual}
-                                                disabled={uploading || !numeroDocumento}
+                                                disabled={uploading}
                                                 className="bg-green-600 hover:bg-green-700 text-white min-w-[220px] h-11 text-base font-bold shadow-lg shadow-green-500/20"
                                             >
                                                 {uploading ? '⏳ Guardando...' : `✅ Guardar ${manualRows.length} productos`}
