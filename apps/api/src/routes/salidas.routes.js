@@ -1,5 +1,5 @@
 const ExcelJS = require('exceljs');
-const { MoreThan } = require('typeorm');
+const { MoreThan, In } = require('typeorm');
 const { generatePDF } = require('../services/pdf.service');
 
 // Schemas para documentación Swagger
@@ -23,7 +23,8 @@ const NotaSalidaDetalleSchema = {
         producto_id: { type: 'integer' },
         cantidad: { type: 'number' },
         lote_id: { type: 'integer', nullable: true },
-        producto: { type: 'object', nullable: true }
+        producto: { type: 'object', nullable: true, additionalProperties: true },
+        lote: { type: 'object', nullable: true, additionalProperties: true }
     }
 };
 
@@ -36,7 +37,7 @@ const NotaSalidaResponseSchema = {
             properties: {
                 ...NotaSalidaSchema.properties,
                 detalles: { type: 'array', items: NotaSalidaDetalleSchema },
-                cliente: { type: 'object', nullable: true }
+                cliente: { type: 'object', nullable: true, additionalProperties: true }
             }
         }
     }
@@ -205,9 +206,41 @@ async function salidasRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Nota de salida no encontrada' });
         }
 
+        // Obtener detalles sin relaciones
         const detalles = await notaSalidaDetalleRepo.find({
-            where: { nota_salida_id: Number(id) },
-            relations: ['producto']
+            where: { nota_salida_id: Number(id) }
+        });
+
+        // Obtener todos los productos de una vez
+        const productoIds = [...new Set(detalles.map(d => d.producto_id))];
+        const productos = productoIds.length > 0 ? await productoRepo.find({
+            where: { id: In(productoIds) }
+        }) : [];
+        const productoMap = new Map(productos.map(p => [p.id, p]));
+
+        // Obtener todos los lotes de una vez
+        const loteIds = detalles.filter(d => d.lote_id).map(d => d.lote_id);
+        const lotes = loteIds.length > 0 ? await loteRepo.find({
+            where: { id: In(loteIds) }
+        }) : [];
+        const loteMap = new Map(lotes.map(l => [l.id, l]));
+
+        // Enriquecer detalles con los datos obtenidos
+        const detallesEnriquecidos = detalles.map(d => {
+            const producto = productoMap.get(d.producto_id);
+            const lote = d.lote_id ? loteMap.get(d.lote_id) : null;
+            
+            return {
+                id: d.id,
+                nota_salida_id: d.nota_salida_id,
+                producto_id: d.producto_id,
+                lote_id: d.lote_id,
+                cantidad: d.cantidad,
+                precio_unitario: d.precio_unitario,
+                created_at: d.created_at,
+                producto: producto ? JSON.parse(JSON.stringify(producto)) : null,
+                lote: lote ? JSON.parse(JSON.stringify(lote)) : null
+            };
         });
 
         const cliente = await clienteRepo.findOneBy({ id: nota.cliente_id });
@@ -216,8 +249,8 @@ async function salidasRoutes(fastify, options) {
             success: true,
             data: {
                 ...nota,
-                detalles,
-                cliente
+                detalles: detallesEnriquecidos,
+                cliente: cliente ? JSON.parse(JSON.stringify(cliente)) : null
             }
         };
     });

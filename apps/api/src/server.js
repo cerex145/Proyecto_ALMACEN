@@ -1,3 +1,4 @@
+// API Server - Production ready with proper schema and data enrichment
 require('dotenv').config();
 
 const fastify = require('fastify')({

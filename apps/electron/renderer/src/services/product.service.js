@@ -7,6 +7,19 @@ export const productService = {
         return response.data.data || [];
     },
 
+    getProductsPaginated: async (filters = {}) => {
+        const response = await api.get('/productos', { params: filters });
+        return {
+            data: response.data.data || [],
+            pagination: response.data.pagination || {
+                page: Number(filters.page) || 1,
+                limit: Number(filters.limit) || 50,
+                total: 0,
+                totalPages: 1
+            }
+        };
+    },
+
     getProductById: async (id) => {
         const response = await api.get(`/productos/${id}`);
         return response.data.data || response.data;

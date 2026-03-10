@@ -967,10 +967,11 @@ async function productoRoutes(fastify, options) {
 
         const qb = productoRepo.createQueryBuilder('producto');
 
-        if (busqueda) {
+        const busquedaTexto = (busqueda || '').trim();
+        if (busquedaTexto) {
             qb.andWhere(
-                '(producto.codigo LIKE :b OR producto.descripcion LIKE :b)',
-                { b: `%${busqueda}%` }
+                '(producto.codigo LIKE :b OR producto.descripcion LIKE :b OR producto.proveedor LIKE :b OR producto.fabricante LIKE :b)',
+                { b: `%${busquedaTexto}%` }
             );
         }
         if (categoria_ingreso) {

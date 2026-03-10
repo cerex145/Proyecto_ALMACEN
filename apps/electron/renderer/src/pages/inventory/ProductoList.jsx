@@ -10,20 +10,26 @@ import { CargaMasivaForm } from './CargaMasivaForm';
 export const ProductoList = () => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [limit] = useState(50);
+    const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
     const [selectedProduct, setSelectedProduct] = useState(null); // For Lotes
     const [isEditing, setIsEditing] = useState(false); // For Form
     const [editingProduct, setEditingProduct] = useState(null);
     const [isMassCharge, setIsMassCharge] = useState(false);
     const [searchDoc, setSearchDoc] = useState('');
+    const [searchName, setSearchName] = useState('');
 
     const loadProducts = async () => {
         try {
             setLoading(true);
-            const params = {};
+            const params = { page, limit };
             if (searchDoc) params.numero_documento = searchDoc;
+            if (searchName) params.busqueda = searchName;
 
-            const data = await productService.getProducts(params);
-            setProducts(data);
+            const response = await productService.getProductsPaginated(params);
+            setProducts(response.data || []);
+            setPagination(response.pagination || { page, limit, total: 0, totalPages: 1 });
         } catch (error) {
             console.error('Error loading products:', error);
         } finally {
@@ -33,7 +39,11 @@ export const ProductoList = () => {
 
     useEffect(() => {
         loadProducts();
-    }, [searchDoc]);
+    }, [searchDoc, searchName, page, limit]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [searchDoc, searchName]);
 
     const getStockStatus = (stock, min) => {
         if (stock <= 0) return { label: 'Sin Stock', variant: 'anulado' };
@@ -94,6 +104,13 @@ export const ProductoList = () => {
                     <p className="text-slate-500">Gestión general del catálogo</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <input
+                        type="text"
+                        placeholder="Buscar por código o nombre..."
+                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm min-w-[220px]"
+                        value={searchName}
+                        onChange={(e) => setSearchName(e.target.value)}
+                    />
                     <input
                         type="text"
                         placeholder="Filtrar por N° Documento..."
@@ -171,6 +188,32 @@ export const ProductoList = () => {
                                         </div>
                                     );
                                 })}
+                            </div>
+                        )}
+
+                        {pagination.totalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 bg-slate-50">
+                                <div className="text-xs text-slate-600">
+                                    Mostrando página {pagination.page} de {pagination.totalPages} · Total: {pagination.total}
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={page <= 1 || loading}
+                                        onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                                    >
+                                        Anterior
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        disabled={page >= pagination.totalPages || loading}
+                                        onClick={() => setPage((prev) => Math.min(pagination.totalPages, prev + 1))}
+                                    >
+                                        Siguiente
+                                    </Button>
+                                </div>
                             </div>
                         )}
                     </CardContent>
