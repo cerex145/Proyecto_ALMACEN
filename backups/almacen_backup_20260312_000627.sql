@@ -1,30 +1,3 @@
--- =============================================================
--- ALMACEN - Backup completo de base de datos
--- Generado: 12/03/2026 00:07:11
--- MySQL 8.0 | DB: almacen | Charset: utf8mb4
--- =============================================================
---
--- INSTRUCCIONES PARA RESTAURAR:
---
---   1) Tener Docker instalado y ejecutar:
---        docker-compose up -d mysql
---
---   2) Esperar ~10s a que MySQL inicie, luego restaurar:
---        docker exec -i almacen_mysql mysql \
---          -ualmacen_user -palmacen123 \
---          almacen < backups/almacen_backup_20260312.sql
---
---   O si prefieren restaurar desde fuera del contenedor:
---        mysql -h127.0.0.1 -P3306 -ualmacen_user -palmacen123 almacen \
---          < backups/almacen_backup_20260312.sql
---
--- CONTENIDO:
---   - 16 tablas con estructura completa (DROP TABLE IF EXISTS + CREATE TABLE)
---   - Datos: productos, clientes, lotes, ingresos, salidas, kardex, usuarios
---   - notas_salida (80 notas, 2017 detalles con CANT.BULTO/CAJAS/x CAJA/FRACC.)
---   - notas_ingreso (16 notas, 1640 detalles)
--- =============================================================
-
 -- MySQL dump 10.13  Distrib 8.0.45, for Linux (x86_64)
 --
 -- Host: localhost    Database: almacen
@@ -647,4 +620,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-12  5:06:33
+-- Dump completed on 2026-03-12  5:06:27
