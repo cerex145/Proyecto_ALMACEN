@@ -2,6 +2,48 @@ const fs = require('fs');
 const readline = require('readline');
 const AppDataSource = require('../src/config/database');
 
+function normalizarEncabezado(valor = '') {
+    return String(valor)
+        .normalize('NFD')
+        .replace(/[^\w\s.]/g, '')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function construirMapaEncabezados(headerLine) {
+    const columnas = headerLine.split(';').map(h => h.trim());
+    const mapa = new Map();
+
+    columnas.forEach((nombre, index) => {
+        mapa.set(normalizarEncabezado(nombre), index);
+    });
+
+    return mapa;
+}
+
+function obtenerValor(columns, headerMap, aliases, fallbackIndex = null) {
+    for (const alias of aliases) {
+        const idx = headerMap.get(normalizarEncabezado(alias));
+        if (idx !== undefined && idx < columns.length) {
+            return (columns[idx] || '').trim();
+        }
+    }
+
+    if (fallbackIndex !== null && fallbackIndex < columns.length) {
+        return (columns[fallbackIndex] || '').trim();
+    }
+
+    return '';
+}
+
+function parsearNumero(valor) {
+    if (!valor) return 0;
+    const limpio = String(valor).replace(/\./g, '').replace(',', '.').replace(/[^0-9.-]/g, '');
+    return parseFloat(limpio) || 0;
+}
+
 async function vincularLotesConSalidas() {
     console.log('🔄 Inicializando conexión a BD...');
     await AppDataSource.initialize();
@@ -11,7 +53,7 @@ async function vincularLotesConSalidas() {
     const notaSalidaRepo = AppDataSource.getRepository('NotaSalida');
     const detalleRepo = AppDataSource.getRepository('NotaSalidaDetalle');
 
-    const csvPath = '/home/ezku/Imágenes/salida.csv';
+    const csvPath = process.argv[2] || process.env.SALIDAS_CSV_PATH || '/home/ezku/tmp/salida.csv';
     const fileStream = fs.createReadStream(csvPath);
     const rl = readline.createInterface({
         input: fileStream,
@@ -23,11 +65,13 @@ async function vincularLotesConSalidas() {
     let noEncontrados = 0;
     let sinLote = 0;
     let procesados = 0;
+    let headerMap = null;
 
     console.log('📖 Procesando CSV...\n');
 
     for await (const line of rl) {
         if (isFirstLine) {
+            headerMap = construirMapaEncabezados(line);
             isFirstLine = false;
             continue;
         }
@@ -35,11 +79,11 @@ async function vincularLotesConSalidas() {
         const columns = line.split(';');
         if (columns.length < 17) continue;
 
-        const codigoProducto = columns[1]?.trim();
-        const numeroLote = columns[3]?.trim();
-        const fechaVctoStr = columns[4]?.trim();
-        const cantidad = parseFloat(columns[10]?.trim() || '0');
-        const fechaSalidaStr = columns[16]?.trim(); // Formato D/M/YYYY
+        const codigoProducto = obtenerValor(columns, headerMap, ['Cod. Producto', 'codigo_producto'], 1);
+        const numeroLote = obtenerValor(columns, headerMap, ['Lote', 'numero_lote'], 3);
+        const fechaVctoStr = obtenerValor(columns, headerMap, ['Fecha Vcto', 'fecha_vencimiento'], 4);
+        const cantidad = parsearNumero(obtenerValor(columns, headerMap, ['Cant.Total_Salida', 'cantidad_total_salida', 'cantidad'], 10));
+        const fechaSalidaStr = obtenerValor(columns, headerMap, ['AÑO', 'Fecha de H_Salida', 'fecha_salida'], 16);
 
         // Validar datos
         if (!codigoProducto || !fechaSalidaStr || cantidad === 0) {
@@ -63,14 +107,16 @@ async function vincularLotesConSalidas() {
             const anioSalida = partesFechaSalida[2];
             const fechaSalida = `${anioSalida}-${mesSalida}-${diaSalida}`;
 
-            // Parsear fecha vencimiento (M/D/YYYY)
+            // Parsear fecha vencimiento (D/M/YYYY o M/D/YYYY)
             let fechaVencimiento = null;
             if (fechaVctoStr && fechaVctoStr !== 'N/A' && fechaVctoStr !== '') {
                 const partesVcto = fechaVctoStr.split('/');
                 if (partesVcto.length === 3) {
-                    const mes = partesVcto[0].padStart(2, '0');
-                    const dia = partesVcto[1].padStart(2, '0');
+                    const p1 = Number(partesVcto[0]);
+                    const p2 = Number(partesVcto[1]);
                     const anio = partesVcto[2];
+                    const mes = (p1 > 12 ? p2 : p1).toString().padStart(2, '0');
+                    const dia = (p1 > 12 ? p1 : p2).toString().padStart(2, '0');
                     fechaVencimiento = `${anio}-${mes}-${dia}`;
                 }
             }

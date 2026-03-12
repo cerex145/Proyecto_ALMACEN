@@ -27,6 +27,34 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: false
         },
+        cant_bulto: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true,
+            default: 0
+        },
+        cant_caja: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true,
+            default: 0
+        },
+        cant_x_caja: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true,
+            default: 0
+        },
+        cant_fraccion: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true,
+            default: 0
+        },
         precio_unitario: {
             type: 'decimal',
             precision: 10,

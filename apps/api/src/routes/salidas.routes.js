@@ -22,6 +22,10 @@ const NotaSalidaDetalleSchema = {
         nota_salida_id: { type: 'integer' },
         producto_id: { type: 'integer' },
         cantidad: { type: 'number' },
+        cant_bulto: { type: 'number', nullable: true },
+        cant_caja: { type: 'number', nullable: true },
+        cant_x_caja: { type: 'number', nullable: true },
+        cant_fraccion: { type: 'number', nullable: true },
         lote_id: { type: 'integer', nullable: true },
         producto: { type: 'object', nullable: true, additionalProperties: true },
         lote: { type: 'object', nullable: true, additionalProperties: true }
@@ -86,8 +90,129 @@ async function salidasRoutes(fastify, options) {
             .limit(1)
             .getOne();
 
-        const numero = ultimaSalida ? parseInt(ultimaSalida.numero_salida) + 1 : 1;
+        const ultimoNumero = ultimaSalida?.numero_salida ? String(ultimaSalida.numero_salida) : '';
+        const matchUltimosDigitos = ultimoNumero.match(/(\d+)(?!.*\d)/);
+        const correlativo = matchUltimosDigitos ? Number.parseInt(matchUltimosDigitos[1], 10) : 0;
+        const numero = Number.isFinite(correlativo) ? correlativo + 1 : 1;
         return String(numero).padStart(8, '0');
+    };
+
+    const normalizarEncabezado = (valor = '') => String(valor)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const mapearEncabezados = (headers = []) => {
+        const mapa = new Map();
+        headers.forEach((header, index) => {
+            const key = normalizarEncabezado(header);
+            if (key) mapa.set(key, index);
+        });
+        return mapa;
+    };
+
+    const obtenerValor = (valores, headerMap, aliases = [], fallbackIndex = null) => {
+        for (const alias of aliases) {
+            const idx = headerMap.get(normalizarEncabezado(alias));
+            if (idx !== undefined && idx < valores.length) {
+                return String(valores[idx] ?? '').trim();
+            }
+        }
+
+        if (fallbackIndex !== null && fallbackIndex < valores.length) {
+            return String(valores[fallbackIndex] ?? '').trim();
+        }
+
+        return '';
+    };
+
+    const parsearNumero = (valor) => {
+        if (valor === null || valor === undefined || valor === '') return 0;
+        const texto = String(valor).trim();
+        if (texto === '-' || texto.toLowerCase() === 'n/a') return 0;
+
+        const sinEspacios = texto.replace(/\s/g, '');
+        const tieneComa = sinEspacios.includes(',');
+        const tienePunto = sinEspacios.includes('.');
+
+        let normalizado = sinEspacios;
+        if (tieneComa && tienePunto) {
+            normalizado = normalizado.replace(/\./g, '').replace(',', '.');
+        } else if (tieneComa) {
+            normalizado = normalizado.replace(',', '.');
+        }
+
+        normalizado = normalizado.replace(/[^0-9.-]/g, '');
+        return Number.parseFloat(normalizado) || 0;
+    };
+
+    const parsearFecha = (valor, mesAux = '', diaAux = '') => {
+        if (valor instanceof Date) return valor;
+        const texto = String(valor || '').trim();
+        if (!texto) return null;
+
+        if (/^\d{4}$/.test(texto) && mesAux && diaAux) {
+            const anio = Number(texto);
+            // año epoch cero de Excel (1900/1899) → inválido
+            if (anio < 2000 || anio > 2099) return null;
+            const mes = String(mesAux).padStart(2, '0');
+            const dia = String(diaAux).padStart(2, '0');
+            return new Date(`${anio}-${mes}-${dia}`);
+        }
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+            const fechaIso = new Date(`${texto}T00:00:00`);
+            return Number.isNaN(fechaIso.getTime()) ? null : fechaIso;
+        }
+
+        const partes = texto.split('/').map(p => p.trim());
+        if (partes.length === 3) {
+            const p1 = Number(partes[0]);
+            const p2 = Number(partes[1]);
+            const p3 = Number(partes[2]);
+            if (!Number.isNaN(p1) && !Number.isNaN(p2) && !Number.isNaN(p3)) {
+                const anio = p3;
+                // año epoch cero de Excel (1900/1899) → inválido
+                if (anio < 2000 || anio > 2099) return null;
+                const mes = p1 > 12 ? p2 : p1;
+                const dia = p1 > 12 ? p1 : p2;
+                const iso = `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+                const fecha = new Date(`${iso}T00:00:00`);
+                return Number.isNaN(fecha.getTime()) ? null : fecha;
+            }
+        }
+
+        const fecha = new Date(texto);
+        if (Number.isNaN(fecha.getTime())) return null;
+        // año epoch cero de Excel (ej. new Date("1900") → válido pero incorrecto)
+        if (fecha.getFullYear() < 2000 || fecha.getFullYear() > 2099) return null;
+        return fecha;
+    };
+
+    const detectarDelimitador = (linea = '') => {
+        if (linea.includes('\t')) return '\t';
+        if (linea.includes(';')) return ';';
+        return ',';
+    };
+
+    const extraerStringCeldaExcel = (valor) => {
+        if (valor === null || valor === undefined) return '';
+        if (valor instanceof Date) {
+            const yyyy = valor.getFullYear();
+            const mm = String(valor.getMonth() + 1).padStart(2, '0');
+            const dd = String(valor.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+        if (typeof valor === 'object') {
+            if (valor.text) return String(valor.text).trim();
+            if (valor.richText && Array.isArray(valor.richText)) {
+                return valor.richText.map(rt => rt.text || '').join('').trim();
+            }
+            if (valor.result !== undefined) return String(valor.result).trim();
+            if (valor.hyperlink) return String(valor.hyperlink).trim();
+        }
+        return String(valor).trim();
     };
 
     // GET /api/salidas - Listar notas de salida
@@ -236,6 +361,10 @@ async function salidasRoutes(fastify, options) {
                 producto_id: d.producto_id,
                 lote_id: d.lote_id,
                 cantidad: d.cantidad,
+                cant_bulto: d.cant_bulto,
+                cant_caja: d.cant_caja,
+                cant_x_caja: d.cant_x_caja,
+                cant_fraccion: d.cant_fraccion,
                 precio_unitario: d.precio_unitario,
                 created_at: d.created_at,
                 producto: producto ? JSON.parse(JSON.stringify(producto)) : null,
@@ -275,6 +404,10 @@ async function salidasRoutes(fastify, options) {
                             properties: {
                                 producto_id: { type: 'integer' },
                                 cantidad: { type: 'number', minimum: 0 },
+                                cant_bulto: { type: 'number', minimum: 0 },
+                                cant_caja: { type: 'number', minimum: 0 },
+                                cant_x_caja: { type: 'number', minimum: 0 },
+                                cant_fraccion: { type: 'number', minimum: 0 },
                                 lote_id: { type: 'integer' }
                             }
                         }
@@ -379,6 +512,10 @@ async function salidasRoutes(fastify, options) {
                     const pid = Number(detalle.producto_id);
                     const cantidadSolicitada = Number(detalle.cantidad);
                     const precioUnitario = detalle.precio_unitario;
+                    const cantBulto = parsearNumero(detalle.cant_bulto);
+                    const cantCaja = parsearNumero(detalle.cant_caja);
+                    const cantXCaja = parsearNumero(detalle.cant_x_caja);
+                    const cantFraccion = parsearNumero(detalle.cant_fraccion);
 
                     const producto = await tx.findOne('Producto', { where: { id: pid } });
 
@@ -402,6 +539,10 @@ async function salidasRoutes(fastify, options) {
                             producto_id: pid,
                             lote_id: lote.id,
                             cantidad: cantidadSolicitada,
+                            cant_bulto: cantBulto,
+                            cant_caja: cantCaja,
+                            cant_x_caja: cantXCaja,
+                            cant_fraccion: cantFraccion,
                             precio_unitario: precioUnitario
                         });
                         await tx.save('NotaSalidaDetalle', detalleNota);
@@ -452,6 +593,10 @@ async function salidasRoutes(fastify, options) {
                                 producto_id: pid,
                                 lote_id: lote.id,
                                 cantidad: aTomar,
+                                cant_bulto: cantBulto,
+                                cant_caja: cantCaja,
+                                cant_x_caja: cantXCaja,
+                                cant_fraccion: cantFraccion,
                                 precio_unitario: precioUnitario
                             });
                             await tx.save('NotaSalidaDetalle', detalleNota);
@@ -580,7 +725,7 @@ async function salidasRoutes(fastify, options) {
     fastify.post('/api/salidas/importar', {
         schema: {
             tags: ['Salidas'],
-            description: 'Importar notas de salida desde archivo Excel',
+            description: 'Importar notas de salida desde archivo Excel/CSV',
             consumes: ['multipart/form-data'],
             response: {
                 200: {
@@ -601,52 +746,136 @@ async function salidasRoutes(fastify, options) {
         }
 
         try {
-            const buffer = await data.toBuffer();
-            const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.load(buffer);
-
-            const worksheet = workbook.worksheets[0];
             const errores = [];
             let generadas = 0;
+            const buffer = await data.toBuffer();
+            const fileName = String(data.filename || '').toLowerCase();
+            const mimeType = String(data.mimetype || '').toLowerCase();
 
-            worksheet.eachRow(async (row, rowNumber) => {
-                if (rowNumber === 1) return; // Skip header
+            let filas = [];
 
-                const [
-                    fecha,
-                    codigo_cliente,
-                    responsable,
-                    codigo_producto,
-                    cantidad,
-                    precio,
-                    observaciones
-                ] = row.values.slice(1);
+            if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || mimeType.includes('csv') || mimeType.includes('text/plain')) {
+                const contenido = buffer.toString('utf8');
+                const lineas = contenido.split(/\r?\n/).filter(l => l.trim());
 
-                // Validaciones
-                if (!fecha || !codigo_cliente || !codigo_producto || !cantidad) {
-                    errores.push(`Fila ${rowNumber}: Faltan datos obligatorios`);
-                    return;
+                if (lineas.length < 2) {
+                    return reply.status(400).send({ success: false, error: 'El archivo no tiene datos' });
+                }
+
+                const delimitador = detectarDelimitador(lineas[0]);
+                const headers = lineas[0].split(delimitador).map(h => h.trim());
+
+                for (let i = 1; i < lineas.length; i++) {
+                    const valores = lineas[i].split(delimitador).map(v => v.trim());
+                    filas.push({ rowNumber: i + 1, headers, valores });
+                }
+            } else {
+                const workbook = new ExcelJS.Workbook();
+                await workbook.xlsx.load(buffer);
+                const worksheet = workbook.worksheets[0];
+
+                if (!worksheet || worksheet.rowCount < 2) {
+                    return reply.status(400).send({ success: false, error: 'La hoja no tiene datos para importar' });
+                }
+
+                const headerRow = worksheet.getRow(1);
+                const headers = [];
+                for (let col = 1; col <= headerRow.cellCount; col++) {
+                    headers.push(extraerStringCeldaExcel(headerRow.getCell(col).value));
+                }
+
+                for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+                    const row = worksheet.getRow(rowNumber);
+                    const valores = [];
+                    for (let col = 1; col <= headers.length; col++) {
+                        valores.push(extraerStringCeldaExcel(row.getCell(col).value));
+                    }
+
+                    if (!valores.some(v => String(v || '').trim() !== '')) continue;
+                    filas.push({ rowNumber, headers, valores });
+                }
+            }
+
+            for (const fila of filas) {
+                const headerMap = mapearEncabezados(fila.headers);
+
+                const codigoProducto = obtenerValor(fila.valores, headerMap, ['codigo_producto', 'cod. producto', 'cod producto', 'codproducto'], 3);
+                const codigoCliente = obtenerValor(fila.valores, headerMap, ['codigo_cliente', 'codigo cliente', 'codcli'], 1);
+                const ruc = obtenerValor(fila.valores, headerMap, ['ruc', 'cuit'], null);
+                const cantidadTexto = obtenerValor(fila.valores, headerMap, ['cantidad', 'cant.total_salida', 'cant total salida', 'canttotalsalida'], 4);
+                const precioTexto = obtenerValor(fila.valores, headerMap, ['precio', 'precio_unitario'], 5);
+                const cantBultoTexto = obtenerValor(fila.valores, headerMap, ['cant.bulto', 'cant_bulto', 'cantidad_bultos'], null);
+                const cantCajaTexto = obtenerValor(fila.valores, headerMap, ['cant.cajas', 'cant.caja', 'cant_cajas', 'cantidad_cajas'], null);
+                const cantXCajaTexto = obtenerValor(fila.valores, headerMap, ['cant x caja', 'cant.x caja', 'cant_x_caja', 'cantidad_por_caja'], null);
+                const cantFraccionTexto = obtenerValor(fila.valores, headerMap, ['cant.fraccion', 'cant_fraccion', 'cantidad_fraccion'], null);
+                const motivoSalida = obtenerValor(fila.valores, headerMap, ['motivo de salida', 'motivo_salida'], null);
+                const loteNumero = obtenerValor(fila.valores, headerMap, ['lote', 'numero_lote'], null);
+                const fechaVctoTexto = obtenerValor(fila.valores, headerMap, ['fecha vcto', 'fecha_vencimiento'], null);
+
+                const fechaSalidaTexto = obtenerValor(fila.valores, headerMap, ['fecha', 'fecha de h_salida', 'fecha_salida', 'ano', 'año', 'columna1'], 0);
+                const mesAux = obtenerValor(fila.valores, headerMap, ['mes'], null);
+                const diaAux = obtenerValor(fila.valores, headerMap, ['dia'], null);
+                // Si el año/fecha principal es epoch cero de Excel, usar Columna1 o fechaH
+                let fechaSalidaFinal = fechaSalidaTexto;
+                const fechaPreliminar = parsearFecha(fechaSalidaTexto, mesAux, diaAux);
+                if (!fechaPreliminar) {
+                    const col1 = obtenerValor(fila.valores, headerMap, ['columna1'], null);
+                    if (col1) fechaSalidaFinal = col1;
+                }
+                const fecha = fechaPreliminar || parsearFecha(fechaSalidaFinal, mesAux, diaAux);
+                const cantidad = parsearNumero(cantidadTexto);
+                const precio = parsearNumero(precioTexto);
+                const cantBulto = parsearNumero(cantBultoTexto);
+                const cantCaja = parsearNumero(cantCajaTexto);
+                const cantXCaja = parsearNumero(cantXCajaTexto);
+                const cantFraccion = parsearNumero(cantFraccionTexto);
+
+                if (!fecha || !codigoProducto || cantidad <= 0) {
+                    errores.push(`Fila ${fila.rowNumber}: Faltan datos obligatorios (fecha/código producto/cantidad)`);
+                    continue;
                 }
 
                 try {
-                    // Buscar cliente
-                    const cliente = await clienteRepo.findOneBy({ codigo: String(codigo_cliente) });
+                    let cliente = null;
+
+                    if (codigoCliente) {
+                        cliente = await clienteRepo.findOneBy({ codigo: String(codigoCliente) });
+                    }
+
+                    if (!cliente && ruc) {
+                        cliente = await clienteRepo.findOneBy({ cuit: String(ruc) });
+                    }
+
                     if (!cliente) {
-                        errores.push(`Fila ${rowNumber}: Cliente no encontrado`);
-                        return;
+                        errores.push(`Fila ${fila.rowNumber}: Cliente no encontrado (Código: ${codigoCliente || '-'} / RUC: ${ruc || '-'})`);
+                        continue;
                     }
 
-                    // Buscar producto
-                    const producto = await productoRepo.findOneBy({ codigo: String(codigo_producto) });
+                    const producto = await productoRepo.findOneBy({ codigo: String(codigoProducto) });
                     if (!producto) {
-                        errores.push(`Fila ${rowNumber}: Producto no encontrado`);
-                        return;
+                        errores.push(`Fila ${fila.rowNumber}: Producto no encontrado (${codigoProducto})`);
+                        continue;
                     }
 
-                    // Validar stock
                     if (Number(producto.stock_actual) < Number(cantidad)) {
-                        errores.push(`Fila ${rowNumber}: Stock insuficiente de ${codigo_producto}`);
-                        return;
+                        errores.push(`Fila ${fila.rowNumber}: Stock insuficiente de ${codigoProducto}`);
+                        continue;
+                    }
+
+                    let loteId = null;
+                    if (loteNumero) {
+                        const fechaVcto = parsearFecha(fechaVctoTexto);
+                        const whereLote = {
+                            producto_id: producto.id,
+                            numero_lote: loteNumero
+                        };
+
+                        if (fechaVcto) {
+                            whereLote.fecha_vencimiento = fechaVcto.toISOString().slice(0, 10);
+                        }
+
+                        const lote = await loteRepo.findOne({ where: whereLote });
+                        if (lote) loteId = lote.id;
                     }
 
                     const numeroSalida = await generarNumeroSalida();
@@ -654,28 +883,31 @@ async function salidasRoutes(fastify, options) {
                     const nota = notaSalidaRepo.create({
                         numero_salida: numeroSalida,
                         cliente_id: cliente.id,
-                        fecha: new Date(fecha),
-                        responsable_id: responsable ? Number(responsable) : 1,
-                        observaciones,
+                        fecha,
+                        responsable_id: 1,
+                        motivo_salida: motivoSalida || null,
+                        observaciones: null,
                         estado: 'REGISTRADA'
                     });
 
                     const notaGuardada = await notaSalidaRepo.save(nota);
 
-                    // Crear detalle
                     const detalle = notaSalidaDetalleRepo.create({
                         nota_salida_id: notaGuardada.id,
                         producto_id: producto.id,
+                        lote_id: loteId,
                         cantidad: Number(cantidad),
-                        precio_unitario: precio ? Number(precio) : null
+                        cant_bulto: cantBulto,
+                        cant_caja: cantCaja,
+                        cant_x_caja: cantXCaja,
+                        cant_fraccion: cantFraccion,
+                        precio_unitario: precio > 0 ? Number(precio) : null
                     });
                     await notaSalidaDetalleRepo.save(detalle);
 
-                    // Descontar stock
                     producto.stock_actual = Number(producto.stock_actual) - Number(cantidad);
                     await productoRepo.save(producto);
 
-                    // Kardex
                     const movimiento = kardexRepo.create({
                         producto_id: producto.id,
                         tipo_movimiento: 'SALIDA',
@@ -688,11 +920,10 @@ async function salidasRoutes(fastify, options) {
                     await kardexRepo.save(movimiento);
 
                     generadas++;
-
                 } catch (error) {
-                    errores.push(`Fila ${rowNumber}: ${error.message}`);
+                    errores.push(`Fila ${fila.rowNumber}: ${error.message}`);
                 }
-            });
+            }
 
             return {
                 success: true,
@@ -766,23 +997,41 @@ async function salidasRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla Salida');
 
         worksheet.columns = [
-            { header: 'Fecha (YYYY-MM-DD)', key: 'fecha', width: 20 },
-            { header: 'Código Cliente', key: 'codigo_cliente', width: 20 },
-            { header: 'Responsable (ID)', key: 'responsable', width: 15 },
-            { header: 'Código Producto', key: 'codigo_producto', width: 20 },
-            { header: 'Cantidad', key: 'cantidad', width: 15 },
-            { header: 'Precio Unitario', key: 'precio', width: 15 },
-            { header: 'Observaciones', key: 'observaciones', width: 40 }
+            { header: 'COD. PRODUCTO', key: 'codigo_producto', width: 20 },
+            { header: 'PRODUCTO', key: 'producto', width: 45 },
+            { header: 'LOTE', key: 'lote', width: 20 },
+            { header: 'FECHA VCTO', key: 'fecha_vcto', width: 15 },
+            { header: 'UM', key: 'um', width: 10 },
+            { header: 'CANT.BULTO', key: 'cant_bulto', width: 12 },
+            { header: 'CANT.CAJAS', key: 'cant_cajas', width: 12 },
+            { header: 'CANT X CAJA', key: 'cant_x_caja', width: 12 },
+            { header: 'CANT.FRACCIÓN', key: 'cant_fraccion', width: 14 },
+            { header: 'CANT.TOTAL_SALIDA', key: 'cantidad', width: 18 },
+            { header: 'FECHA DE H_SALIDA', key: 'fecha', width: 18 },
+            { header: 'MES', key: 'mes', width: 8 },
+            { header: 'DIA', key: 'dia', width: 8 },
+            { header: 'RUC', key: 'ruc', width: 16 },
+            { header: 'AÑO', key: 'anio', width: 10 },
+            { header: 'MOTIVO DE SALIDA', key: 'motivo_salida', width: 20 }
         ];
 
         worksheet.addRow({
-            fecha: '2026-01-30',
-            codigo_cliente: 'CLI001',
-            responsable: '1',
-            codigo_producto: 'PROD001',
-            cantidad: '50',
-            precio: '10.50',
-            observaciones: 'Salida normal'
+            codigo_producto: 'VK01111505',
+            producto: 'VERTEBROPLASTY KIT',
+            lote: '20250300006',
+            fecha_vcto: '13/2/2028',
+            um: 'UND',
+            cant_bulto: '-',
+            cant_cajas: '-',
+            cant_x_caja: '-',
+            cant_fraccion: '-',
+            cantidad: '1',
+            fecha: '15/1/2026',
+            mes: '01',
+            dia: '15',
+            ruc: '20606511991',
+            anio: '2026',
+            motivo_salida: 'VENTA'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();

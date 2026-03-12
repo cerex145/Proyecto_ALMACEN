@@ -93,6 +93,7 @@ export const HistorialSalidasFuncional = () => {
                 }
 
                 detalles.forEach((d, index) => {
+                    const fmt = (v) => (v != null && Number(v) !== 0) ? parseFloat(v).toFixed(2) : '-';
                     rows.push({
                         key: `${nota.id}-${index}`,
                         codigo: d.producto?.codigo || '-',
@@ -100,10 +101,10 @@ export const HistorialSalidasFuncional = () => {
                         lote: d.lote?.numero_lote || '-',
                         vencimiento: d.lote?.fecha_vencimiento ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
                         um: d.producto?.um || '-',
-                        cantBulto: '-',
-                        cantCajas: '-',
-                        cantPorCaja: '-',
-                        cantFraccion: '-',
+                        cantBulto: fmt(d.cant_bulto),
+                        cantCajas: fmt(d.cant_caja),
+                        cantPorCaja: fmt(d.cant_x_caja),
+                        cantFraccion: fmt(d.cant_fraccion),
                         cantTotal: d.cantidad ?? '-',
                         fechaSalida: new Date(nota.fecha).toLocaleDateString('es-PE'),
                         mes,
