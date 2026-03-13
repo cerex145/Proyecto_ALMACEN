@@ -265,10 +265,6 @@ async function salidasRoutes(fastify, options) {
             queryBuilder.where('nota.numero_salida LIKE :busqueda', { busqueda: `%${terminoBusqueda}%` });
         }
 
-        if (cliente_id) {
-            queryBuilder.andWhere('nota.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
-        }
-
         if (estado) {
             queryBuilder.andWhere('nota.estado = :estado', { estado });
         }
@@ -281,16 +277,12 @@ async function salidasRoutes(fastify, options) {
             queryBuilder.andWhere('nota.fecha <= :fecha_hasta', { fecha_hasta });
         }
 
-        queryBuilder
-            .leftJoinAndMapOne('nota.cliente', 'clientes', 'cliente', 'cliente.id = nota.cliente_id')
-            .skip(skip)
-            .take(limit);
-
         const allowedOrderFields = new Set(['created_at', 'fecha', 'estado', 'numero_salida', 'id']);
         const safeOrderBy = allowedOrderFields.has(orderBy) ? orderBy : 'created_at';
         const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
         queryBuilder.orderBy(`nota.${safeOrderBy}`, safeOrder);
+        queryBuilder.skip(skip).take(limit);
 
         const [notas, total] = await queryBuilder.getManyAndCount();
 
@@ -331,55 +323,18 @@ async function salidasRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Nota de salida no encontrada' });
         }
 
-        // Obtener detalles sin relaciones
-        const detalles = await notaSalidaDetalleRepo.find({
-            where: { nota_salida_id: Number(id) }
-        });
-
-        // Obtener todos los productos de una vez
-        const productoIds = [...new Set(detalles.map(d => d.producto_id))];
-        const productos = productoIds.length > 0 ? await productoRepo.find({
-            where: { id: In(productoIds) }
-        }) : [];
-        const productoMap = new Map(productos.map(p => [p.id, p]));
-
-        // Obtener todos los lotes de una vez
-        const loteIds = detalles.filter(d => d.lote_id).map(d => d.lote_id);
-        const lotes = loteIds.length > 0 ? await loteRepo.find({
-            where: { id: In(loteIds) }
-        }) : [];
-        const loteMap = new Map(lotes.map(l => [l.id, l]));
-
-        // Enriquecer detalles con los datos obtenidos
-        const detallesEnriquecidos = detalles.map(d => {
-            const producto = productoMap.get(d.producto_id);
-            const lote = d.lote_id ? loteMap.get(d.lote_id) : null;
-            
-            return {
-                id: d.id,
-                nota_salida_id: d.nota_salida_id,
-                producto_id: d.producto_id,
-                lote_id: d.lote_id,
-                cantidad: d.cantidad,
-                cant_bulto: d.cant_bulto,
-                cant_caja: d.cant_caja,
-                cant_x_caja: d.cant_x_caja,
-                cant_fraccion: d.cant_fraccion,
-                precio_unitario: d.precio_unitario,
-                created_at: d.created_at,
-                producto: producto ? JSON.parse(JSON.stringify(producto)) : null,
-                lote: lote ? JSON.parse(JSON.stringify(lote)) : null
-            };
-        });
-
-        const cliente = await clienteRepo.findOneBy({ id: nota.cliente_id });
+        // Obtener detalles con JOIN para traer los productos
+        const detalles = await notaSalidaDetalleRepo
+            .createQueryBuilder('detalle')
+            .leftJoinAndSelect('detalle.producto', 'producto')
+            .where('detalle.nota_salida_id = :notaId', { notaId: Number(id) })
+            .getMany();
 
         return {
             success: true,
             data: {
                 ...nota,
-                detalles: detallesEnriquecidos,
-                cliente: cliente ? JSON.parse(JSON.stringify(cliente)) : null
+                detalles: detalles
             }
         };
     });

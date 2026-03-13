@@ -6,18 +6,7 @@ const ClienteSchema = {
         id: { type: 'integer' },
         codigo: { type: 'string' },
         razon_social: { type: 'string' },
-        cuit: { type: 'string' },
-        direccion: { type: 'string', nullable: true },
-        distrito: { type: 'string', nullable: true },
-        provincia: { type: 'string', nullable: true },
-        departamento: { type: 'string', nullable: true },
-        categoria_riesgo: { type: 'string', enum: ['Bajo', 'Alto', 'No verificado'], nullable: true },
-        estado: { type: 'string', enum: ['Activo', 'Inactivo', 'Potencial', 'Blokeado'] },
-        telefono: { type: 'string', nullable: true },
-        email: { type: 'string', nullable: true },
-        activo: { type: 'boolean' },
-        created_at: { type: 'string', format: 'date-time' },
-        updated_at: { type: 'string', format: 'date-time' }
+        activo: { type: 'integer' }
     }
 };
 
@@ -105,7 +94,7 @@ async function clienteRoutes(fastify, options) {
 
         if (busqueda) {
             queryBuilder.where(
-                '(cliente.codigo LIKE :busqueda OR cliente.razon_social LIKE :busqueda OR cliente.cuit LIKE :busqueda)',
+                '(cliente.codigo LIKE :busqueda OR cliente.razon_social LIKE :busqueda)',
                 { busqueda: `%${busqueda}%` }
             );
         }

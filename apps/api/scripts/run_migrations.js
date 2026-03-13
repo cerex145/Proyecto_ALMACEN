@@ -1,0 +1,249 @@
+/**
+ * Ejecutor de Migraciones - INICIAL + DATOS
+ * Ejecuta primero el schema, luego los datos
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const dotenvPath = path.join(__dirname, '../.env');
+console.log(`Cargando .env desde: ${dotenvPath}`);
+require('dotenv').config({ path: dotenvPath });
+const mysql = require('mysql2/promise');
+
+console.log('\n' + '═'.repeat(70));
+console.log('🚀 EJECUTOR DE MIGRACIONES - SCHEMA + DATOS');
+console.log('═'.repeat(70) + '\n');
+
+async function executeSqlFile(conn, filePath, title) {
+    console.log(`\n📋 Ejecutando: ${title}`);
+    const sql = fs.readFileSync(filePath, 'utf-8');
+    const statements = sql.split(';').filter(s => s.trim());
+    
+    for (const statement of statements) {
+        if (statement.trim()) {
+            try {
+                await conn.execute(statement);
+            } catch (e) {
+                console.log(`  ⚠️  ${e.message.substring(0, 100)}`);
+            }
+        }
+    }
+    console.log(`  ✅ Completado`);
+}
+
+async function migrar() {
+    let conn;
+    try {
+        conn = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            port: process.env.DB_PORT || 3306,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            database: process.env.DB_NAME
+        });
+        
+        console.log('✅ Conectado a BD\n');
+        
+        // Ejecutar migraciones en orden
+        const migrations = [
+            ['../../migrations/001_create_clientes_and_ajustes.sql', '001 - Base de datos'],
+            ['../../migrations/002_create_complete_schema.sql', '002 - Schema completo'],
+        ];
+        
+        for (const [file, title] of migrations) {
+            const fullPath = path.join(__dirname, file);
+            if (fs.existsSync(fullPath)) {
+                await executeSqlFile(conn, fullPath, title);
+            }
+        }
+        
+        console.log('\n' + '═'.repeat(70));
+        console.log('✅ SCHEMA CREADO EXITOSAMENTE');
+        console.log('═'.repeat(70));
+        
+        // Ahora procesar datos
+        await procesarDatos(conn);
+        
+    } catch (e) {
+        console.error('❌ ERROR:', e.message);
+        console.error(e.stack);
+        process.exit(1);
+    } finally {
+        if (conn) await conn.end();
+    }
+}
+
+async function procesarDatos(conn) {
+    console.log('\n\n' + '═'.repeat(70));
+    console.log('📊 CARGANDO DATOS');
+    console.log('═'.repeat(70) + '\n');
+    
+    function parseFecha(str) {
+        if (!str || str.trim() === '') return null;
+        const match = str.trim().match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (!match) return null;
+        const [, d, m, y] = match.map(Number);
+        if (d < 1 || d > 31 || m < 1 || m > 12 || y < 2000 || y > 2099) return null;
+        const fecha = new Date(y, m - 1, d);
+        return fecha.toISOString().split('T')[0];
+    }
+    
+    // LIMPIAR PRIMERO
+    console.log('🗑️  Limpiando datos previos...\n');
+    try {
+        await conn.execute('DELETE FROM nota_ingreso_detalles WHERE 1=1');
+        await conn.execute('DELETE FROM nota_salida_detalles WHERE 1=1');
+        await conn.execute('DELETE FROM notas_ingreso WHERE 1=1');
+        await conn.execute('DELETE FROM notas_salida WHERE 1=1');
+        await conn.execute('DELETE FROM productos WHERE 1=1');
+    } catch (e) {}
+    
+    // MIGRAR PRODUCTOS
+    console.log('📦 MIGRANDO PRODUCTOS...\n');
+    const prodContent = fs.readFileSync(path.join(__dirname, '../../../Productos.csv'), 'utf-8');
+    const prodLineas = prodContent.split('\n').filter(l => l.trim());
+    const productosMap = {};
+    let prodCount = 0;
+    
+    // Índices correctos para Productos.csv:
+    // [1] = Cod. Producto
+    // [2] = Producto
+    // [7] = Proveedor
+    // [21] = Fabricante
+    
+    for (let i = 1; i < prodLineas.length; i++) {
+        const v = prodLineas[i].split(';');
+        const codProd = (v[1] || '').trim();
+        const nombre = (v[2] || '').trim();
+        const proveedor = (v[7] || '').trim();
+        const fabricante = (v[21] || '').trim();
+        
+        if (!codProd || !nombre) continue;
+        
+        try {
+            const [r] = await conn.execute(
+                `INSERT INTO productos (codigo, nombre, proveedor, fabricante, descripcion) 
+                 VALUES (?, ?, ?, ?, ?)`,
+                [codProd, nombre, proveedor || fabricante || 'Desconocido', fabricante, nombre]
+            );
+            productosMap[codProd] = r.insertId;
+            prodCount++;
+            if (prodCount % 100 === 0) process.stdout.write(`  ...${prodCount}\n`);
+        } catch (e) {
+            const [existente] = await conn.execute(
+                `SELECT id FROM productos WHERE codigo = ?`,
+                [codProd]
+            );
+            if (existente.length > 0) {
+                productosMap[codProd] = existente[0].id;
+            }
+        }
+    }
+    console.log(`✅ Productos: ${prodCount} productos migrados\n`);
+    
+    // ============ INGRESOS ============
+    console.log('📥 MIGRANDO INGRESOS...\n');
+    const ingContent = fs.readFileSync(path.join(__dirname, '../../../ingreso.csv'), 'utf-8');
+    const ingLineas = ingContent.split('\n').filter(l => l.trim());
+    let ingCount = 0;
+    
+    // Índices para ingreso.csv:
+    // [1] = Cod. Producto
+    // [3] = Lote
+    // [13] = Fecha de H_Ingreso
+    // [12] = Cant.Total_Ingreso
+    
+    for (let i = 1; i < ingLineas.length; i++) {
+        const v = ingLineas[i].split(';');
+        const codProd = (v[1] || '').trim();
+        const lote = (v[3] || '').trim();
+        let fechaStr = (v[13] || '').trim();
+        const cantidad = parseFloat((v[12] || '0').trim().replace(',', '.')) || 0;
+        
+        if (!codProd || !fechaStr || cantidad === 0) continue;
+        
+        const fecha = parseFecha(fechaStr);
+        if (!fecha) continue;
+        
+        const productoId = productosMap[codProd] || 1;
+        
+        try {
+            const [r] = await conn.execute(
+                `INSERT INTO notas_ingreso (numero_ingreso, fecha, proveedor, estado) 
+                 VALUES (?, ?, ?, 'RECIBIDA_CONFORME')`,
+                [`ING-${Date.now()}-${i}`, fecha, 'PROVEEDOR']
+            );
+            
+            await conn.execute(
+                `INSERT INTO nota_ingreso_detalles (nota_ingreso_id, producto_id, lote_numero, cantidad) 
+                 VALUES (?, ?, ?, ?)`,
+                [r.insertId, productoId, lote || 'SIN-LOTE', cantidad]
+            );
+            
+            ingCount++;
+            if (ingCount % 200 === 0) process.stdout.write(`  ...${ingCount}\n`);
+        } catch (e) {
+            // Silencioso
+        }
+    }
+    console.log(`✅ Ingresos: ${ingCount} notas migradas\n`);
+    
+    // ============ SALIDAS ============
+    console.log('📤 MIGRANDO SALIDAS...\n');
+    const salContent = fs.readFileSync(path.join(__dirname, '../../../salida.csv'), 'utf-8');
+    const salLineas = salContent.split('\n').filter(l => l.trim());
+    let salCount = 0;
+    
+    // Índices para salida.csv:
+    // [1] = Cod. Producto
+    // [3] = Lote
+    // [16] = Fecha de H_Salida
+    // [10] = Cant.Total_Salida
+    
+    for (let i = 1; i < salLineas.length; i++) {
+        const v = salLineas[i].split(';');
+        const codProd = (v[1] || '').trim();
+        const lote = (v[3] || '').trim();
+        let fechaStr = (v[16] || '').trim();
+        const cantidad = parseFloat((v[10] || '0').trim().replace(',', '.')) || 0;
+        
+        if (!codProd || !fechaStr || cantidad === 0) continue;
+        
+        const fecha = parseFecha(fechaStr);
+        if (!fecha) continue;
+        
+        const productoId = productosMap[codProd] || 1;
+        
+        try {
+            const [r] = await conn.execute(
+                `INSERT INTO notas_salida (numero_salida, fecha, estado) 
+                 VALUES (?, ?, 'REGISTRADA')`,
+                [`SAL-${Date.now()}-${i}`, fecha]
+            );
+            
+            await conn.execute(
+                `INSERT INTO nota_salida_detalles (nota_salida_id, producto_id, lote_numero, cantidad) 
+                 VALUES (?, ?, ?, ?)`,
+                [r.insertId, productoId, lote || 'SIN-LOTE', cantidad]
+            );
+            
+            salCount++;
+            if (salCount % 200 === 0) process.stdout.write(`  ...${salCount}\n`);
+        } catch (e) {
+            // Silencioso
+        }
+    }
+    console.log(`✅ Salidas: ${salCount} notas migradas\n`);
+    
+    console.log('═'.repeat(70));
+    console.log(`✅ MIGRACIÓN COMPLETADA`);
+    console.log(`   📦 Productos: ${prodCount}`);
+    console.log(`   📥 Ingresos: ${ingCount} notas`);
+    console.log(`   📤 Salidas: ${salCount} notas`);
+    console.log(`   📊 Total: ${prodCount + ingCount + salCount} registros`);
+    console.log('═'.repeat(70) + '\n');
+}
+
+migrar();

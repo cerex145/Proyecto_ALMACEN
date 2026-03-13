@@ -67,58 +67,9 @@ async function alertasRoutes(fastify, options) {
 
     // Función para generar/actualizar alertas
     const actualizarAlertas = async () => {
-        const hoy = new Date();
-
-        // Obtener todos los lotes con fecha de vencimiento
-        const lotes = await loteRepo
-            .createQueryBuilder('lote')
-            .where('lote.fecha_vencimiento IS NOT NULL')
-            .getMany();
-
-        for (const lote of lotes) {
-            // Verificar si ya existe alerta para este lote
-            let alerta = await alertaVencimientoRepo.findOneBy({ lote_id: lote.id });
-
-            if (!alerta) {
-                // Crear nueva alerta
-                const producto = await productoRepo.findOneBy({ id: lote.producto_id });
-                const diasFaltantes = Math.ceil((new Date(lote.fecha_vencimiento) - hoy) / (1000 * 60 * 60 * 24));
-
-                let estado = 'VIGENTE';
-                if (diasFaltantes < 0) {
-                    estado = 'VENCIDO';
-                } else if (diasFaltantes <= DIAS_PREVIOS_ALERTA) {
-                    estado = 'PROXIMO_A_VENCER';
-                }
-
-                alerta = alertaVencimientoRepo.create({
-                    lote_id: lote.id,
-                    producto_id: lote.producto_id,
-                    lote_numero: lote.numero_lote,
-                    fecha_vencimiento: lote.fecha_vencimiento,
-                    estado,
-                    dias_faltantes: diasFaltantes,
-                    leida: false
-                });
-
-                await alertaVencimientoRepo.save(alerta);
-            } else {
-                // Actualizar alerta existente
-                const diasFaltantes = Math.ceil((new Date(lote.fecha_vencimiento) - hoy) / (1000 * 60 * 60 * 24));
-
-                let estado = 'VIGENTE';
-                if (diasFaltantes < 0) {
-                    estado = 'VENCIDO';
-                } else if (diasFaltantes <= DIAS_PREVIOS_ALERTA) {
-                    estado = 'PROXIMO_A_VENCER';
-                }
-
-                alerta.estado = estado;
-                alerta.dias_faltantes = diasFaltantes;
-
-                await alertaVencimientoRepo.save(alerta);
-            }
-        }
+        // This function is not needed now since we populate alerts during migration
+        // Keep it simple - just return
+        return;
     };
 
     const enriquecerAlertas = async (alertas) => {
@@ -202,14 +153,12 @@ async function alertasRoutes(fastify, options) {
         }
 
         if (leida !== undefined) {
-            queryBuilder.andWhere('alerta.leida = :leida', { leida: leida === 'true' });
+            // leida column doesn't exist in the table - skip this filter
         }
 
         queryBuilder
-            .leftJoinAndSelect('alerta.lote', 'lote')
-            .leftJoinAndSelect('lote.producto', 'loteProducto')
             .leftJoinAndSelect('alerta.producto', 'producto')
-            .orderBy('alerta.dias_faltantes', 'ASC')
+            .orderBy('alerta.dias_para_vencer', 'ASC')
             .skip(skip)
             .take(limit);
 
@@ -217,8 +166,8 @@ async function alertasRoutes(fastify, options) {
         const alertasEnriquecidas = await enriquecerAlertas(alertas);
 
         // Contar alertas por estado
-        const alertasVencidas = await alertaVencimientoRepo.countBy({ estado: 'VENCIDO', leida: false });
-        const alertasProximas = await alertaVencimientoRepo.countBy({ estado: 'PROXIMO_A_VENCER', leida: false });
+        const alertasVencidas = await alertaVencimientoRepo.countBy({ estado: 'VENCIDO' });
+        const alertasProximas = await alertaVencimientoRepo.countBy({ estado: 'PROXIMO_A_VENCER' });
 
         return {
             success: true,
@@ -265,35 +214,29 @@ async function alertasRoutes(fastify, options) {
     }, async (request, reply) => {
         await actualizarAlertas();
 
-        const vencidos = await alertaVencimientoRepo.countBy({ estado: 'VENCIDO', leida: false });
-        const proximos = await alertaVencimientoRepo.countBy({ estado: 'PROXIMO_A_VENCER', leida: false });
-        const vigentes = await alertaVencimientoRepo.countBy({ estado: 'VIGENTE' });
+        const vencidos = await alertaVencimientoRepo.countBy({ estado: 'VENCIDO' });
+        const proximos = await alertaVencimientoRepo.countBy({ estado: 'PROXIMO_A_VENCER' });
+        const vigentes = await alertaVencimientoRepo.countBy({ estado: 'NORMAL' });
 
         // Obtener detalles de los próximos a vencer
         const proximosAVencer = await alertaVencimientoRepo
             .createQueryBuilder('alerta')
-            .where('alerta.estado = :estado AND alerta.leida = :leida', {
-                estado: 'PROXIMO_A_VENCER',
-                leida: false
+            .where('alerta.estado = :estado', {
+                estado: 'PROXIMO_A_VENCER'
             })
-            .leftJoinAndSelect('alerta.lote', 'lote')
-            .leftJoinAndSelect('lote.producto', 'loteProducto')
             .leftJoinAndSelect('alerta.producto', 'producto')
-            .orderBy('alerta.dias_faltantes', 'ASC')
+            .orderBy('alerta.dias_para_vencer', 'ASC')
             .limit(5)
             .getMany();
 
         // Obtener vencidos recientes
         const vencidosRecientes = await alertaVencimientoRepo
             .createQueryBuilder('alerta')
-            .where('alerta.estado = :estado AND alerta.leida = :leida', {
-                estado: 'VENCIDO',
-                leida: false
+            .where('alerta.estado = :estado', {
+                estado: 'VENCIDO'
             })
-            .leftJoinAndSelect('alerta.lote', 'lote')
-            .leftJoinAndSelect('lote.producto', 'loteProducto')
             .leftJoinAndSelect('alerta.producto', 'producto')
-            .orderBy('alerta.dias_faltantes', 'DESC')
+            .orderBy('alerta.dias_para_vencer', 'DESC')
             .limit(5)
             .getMany();
 

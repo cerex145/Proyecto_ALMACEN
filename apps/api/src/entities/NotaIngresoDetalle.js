@@ -20,6 +20,12 @@ module.exports = new EntitySchema({
         lote_numero: {
             type: 'varchar',
             length: 100,
+            nullable: true
+        },
+        cantidad: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
             nullable: false
         },
         fecha_vencimiento: {
@@ -48,56 +54,35 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: true
         },
-        cantidad: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            nullable: false
-        },
-        precio_unitario: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            nullable: true
-        },
         cantidad_bultos: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            default: 0,
             nullable: true
         },
         cantidad_cajas: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            default: 0,
             nullable: true
         },
         cantidad_por_caja: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            default: 0,
             nullable: true
         },
         cantidad_fraccion: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            default: 0,
             nullable: true
         },
         cantidad_total: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            default: 0,
             nullable: true
-        },
-        created_at: {
-            type: 'timestamp',
-            createDate: true
         }
     },
     relations: {

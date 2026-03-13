@@ -9,10 +9,6 @@ module.exports = new EntitySchema({
             primary: true,
             generated: true
         },
-        lote_id: {
-            type: 'int',
-            nullable: false
-        },
         producto_id: {
             type: 'int',
             nullable: false
@@ -20,24 +16,25 @@ module.exports = new EntitySchema({
         lote_numero: {
             type: 'varchar',
             length: 100,
-            nullable: false
+            nullable: true
         },
         fecha_vencimiento: {
             type: 'date',
-            nullable: false
+            nullable: true
         },
         estado: {
             type: 'enum',
-            enum: ['VIGENTE', 'PROXIMO_A_VENCER', 'VENCIDO', 'DESCARTADO'],
-            default: 'VIGENTE'
+            enum: ['VENCIDO', 'PROXIMO_A_VENCER', 'NORMAL'],
+            default: 'NORMAL'
         },
-        dias_faltantes: {
+        dias_para_vencer: {
             type: 'int',
             nullable: true
         },
-        leida: {
-            type: 'boolean',
-            default: false
+        cantidad: {
+            type: 'int',
+            nullable: true,
+            default: 0
         },
         created_at: {
             type: 'timestamp',
@@ -53,12 +50,6 @@ module.exports = new EntitySchema({
             type: 'many-to-one',
             target: 'Producto',
             joinColumn: { name: 'producto_id' },
-            nullable: false
-        },
-        lote: {
-            type: 'many-to-one',
-            target: 'Lote',
-            joinColumn: { name: 'lote_id' },
             nullable: false
         }
     }

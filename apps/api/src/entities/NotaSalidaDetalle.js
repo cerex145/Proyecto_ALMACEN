@@ -17,8 +17,9 @@ module.exports = new EntitySchema({
             type: 'int',
             nullable: false
         },
-        lote_id: {
-            type: 'int',
+        lote_numero: {
+            type: 'varchar',
+            length: 100,
             nullable: true
         },
         cantidad: {
@@ -27,43 +28,37 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: false
         },
-        cant_bulto: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            nullable: true,
-            default: 0
+        fecha_vencimiento: {
+            type: 'date',
+            nullable: true
         },
-        cant_caja: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            nullable: true,
-            default: 0
+        um: {
+            type: 'varchar',
+            length: 50,
+            nullable: true
         },
-        cant_x_caja: {
-            type: 'decimal',
-            precision: 10,
-            scale: 2,
-            nullable: true,
-            default: 0
+        fabricante: {
+            type: 'varchar',
+            length: 200,
+            nullable: true
         },
-        cant_fraccion: {
+        temperatura_min_c: {
             type: 'decimal',
-            precision: 10,
+            precision: 5,
             scale: 2,
-            nullable: true,
-            default: 0
+            nullable: true
         },
-        precio_unitario: {
+        temperatura_max_c: {
+            type: 'decimal',
+            precision: 5,
+            scale: 2,
+            nullable: true
+        },
+        cantidad_total: {
             type: 'decimal',
             precision: 10,
             scale: 2,
             nullable: true
-        },
-        created_at: {
-            type: 'timestamp',
-            createDate: true
         }
     },
     relations: {
@@ -79,13 +74,6 @@ module.exports = new EntitySchema({
             target: 'Producto',
             joinColumn: {
                 name: 'producto_id'
-            }
-        },
-        lote: {
-            type: 'many-to-one',
-            target: 'Lote',
-            joinColumn: {
-                name: 'lote_id'
             }
         }
     }

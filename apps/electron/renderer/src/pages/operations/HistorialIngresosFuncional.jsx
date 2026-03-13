@@ -21,10 +21,8 @@ export const HistorialIngresosFuncional = () => {
     }, []);
 
     useEffect(() => {
-        if (!showForm) {
-            cargarIngresos();
-        }
-    }, [filtro, showForm, clientesMap]);
+        cargarIngresos();
+    }, [filtro, clientesMap]);
 
     const cargarClientes = async () => {
         try {
@@ -32,8 +30,8 @@ export const HistorialIngresosFuncional = () => {
             const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
             const map = {};
             clientsArray.forEach((c) => {
-                if (c.razon_social) {
-                    map[c.razon_social] = c.cuit || '';
+                if (c.id != null) {
+                    map[String(c.id)] = c.cuit || '';
                 }
             });
             setClientesMap(map);
@@ -47,7 +45,7 @@ export const HistorialIngresosFuncional = () => {
         try {
             setLoading(true);
             const params = filtro ? `?numero_ingreso=${filtro}` : '';
-            const response = await fetch(`http://127.0.0.1:3000/api/ingresos${params}`);
+            const response = await fetch(`http://localhost:3000/api/ingresos${params}`);
             const result = await response.json();
             const notas = result.data || [];
             setIngresos(notas);
@@ -55,12 +53,12 @@ export const HistorialIngresosFuncional = () => {
             const detallesResponses = await Promise.all(
                 notas.map(async (nota) => {
                     try {
-                        const detRes = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+                        const detRes = await fetch(`http://localhost:3000/api/ingresos/${nota.id}`);
                         const detJson = await detRes.json();
-                        return detJson?.data || { detalles: [] };
+                        return detJson?.data || { detalles: [], proveedor: null };
                     } catch (err) {
                         console.error('Error al cargar detalles:', err);
-                        return { detalles: [] };
+                        return { detalles: [], proveedor: null };
                     }
                 })
             );
@@ -69,10 +67,10 @@ export const HistorialIngresosFuncional = () => {
             detallesResponses.forEach((data, idx) => {
                 const nota = notas[idx];
                 const fechaObj = new Date(nota.fecha);
-                const ruc = clientesMap[nota.proveedor] || '-';
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
+                const ruc = clientesMap[String(nota.proveedor_id)] || data?.proveedor?.cuit || '-';
                 const detalles = data?.detalles || [];
 
                 if (detalles.length === 0) {
@@ -107,7 +105,6 @@ export const HistorialIngresosFuncional = () => {
                     if (tempMin != null || tempMax != null) {
                         tempText = `${tempMin ?? '-'} a ${tempMax ?? '-'}`;
                     }
-                    // fecha_vencimiento puede estar en el detalle o en el lote asociado
                     const fVcto = d.fecha_vencimiento || null;
 
                     rows.push({
@@ -116,7 +113,7 @@ export const HistorialIngresosFuncional = () => {
                         producto: d.producto?.descripcion || '-',
                         lote: d.lote_numero || '-',
                         vencimiento: fVcto ? new Date(fVcto).toLocaleDateString('es-PE') : '-',
-                        um: d.um || d.producto?.um || d.producto?.unidad || '-',
+                        um: d.um || d.producto?.um || '-',
                         fabricante: d.fabricante || d.producto?.fabricante || '-',
                         temperatura: tempText,
                         cantBulto: fmt(d.cantidad_bultos),
@@ -187,50 +184,50 @@ export const HistorialIngresosFuncional = () => {
                     <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
-                                <tr>
-                                    <th className="px-4 py-3">Cod. Producto</th>
-                                    <th className="px-4 py-3">Producto</th>
-                                    <th className="px-4 py-3">Lote</th>
-                                    <th className="px-4 py-3">Fecha Vcto</th>
-                                    <th className="px-4 py-3">UM</th>
-                                    <th className="px-4 py-3">Fabr.</th>
-                                    <th className="px-4 py-3">Temp.</th>
-                                    <th className="px-4 py-3">Cant.Bulto</th>
-                                    <th className="px-4 py-3">Cant.Cajas</th>
-                                    <th className="px-4 py-3">Cant x Caja</th>
-                                    <th className="px-4 py-3">Cant.Fracción</th>
-                                    <th className="px-4 py-3">Cant.Total_Ingreso</th>
-                                    <th className="px-4 py-3">Fecha de H_Ingreso</th>
-                                    <th className="px-4 py-3">MES</th>
-                                    <th className="px-4 py-3">DIA</th>
-                                    <th className="px-4 py-3">RUC</th>
-                                    <th className="px-4 py-3">AÑO</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {detalleRows.map((row) => (
-                                    <tr key={row.key} className="hover:bg-slate-50/50">
-                                        <td className="px-4 py-2 font-mono text-xs">{row.codigo}</td>
-                                        <td className="px-4 py-2 font-medium text-slate-700">{row.producto}</td>
-                                        <td className="px-4 py-2">{row.lote}</td>
-                                        <td className="px-4 py-2">{row.vencimiento}</td>
-                                        <td className="px-4 py-2">{row.um}</td>
-                                        <td className="px-4 py-2">{row.fabricante}</td>
-                                        <td className="px-4 py-2">{row.temperatura}</td>
-                                        <td className="px-4 py-2">{row.cantBulto}</td>
-                                        <td className="px-4 py-2">{row.cantCajas}</td>
-                                        <td className="px-4 py-2">{row.cantPorCaja}</td>
-                                        <td className="px-4 py-2">{row.cantFraccion}</td>
-                                        <td className="px-4 py-2 font-semibold text-blue-600">{row.cantTotal}</td>
-                                        <td className="px-4 py-2">{row.fechaIngreso}</td>
-                                        <td className="px-4 py-2">{row.mes}</td>
-                                        <td className="px-4 py-2">{row.dia}</td>
-                                        <td className="px-4 py-2">{row.ruc}</td>
-                                        <td className="px-4 py-2">{row.anio}</td>
+                                <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
+                                    <tr>
+                                        <th className="px-4 py-3">Cod. Producto</th>
+                                        <th className="px-4 py-3">Producto</th>
+                                        <th className="px-4 py-3">Lote</th>
+                                        <th className="px-4 py-3">Fecha Vcto</th>
+                                        <th className="px-4 py-3">UM</th>
+                                        <th className="px-4 py-3">Fabr.</th>
+                                        <th className="px-4 py-3">Temp.</th>
+                                        <th className="px-4 py-3">Cant.Bulto</th>
+                                        <th className="px-4 py-3">Cant.Cajas</th>
+                                        <th className="px-4 py-3">Cant x Caja</th>
+                                        <th className="px-4 py-3">Cant.Fracción</th>
+                                        <th className="px-4 py-3">Cant.Total_Ingreso</th>
+                                        <th className="px-4 py-3">Fecha de H_Ingreso</th>
+                                        <th className="px-4 py-3">MES</th>
+                                        <th className="px-4 py-3">DIA</th>
+                                        <th className="px-4 py-3">RUC</th>
+                                        <th className="px-4 py-3">AÑO</th>
                                     </tr>
-                                ))}
-                            </tbody>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {detalleRows.map((row) => (
+                                        <tr key={row.key} className="hover:bg-slate-50/50">
+                                            <td className="px-4 py-2 font-mono text-xs">{row.codigo}</td>
+                                            <td className="px-4 py-2 font-medium text-slate-700">{row.producto}</td>
+                                            <td className="px-4 py-2">{row.lote}</td>
+                                            <td className="px-4 py-2">{row.vencimiento}</td>
+                                            <td className="px-4 py-2">{row.um}</td>
+                                            <td className="px-4 py-2">{row.fabricante}</td>
+                                            <td className="px-4 py-2">{row.temperatura}</td>
+                                            <td className="px-4 py-2">{row.cantBulto}</td>
+                                            <td className="px-4 py-2">{row.cantCajas}</td>
+                                            <td className="px-4 py-2">{row.cantPorCaja}</td>
+                                            <td className="px-4 py-2">{row.cantFraccion}</td>
+                                            <td className="px-4 py-2 font-semibold text-blue-600">{row.cantTotal}</td>
+                                            <td className="px-4 py-2">{row.fechaIngreso}</td>
+                                            <td className="px-4 py-2">{row.mes}</td>
+                                            <td className="px-4 py-2">{row.dia}</td>
+                                            <td className="px-4 py-2">{row.ruc}</td>
+                                            <td className="px-4 py-2">{row.anio}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -239,3 +236,4 @@ export const HistorialIngresosFuncional = () => {
         </div>
     );
 };
+

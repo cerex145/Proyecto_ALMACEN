@@ -115,37 +115,21 @@ async function kardexRoutes(fastify, options) {
 
         let sql = `
             SELECT 
-                k.id, k.producto_id, k.lote_numero, k.tipo_movimiento,
-                k.cantidad, k.saldo, k.documento_tipo, k.documento_numero,
-                k.referencia_id, k.observaciones, k.created_at,
+                k.id, k.producto_id, k.tipo_movimiento,
+                k.cantidad, k.numero_documento,
+                k.observaciones, k.fecha as created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
-                p.um as unidad_medida,
+                ni.numero_ingreso,
                 ni.proveedor as proveedor_ingreso,
-                c.razon_social as cliente_salida,
-                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre,
                 ni.fecha as fecha_nota_ingreso,
-                ns.fecha as fecha_nota_salida,
-                CASE 
-                    WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN COALESCE(ni.fecha, k.created_at)
-                    ELSE NULL
-                END as fecha_ingreso,
-                CASE 
-                    WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO') THEN COALESCE(ns.fecha, k.created_at)
-                    ELSE NULL
-                END as fecha_salida
+                ns.numero_salida,
+                ns.fecha as fecha_nota_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
             LEFT JOIN notas_ingreso ni ON k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
-                AND (
-                    (k.referencia_id IS NOT NULL AND k.referencia_id = ni.id)
-                    OR (k.referencia_id IS NULL AND k.documento_numero IS NOT NULL AND k.documento_numero = ni.numero_ingreso)
-                )
+                AND k.numero_documento = ni.numero_ingreso
             LEFT JOIN notas_salida ns ON k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
-                AND (
-                    (k.referencia_id IS NOT NULL AND k.referencia_id = ns.id)
-                    OR (k.referencia_id IS NULL AND k.documento_numero IS NOT NULL AND k.documento_numero = ns.numero_salida)
-                )
-            LEFT JOIN clientes c ON ns.cliente_id = c.id
+                AND k.numero_documento = ns.numero_salida
             WHERE 1=1
         `;
 
@@ -202,7 +186,7 @@ async function kardexRoutes(fastify, options) {
         const total = countResult[0]?.total || 0;
 
         // Order and pagination
-        const allowedOrderFields = ['created_at', 'tipo_movimiento', 'cantidad', 'saldo', 'documento_tipo', 'documento_numero'];
+        const allowedOrderFields = ['created_at', 'tipo_movimiento', 'cantidad', 'numero_documento'];
         const normalizedOrderBy = orderBy === 'fecha' ? 'created_at' : orderBy;
         const safeOrderBy = allowedOrderFields.includes(normalizedOrderBy) ? normalizedOrderBy : 'created_at';
         const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
@@ -216,26 +200,21 @@ async function kardexRoutes(fastify, options) {
         const data = movimientos.map(row => ({
             id: row.id,
             producto_id: row.producto_id,
-            lote_numero: row.lote_numero || 'N/A',
             tipo_movimiento: row.tipo_movimiento,
             cantidad: Number(row.cantidad),
-            saldo: Number(row.saldo),
-            documento_tipo: row.documento_tipo,
-            documento_numero: row.documento_numero,
-            referencia_id: row.referencia_id,
+            numero_documento: row.numero_documento,
             observaciones: row.observaciones || '-',
-            cliente_nombre: row.cliente_nombre || 'N/A',
             created_at: row.created_at,
-            fecha_ingreso: row.fecha_ingreso,
-            fecha_salida: row.fecha_salida,
-            unidad_medida: row.unidad_medida || 'UND',
+            fecha_ingreso: row.fecha_nota_ingreso,
+            fecha_salida: row.fecha_nota_salida,
+            numero_ingreso: row.numero_ingreso || null,
+            numero_salida: row.numero_salida || null,
+            proveedor: row.proveedor_ingreso || null,
             producto: {
                 id: row.producto_id,
                 codigo: row.codigo_producto || 'N/A',
                 descripcion: row.descripcion_producto || 'N/A'
-            },
-            proveedor: row.proveedor_ingreso || null,
-            cliente: row.cliente_salida || null
+            }
         }));
 
         return {

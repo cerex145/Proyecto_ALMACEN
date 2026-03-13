@@ -9,9 +9,6 @@ const NotaIngresoSchema = {
         numero_ingreso: { type: 'string' },
         fecha: { type: 'string', format: 'date' },
         proveedor: { type: 'string' },
-        tipo_documento: { type: 'string', nullable: true },
-        numero_documento: { type: 'string', nullable: true },
-        categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
         estado: { type: 'string' },
         observaciones: { type: 'string', nullable: true }
     }
@@ -225,41 +222,18 @@ async function ingresosRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
         }
 
+        // Con JOIN para traer los productos
         const detalles = await notaIngresoDetalleRepo
             .createQueryBuilder('detalle')
             .leftJoinAndSelect('detalle.producto', 'producto')
-            .where('detalle.nota_ingreso_id = :id', { id: Number(id) })
+            .where('detalle.nota_ingreso_id = :notaId', { notaId: Number(id) })
             .getMany();
-
-        const lotes = await loteRepo.find({
-            where: { nota_ingreso_id: Number(id) }
-        });
-
-        const loteMap = new Map();
-        for (const lote of lotes) {
-            const key = `${lote.producto_id}::${lote.numero_lote}`;
-            loteMap.set(key, lote);
-        }
-
-        const detallesConSaldo = detalles.map((detalle) => {
-            const key = `${detalle.producto_id}::${detalle.lote_numero}`;
-            const lote = loteMap.get(key);
-            const totalRaw = Number(detalle.cantidad_total ?? detalle.cantidad ?? 0);
-            const disponibleRaw = lote ? Number(lote.cantidad_disponible) : 0;
-            const disponible = Math.max(0, Math.min(disponibleRaw, totalRaw));
-
-            return {
-                ...detalle,
-                lote_id: lote?.id ?? null,
-                cantidad_disponible: disponible
-            };
-        });
 
         return {
             success: true,
             data: {
                 ...nota,
-                detalles: detallesConSaldo
+                detalles: detalles
             }
         };
     });
