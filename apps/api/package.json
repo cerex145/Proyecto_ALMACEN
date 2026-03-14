@@ -9,7 +9,8 @@
     "migrate:mysql-to-postgres": "node scripts/migrate-mysql-to-postgres.js",
     "migrate:mysql-to-postgres:init": "node scripts/migrate-mysql-to-postgres.js --init",
     "migrate:mysql-to-postgres:schema-only": "node scripts/migrate-mysql-to-postgres.js --init --schema-only",
-    "verify:mysql-to-postgres": "node scripts/verify-mysql-postgres-migration.js"
+    "verify:mysql-to-postgres": "node scripts/verify-mysql-postgres-migration.js",
+    "stock:rebuild": "node scripts/rebuild-stock-from-movements.js"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.0",

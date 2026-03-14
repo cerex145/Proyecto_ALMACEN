@@ -4,7 +4,7 @@ const AppDataSource = require('../config/database');
 async function dbConnector(fastify, options) {
     try {
         await AppDataSource.initialize();
-        fastify.log.info('✅ MySQL Database connected');
+        fastify.log.info('✅ PostgreSQL/Supabase connected');
 
         fastify.decorate('db', AppDataSource);
 

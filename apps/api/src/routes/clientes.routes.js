@@ -57,6 +57,7 @@ const ClienteResponseWithMessageSchema = {
 
 async function clienteRoutes(fastify, options) {
     const clienteRepo = fastify.db.getRepository('Cliente');
+    const toActivoSmallint = (value) => (value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0);
 
     // GET /api/clientes - Listar con filtros y paginación
     fastify.get('/api/clientes', {
@@ -100,7 +101,7 @@ async function clienteRoutes(fastify, options) {
         }
 
         if (activo !== undefined) {
-            queryBuilder.andWhere('cliente.activo = :activo', { activo: activo === 'true' });
+            queryBuilder.andWhere('cliente.activo = :activo', { activo: toActivoSmallint(activo) });
         }
 
         queryBuilder
@@ -209,7 +210,7 @@ async function clienteRoutes(fastify, options) {
             estado: estado || 'Activo',
             telefono: telefono || null,
             email: email || null,
-            activo: true
+            activo: 1
         });
 
         await clienteRepo.save(nuevoCliente);
@@ -295,7 +296,7 @@ async function clienteRoutes(fastify, options) {
         if (estado !== undefined) cliente.estado = estado;
         cliente.telefono = telefono || null;
         cliente.email = email || null;
-        if (activo !== undefined) cliente.activo = activo;
+        if (activo !== undefined) cliente.activo = toActivoSmallint(activo);
 
         await clienteRepo.save(cliente);
 
@@ -333,7 +334,7 @@ async function clienteRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Cliente no encontrado' });
         }
 
-        cliente.activo = false;
+        cliente.activo = 0;
         await clienteRepo.save(cliente);
 
         return { success: true, message: 'Cliente desactivado exitosamente' };
@@ -395,7 +396,7 @@ async function clienteRoutes(fastify, options) {
                 direccion: direccion ? String(direccion) : null,
                 telefono: telefono ? String(telefono) : null,
                 email: email ? String(email) : null,
-                activo: true
+                activo: 1
             });
         });
 
@@ -443,7 +444,7 @@ async function clienteRoutes(fastify, options) {
         const queryBuilder = clienteRepo.createQueryBuilder('cliente');
 
         if (activo !== undefined) {
-            queryBuilder.where('cliente.activo = :activo', { activo: activo === 'true' });
+            queryBuilder.where('cliente.activo = :activo', { activo: toActivoSmallint(activo) });
         }
 
         const clientes = await queryBuilder.orderBy('cliente.razon_social', 'ASC').getMany();

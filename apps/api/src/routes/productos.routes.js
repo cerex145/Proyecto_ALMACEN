@@ -85,6 +85,7 @@ const ProductoResponseWithMessageSchema = {
 
 async function productoRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
+    const toActivoSmallint = (value) => (value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0);
 
     // GET /api/productos - Listar con filtros y paginación
     fastify.get('/api/productos', {
@@ -963,7 +964,6 @@ async function productoRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { busqueda, categoria_ingreso, activo } = request.query;
-        const loteRepo = fastify.db.getRepository('Lote');
 
         const qb = productoRepo.createQueryBuilder('producto');
 
@@ -978,44 +978,53 @@ async function productoRoutes(fastify, options) {
             qb.andWhere('producto.categoria_ingreso = :cat', { cat: categoria_ingreso });
         }
         if (activo !== undefined) {
-            qb.andWhere('producto.activo = :activo', { activo: activo === 'true' });
+            qb.andWhere('producto.activo = :activo', { activo: toActivoSmallint(activo) });
         }
 
-        qb.orderBy('producto.descripcion', 'ASC');
-        const productos = await qb.getMany();
+        qb.leftJoin('lotes', 'lote', 'lote.producto_id = producto.id');
 
-        // Para cada producto, calcular stock real sumando lotes disponibles
-        const data = await Promise.all(productos.map(async (p) => {
-            const lotes = await loteRepo.find({
-                where: { producto_id: p.id },
-                order: { fecha_vencimiento: 'ASC' }
-            });
+        qb.select([
+            'producto.id AS id',
+            'producto.codigo AS codigo',
+            'producto.descripcion AS descripcion',
+            'producto.proveedor AS proveedor',
+            'producto.categoria_ingreso AS categoria_ingreso',
+            'producto.um AS um',
+            'producto.unidad AS unidad',
+            'producto.registro_sanitario AS registro_sanitario',
+            'COALESCE(SUM(COALESCE(NULLIF(lote.cantidad_disponible, 0), lote.cantidad_actual, lote.cantidad_inicial, 0)), 0) AS stock_calculado',
+            'COUNT(lote.id) AS total_lotes',
+            "MIN(CASE WHEN COALESCE(NULLIF(lote.cantidad_disponible, 0), lote.cantidad_actual, lote.cantidad_inicial, 0) > 0 THEN lote.fecha_vencimiento END) AS proximo_vencimiento",
+            'producto.activo AS activo'
+        ]);
 
-            const stockCalculado = lotes.reduce(
-                (sum, l) => sum + (parseFloat(l.cantidad_disponible) || 0),
-                0
-            );
+        qb.groupBy('producto.id')
+            .addGroupBy('producto.codigo')
+            .addGroupBy('producto.descripcion')
+            .addGroupBy('producto.proveedor')
+            .addGroupBy('producto.categoria_ingreso')
+            .addGroupBy('producto.um')
+            .addGroupBy('producto.unidad')
+            .addGroupBy('producto.registro_sanitario')
+            .addGroupBy('producto.activo')
+            .orderBy('producto.descripcion', 'ASC');
 
-            // Próximo vencimiento: el lote con stock disponible con fecha más próxima
-            const proximoLote = lotes.find(
-                l => (parseFloat(l.cantidad_disponible) || 0) > 0 && l.fecha_vencimiento
-            );
+        const rows = await qb.getRawMany();
 
-            return {
-                id: p.id,
-                codigo: p.codigo,
-                descripcion: p.descripcion,
-                proveedor: p.proveedor || null,
-                categoria_ingreso: p.categoria_ingreso || null,
-                um: p.um || null,
-                unidad: p.unidad || null,
-                registro_sanitario: p.registro_sanitario || null,
-                stock_minimo: p.stock_minimo || 0,
-                stock_calculado: stockCalculado,
-                total_lotes: lotes.length,
-                proximo_vencimiento: proximoLote ? proximoLote.fecha_vencimiento : null,
-                activo: p.activo
-            };
+        const data = rows.map((row) => ({
+            id: Number(row.id),
+            codigo: row.codigo,
+            descripcion: row.descripcion,
+            proveedor: row.proveedor || null,
+            categoria_ingreso: row.categoria_ingreso || null,
+            um: row.um || null,
+            unidad: row.unidad || null,
+            registro_sanitario: row.registro_sanitario || null,
+            stock_minimo: 0,
+            stock_calculado: Number(row.stock_calculado || 0),
+            total_lotes: Number(row.total_lotes || 0),
+            proximo_vencimiento: row.proximo_vencimiento || null,
+            activo: Number(row.activo || 0) === 1
         }));
 
         return { success: true, data };
@@ -1042,7 +1051,7 @@ async function productoRoutes(fastify, options) {
         const queryBuilder = productoRepo.createQueryBuilder('producto');
 
         if (activo !== undefined) {
-            queryBuilder.where('producto.activo = :activo', { activo: activo === 'true' });
+            queryBuilder.where('producto.activo = :activo', { activo: toActivoSmallint(activo) });
         }
 
         const productos = await queryBuilder.orderBy('producto.descripcion', 'ASC').getMany();

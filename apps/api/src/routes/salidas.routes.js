@@ -452,13 +452,13 @@ async function salidasRoutes(fastify, options) {
                         ) um_fallback
                             ON um_fallback.producto_id = detalle.producto_id
             WHERE (
-                ? = ''
-                OR nota.numero_salida LIKE ?
-                OR prod.codigo LIKE ?
-                OR prod.descripcion LIKE ?
+                $1 = ''
+                OR nota.numero_salida ILIKE $2
+                OR prod.codigo ILIKE $3
+                OR prod.descripcion ILIKE $4
             )
             ORDER BY nota.fecha DESC, nota.id DESC, detalle.id ASC
-            LIMIT ?
+            LIMIT $5
         `;
 
         const rows = await fastify.db.query(sql, [termino, like, like, like, Number(limit)]);

@@ -12,15 +12,17 @@
     "packages/shared-utils"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
-    "dev:api": "npm run dev --workspace=apps/api",
-    "dev:renderer": "npm run dev --workspace=apps/electron/renderer",
-    "dev:electron": "wait-on http://localhost:5173 http://localhost:3000 && npm run dev --workspace=apps/electron",
-    "migrate:supabase": "npm run migrate:mysql-to-postgres:init --workspace=apps/api",
-    "verify:migrate:supabase": "npm run verify:mysql-to-postgres --workspace=apps/api",
+    "dev": "npm run dev:clean && concurrently \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:clean": "fuser -k 3000/tcp || true && fuser -k 5173/tcp || true",
+    "dev:api": "npm run dev --workspace=@sistema-almacen/api",
+    "dev:renderer": "npm run dev --workspace=@sistema-almacen/renderer",
+    "dev:electron": "wait-on http://localhost:5173 http://localhost:3000 && npm run dev --workspace=@sistema-almacen/electron",
+    "migrate:supabase": "npm run migrate:mysql-to-postgres:init --workspace=@sistema-almacen/api",
+    "verify:migrate:supabase": "npm run verify:mysql-to-postgres --workspace=@sistema-almacen/api",
+    "stock:rebuild": "npm run stock:rebuild --workspace=@sistema-almacen/api",
     "build": "npm run build:renderer && npm run build:electron",
-    "build:renderer": "npm run build --workspace=apps/electron/renderer",
-    "build:electron": "npm run build --workspace=apps/electron"
+    "build:renderer": "npm run build --workspace=@sistema-almacen/renderer",
+    "build:electron": "npm run build --workspace=@sistema-almacen/electron"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

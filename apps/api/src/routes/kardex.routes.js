@@ -64,14 +64,14 @@ async function kardexRoutes(fastify, options) {
         const rows = await kardexRepo.manager.connection.query(`
             SELECT TABLE_NAME, COLUMN_NAME
             FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
+                        WHERE TABLE_SCHEMA = current_schema()
               AND (
                 (TABLE_NAME = 'notas_salida' AND COLUMN_NAME = 'cliente_id')
                 OR (TABLE_NAME = 'clientes' AND COLUMN_NAME = 'razon_social')
               )
         `);
 
-        const flags = new Set(rows.map((row) => `${row.TABLE_NAME}.${row.COLUMN_NAME}`));
+                const flags = new Set(rows.map((row) => `${row.table_name}.${row.column_name}`));
         kardexSchemaInfo = {
             hasNotaSalidaClienteId: flags.has('notas_salida.cliente_id'),
             hasClienteRazonSocial: flags.has('clientes.razon_social')
@@ -133,6 +133,7 @@ async function kardexRoutes(fastify, options) {
         } = request.query;
 
         const skip = (page - 1) * limit;
+        let paramIndex = 1;
 
         // Query raw SQL para asegurar que trae los datos del producto
         const connection = kardexRepo.manager.connection;
@@ -174,47 +175,47 @@ async function kardexRoutes(fastify, options) {
         const params = [];
 
         if (producto_id) {
-            sql += ` AND k.producto_id = ?`;
+            sql += ` AND k.producto_id = $${paramIndex++}`;
             params.push(Number(producto_id));
         }
 
         if (producto_codigo) {
-            sql += ` AND p.codigo LIKE ?`;
+            sql += ` AND p.codigo ILIKE $${paramIndex++}`;
             params.push(`%${producto_codigo}%`);
         }
 
         if (producto_nombre) {
-            sql += ` AND (p.descripcion LIKE ? OR p.codigo LIKE ?)`;
+            sql += ` AND (p.descripcion ILIKE $${paramIndex++} OR p.codigo ILIKE $${paramIndex++})`;
             params.push(`%${producto_nombre}%`, `%${producto_nombre}%`);
         }
 
         if (documento_numero) {
-            sql += ` AND k.documento_numero LIKE ?`;
+            sql += ` AND k.documento_numero ILIKE $${paramIndex++}`;
             params.push(`%${documento_numero}%`);
         }
 
         if (cliente_nombre) {
-            sql += ` AND ${clienteFilterExpr} LIKE ?`;
+            sql += ` AND ${clienteFilterExpr} ILIKE $${paramIndex++}`;
             params.push(`%${cliente_nombre}%`);
         }
 
         if (lote_numero) {
-            sql += ` AND k.lote_numero LIKE ?`;
+            sql += ` AND k.lote_numero ILIKE $${paramIndex++}`;
             params.push(`%${lote_numero}%`);
         }
 
         if (tipo_movimiento) {
-            sql += ` AND k.tipo_movimiento = ?`;
+            sql += ` AND k.tipo_movimiento = $${paramIndex++}`;
             params.push(tipo_movimiento);
         }
 
         if (fecha_desde) {
-            sql += ` AND DATE(k.created_at) >= ?`;
+            sql += ` AND DATE(k.created_at) >= $${paramIndex++}`;
             params.push(fecha_desde);
         }
 
         if (fecha_hasta) {
-            sql += ` AND DATE(k.created_at) <= ?`;
+            sql += ` AND DATE(k.created_at) <= $${paramIndex++}`;
             params.push(fecha_hasta);
         }
 
@@ -231,7 +232,7 @@ async function kardexRoutes(fastify, options) {
         const safeOrderBy = allowedOrderFields.includes(normalizedOrderBy) ? normalizedOrderBy : 'created_at';
         const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
-        sql += ` ORDER BY k.${safeOrderBy} ${safeOrder} LIMIT ? OFFSET ?`;
+        sql += ` ORDER BY k.${safeOrderBy} ${safeOrder} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
         params.push(Number(limit), skip);
 
         const movimientos = await connection.query(sql, params);
@@ -351,6 +352,7 @@ async function kardexRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { producto_id, producto_nombre, cliente_nombre, fecha_desde, fecha_hasta } = request.query;
+        let paramIndex = 1;
 
         const connection = kardexRepo.manager.connection;
         const schemaInfo = await getKardexSchemaInfo();
@@ -383,27 +385,27 @@ async function kardexRoutes(fastify, options) {
         const params = [];
 
         if (producto_id) {
-            sql += ` AND k.producto_id = ?`;
+            sql += ` AND k.producto_id = $${paramIndex++}`;
             params.push(Number(producto_id));
         }
 
         if (producto_nombre) {
-            sql += ` AND (p.descripcion LIKE ? OR p.codigo LIKE ?)`;
+            sql += ` AND (p.descripcion ILIKE $${paramIndex++} OR p.codigo ILIKE $${paramIndex++})`;
             params.push(`%${producto_nombre}%`, `%${producto_nombre}%`);
         }
 
         if (cliente_nombre) {
-            sql += ` AND ${clienteFilterExpr} LIKE ?`;
+            sql += ` AND ${clienteFilterExpr} ILIKE $${paramIndex++}`;
             params.push(`%${cliente_nombre}%`);
         }
 
         if (fecha_desde) {
-            sql += ` AND DATE(k.created_at) >= ?`;
+            sql += ` AND DATE(k.created_at) >= $${paramIndex++}`;
             params.push(fecha_desde);
         }
 
         if (fecha_hasta) {
-            sql += ` AND DATE(k.created_at) <= ?`;
+            sql += ` AND DATE(k.created_at) <= $${paramIndex++}`;
             params.push(fecha_hasta);
         }
 
