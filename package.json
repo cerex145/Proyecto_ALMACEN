@@ -16,6 +16,8 @@
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:renderer": "npm run dev --workspace=apps/electron/renderer",
     "dev:electron": "wait-on http://localhost:5173 http://localhost:3000 && npm run dev --workspace=apps/electron",
+    "migrate:supabase": "npm run migrate:mysql-to-postgres:init --workspace=apps/api",
+    "verify:migrate:supabase": "npm run verify:mysql-to-postgres --workspace=apps/api",
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "npm run build --workspace=apps/electron/renderer",
     "build:electron": "npm run build --workspace=apps/electron"
