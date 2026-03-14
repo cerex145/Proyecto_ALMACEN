@@ -5,7 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "migrate:mysql-to-postgres": "node scripts/migrate-mysql-to-postgres.js",
+    "migrate:mysql-to-postgres:init": "node scripts/migrate-mysql-to-postgres.js --init",
+    "migrate:mysql-to-postgres:schema-only": "node scripts/migrate-mysql-to-postgres.js --init --schema-only"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.0",
