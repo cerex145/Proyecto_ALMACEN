@@ -148,6 +148,25 @@ const TABLE_ORDER = [
   'auditorias',
 ];
 
+const COLUMN_MAPPINGS = {
+  productos: {
+    unidad_medida: 'unidad_medida',
+  },
+  lotes: {
+    cantidad_inicial: 'cantidad_inicial',
+    cantidad_actual: 'cantidad_actual',
+  },
+  alertas_vencimiento: {
+    dias_para_vencer: 'dias_para_vencer',
+  },
+};
+
+const TABLE_DEFAULTS = {
+  notas_salida: {
+    cliente_id: 1,
+  },
+};
+
 const SEQUENCES = {
   roles: 'roles_id_seq',
   clientes: 'clientes_id_seq',
@@ -183,19 +202,70 @@ async function getMysqlTables(conn) {
   return rows.map((r) => r.TABLE_NAME);
 }
 
+const pgColumnsCache = new Map();
+
+async function getPgColumns(pgClient, tableName) {
+  if (pgColumnsCache.has(tableName)) return pgColumnsCache.get(tableName);
+  const result = await pgClient.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [tableName]
+  );
+  const columns = new Set(result.rows.map((r) => r.column_name));
+  pgColumnsCache.set(tableName, columns);
+  return columns;
+}
+
+function mapRowColumns(tableName, row) {
+  const mappedRow = {};
+  const tableMappings = COLUMN_MAPPINGS[tableName] || {};
+  for (const [key, value] of Object.entries(row)) {
+    const mappedKey = tableMappings[key] || key;
+    mappedRow[mappedKey] = value;
+  }
+  return mappedRow;
+}
+
+function applyDefaultValues(tableName, row) {
+  const defaults = TABLE_DEFAULTS[tableName] || {};
+  const enriched = { ...row };
+  for (const [key, value] of Object.entries(defaults)) {
+    if (enriched[key] === undefined || enriched[key] === null) {
+      enriched[key] = value;
+    }
+  }
+  return enriched;
+}
+
 async function copyTable(mysqlConn, pgClient, tableName) {
   const [rows] = await mysqlConn.query(`SELECT * FROM \`${tableName}\``);
   if (rows.length === 0) {
     console.log(`  ${tableName}: 0 filas (omitido)`);
     return 0;
   }
-  const columns = Object.keys(rows[0]).filter((k) => k !== undefined);
+  const pgColumns = await getPgColumns(pgClient, tableName);
+  const previewMapped = applyDefaultValues(tableName, mapRowColumns(tableName, rows[0]));
+  const allMappedColumns = Object.keys(previewMapped).filter((k) => k !== undefined);
+  const columns = allMappedColumns.filter((col) => pgColumns.has(col));
+
+  const droppedColumns = allMappedColumns.filter((col) => !pgColumns.has(col));
+  if (droppedColumns.length > 0) {
+    console.log(`  ${tableName}: columnas omitidas (no existen en Postgres): ${droppedColumns.join(', ')}`);
+  }
+
+  if (columns.length === 0) {
+    console.log(`  ${tableName}: sin columnas compatibles para insertar (omitido)`);
+    return 0;
+  }
+
   const colList = columns.map((c) => `"${c}"`).join(', ');
   const hasId = columns.includes('id');
   const onConflict = hasId ? ' ON CONFLICT (id) DO NOTHING' : '';
   let inserted = 0;
   for (const row of rows) {
-    const values = columns.map((col) => escapePgValue(row[col])).join(', ');
+    const mapped = applyDefaultValues(tableName, mapRowColumns(tableName, row));
+    const values = columns.map((col) => escapePgValue(mapped[col])).join(', ');
     try {
       await pgClient.query(`INSERT INTO ${tableName} (${colList}) VALUES (${values})${onConflict}`);
       inserted++;

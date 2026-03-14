@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS productos (
   proveedor VARCHAR(200),
   tipo_documento VARCHAR(100),
   numero_documento VARCHAR(100),
+  fecha_documento DATE,
   registro_sanitario VARCHAR(100),
   lote VARCHAR(100),
   fabricante VARCHAR(200),
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS productos (
   cantidad_por_caja DECIMAL(10,2) NOT NULL DEFAULT 0,
   cantidad_fraccion DECIMAL(10,2) NOT NULL DEFAULT 0,
   cantidad_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+  unidad_medida VARCHAR(50),
   observaciones TEXT,
   stock_actual DECIMAL(10,2) NOT NULL DEFAULT 0,
   activo SMALLINT NOT NULL DEFAULT 1,
@@ -124,8 +126,11 @@ CREATE TABLE IF NOT EXISTS lotes (
   producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE ON UPDATE CASCADE,
   numero_lote VARCHAR(100) NOT NULL,
   fecha_vencimiento DATE,
-  cantidad_ingresada DECIMAL(10,2) NOT NULL,
-  cantidad_disponible DECIMAL(10,2) NOT NULL,
+  cantidad_ingresada DECIMAL(10,2) NOT NULL DEFAULT 0,
+  cantidad_disponible DECIMAL(10,2) NOT NULL DEFAULT 0,
+  cantidad_inicial DECIMAL(10,2),
+  cantidad_actual DECIMAL(10,2),
+  estado VARCHAR(20) DEFAULT 'ACTIVO',
   nota_ingreso_id INT,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -135,7 +140,7 @@ CREATE TABLE IF NOT EXISTS lotes (
 CREATE TABLE IF NOT EXISTS notas_salida (
   id SERIAL PRIMARY KEY,
   numero_salida VARCHAR(50) NOT NULL UNIQUE,
-  cliente_id INT NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  cliente_id INT REFERENCES clientes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
   fecha DATE NOT NULL,
   tipo_documento VARCHAR(50),
   numero_documento VARCHAR(100),
@@ -251,12 +256,14 @@ CREATE TABLE IF NOT EXISTS ajustes_stock (
 -- 14) alertas_vencimiento
 CREATE TABLE IF NOT EXISTS alertas_vencimiento (
   id SERIAL PRIMARY KEY,
-  lote_id INT NOT NULL,
+  lote_id INT,
   producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE ON UPDATE CASCADE,
   lote_numero VARCHAR(100) NOT NULL,
   fecha_vencimiento DATE NOT NULL,
   estado VARCHAR(50) NOT NULL DEFAULT 'VIGENTE',
   dias_faltantes INT,
+  dias_para_vencer INT,
+  cantidad INT DEFAULT 0,
   leida SMALLINT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -283,3 +290,19 @@ CREATE INDEX IF NOT EXISTS idx_notas_salida_cliente ON notas_salida(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_notas_salida_fecha ON notas_salida(fecha);
 CREATE INDEX IF NOT EXISTS idx_kardex_producto ON kardex(producto_id);
 CREATE INDEX IF NOT EXISTS idx_kardex_created_at ON kardex(created_at);
+
+-- Compatibilidad para bases ya creadas antes de este ajuste
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS fecha_documento DATE;
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS unidad_medida VARCHAR(50);
+
+ALTER TABLE lotes ADD COLUMN IF NOT EXISTS cantidad_inicial DECIMAL(10,2);
+ALTER TABLE lotes ADD COLUMN IF NOT EXISTS cantidad_actual DECIMAL(10,2);
+ALTER TABLE lotes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'ACTIVO';
+ALTER TABLE lotes ALTER COLUMN cantidad_ingresada SET DEFAULT 0;
+ALTER TABLE lotes ALTER COLUMN cantidad_disponible SET DEFAULT 0;
+
+ALTER TABLE notas_salida ALTER COLUMN cliente_id DROP NOT NULL;
+
+ALTER TABLE alertas_vencimiento ADD COLUMN IF NOT EXISTS dias_para_vencer INT;
+ALTER TABLE alertas_vencimiento ADD COLUMN IF NOT EXISTS cantidad INT DEFAULT 0;
+ALTER TABLE alertas_vencimiento ALTER COLUMN lote_id DROP NOT NULL;
