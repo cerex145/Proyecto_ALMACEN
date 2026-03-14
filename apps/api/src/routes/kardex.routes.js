@@ -56,6 +56,29 @@ const ErrorResponseSchema = {
 async function kardexRoutes(fastify, options) {
     const kardexRepo = fastify.db.getRepository('Kardex');
     const productoRepo = fastify.db.getRepository('Producto');
+    let kardexSchemaInfo = null;
+
+    const getKardexSchemaInfo = async () => {
+        if (kardexSchemaInfo) return kardexSchemaInfo;
+
+        const rows = await kardexRepo.manager.connection.query(`
+            SELECT TABLE_NAME, COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND (
+                (TABLE_NAME = 'notas_salida' AND COLUMN_NAME = 'cliente_id')
+                OR (TABLE_NAME = 'clientes' AND COLUMN_NAME = 'razon_social')
+              )
+        `);
+
+        const flags = new Set(rows.map((row) => `${row.TABLE_NAME}.${row.COLUMN_NAME}`));
+        kardexSchemaInfo = {
+            hasNotaSalidaClienteId: flags.has('notas_salida.cliente_id'),
+            hasClienteRazonSocial: flags.has('clientes.razon_social')
+        };
+
+        return kardexSchemaInfo;
+    };
 
     // GET /api/kardex - Listar movimientos (con datos del producto)
     fastify.get('/api/kardex', {
@@ -92,6 +115,7 @@ async function kardexRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
+        const schemaInfo = await getKardexSchemaInfo();
         const {
             producto_id,
             producto_codigo,
@@ -112,24 +136,38 @@ async function kardexRoutes(fastify, options) {
 
         // Query raw SQL para asegurar que trae los datos del producto
         const connection = kardexRepo.manager.connection;
+        const clienteSelect = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
+            ? 'c.razon_social'
+            : 'NULL';
+        const clienteJoin = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
+            ? 'LEFT JOIN clientes c ON ns.cliente_id = c.id'
+            : '';
+        const clienteFilterExpr = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
+            ? 'COALESCE(ni.proveedor, c.razon_social)'
+            : 'ni.proveedor';
 
         let sql = `
             SELECT 
-                k.id, k.producto_id, k.tipo_movimiento,
-                k.cantidad, k.numero_documento,
-                k.observaciones, k.fecha as created_at,
+                k.id, k.producto_id, k.lote_numero, k.tipo_movimiento,
+                k.cantidad, k.saldo, k.documento_tipo, k.documento_numero,
+                k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
+                p.unidad_medida,
                 ni.numero_ingreso,
                 ni.proveedor as proveedor_ingreso,
                 ni.fecha as fecha_nota_ingreso,
                 ns.numero_salida,
-                ns.fecha as fecha_nota_salida
+                ns.fecha as fecha_nota_salida,
+                ${clienteSelect} as cliente_nombre_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
-            LEFT JOIN notas_ingreso ni ON k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
-                AND k.numero_documento = ni.numero_ingreso
-            LEFT JOIN notas_salida ns ON k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
-                AND k.numero_documento = ns.numero_salida
+            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
+                AND k.referencia_id = ni.id
+                AND k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
+            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA'
+                AND k.referencia_id = ns.id
+                AND k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+            ${clienteJoin}
             WHERE 1=1
         `;
 
@@ -156,7 +194,7 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (cliente_nombre) {
-            sql += ` AND COALESCE(ni.proveedor, c.razon_social) LIKE ?`;
+            sql += ` AND ${clienteFilterExpr} LIKE ?`;
             params.push(`%${cliente_nombre}%`);
         }
 
@@ -186,8 +224,10 @@ async function kardexRoutes(fastify, options) {
         const total = countResult[0]?.total || 0;
 
         // Order and pagination
-        const allowedOrderFields = ['created_at', 'tipo_movimiento', 'cantidad', 'numero_documento'];
-        const normalizedOrderBy = orderBy === 'fecha' ? 'created_at' : orderBy;
+        const allowedOrderFields = ['created_at', 'tipo_movimiento', 'cantidad', 'documento_numero', 'saldo'];
+        const normalizedOrderBy = orderBy === 'fecha'
+            ? 'created_at'
+            : (orderBy === 'numero_documento' ? 'documento_numero' : orderBy);
         const safeOrderBy = allowedOrderFields.includes(normalizedOrderBy) ? normalizedOrderBy : 'created_at';
         const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
@@ -200,9 +240,12 @@ async function kardexRoutes(fastify, options) {
         const data = movimientos.map(row => ({
             id: row.id,
             producto_id: row.producto_id,
+            lote_numero: row.lote_numero || null,
             tipo_movimiento: row.tipo_movimiento,
             cantidad: Number(row.cantidad),
-            numero_documento: row.numero_documento,
+            saldo: Number(row.saldo || 0),
+            documento_tipo: row.documento_tipo || null,
+            documento_numero: row.documento_numero || null,
             observaciones: row.observaciones || '-',
             created_at: row.created_at,
             fecha_ingreso: row.fecha_nota_ingreso,
@@ -210,6 +253,8 @@ async function kardexRoutes(fastify, options) {
             numero_ingreso: row.numero_ingreso || null,
             numero_salida: row.numero_salida || null,
             proveedor: row.proveedor_ingreso || null,
+            cliente_nombre: row.proveedor_ingreso || row.cliente_nombre_salida || null,
+            unidad_medida: row.unidad_medida || null,
             producto: {
                 id: row.producto_id,
                 codigo: row.codigo_producto || 'N/A',
@@ -308,6 +353,16 @@ async function kardexRoutes(fastify, options) {
         const { producto_id, producto_nombre, cliente_nombre, fecha_desde, fecha_hasta } = request.query;
 
         const connection = kardexRepo.manager.connection;
+        const schemaInfo = await getKardexSchemaInfo();
+        const clienteSelect = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
+            ? 'c.razon_social'
+            : 'NULL';
+        const clienteJoin = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
+            ? 'LEFT JOIN clientes c ON ns.cliente_id = c.id'
+            : '';
+        const clienteFilterExpr = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
+            ? 'COALESCE(ni.proveedor, c.razon_social)'
+            : 'ni.proveedor';
 
         let sql = `
             SELECT 
@@ -315,12 +370,13 @@ async function kardexRoutes(fastify, options) {
                 k.cantidad, k.saldo, k.documento_tipo, k.documento_numero,
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
-                COALESCE(ni.proveedor, c.razon_social) as cliente_nombre
+                ni.proveedor as proveedor_ingreso,
+                ${clienteSelect} as cliente_nombre_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
             LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento = 'INGRESO'
             LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id AND k.tipo_movimiento = 'SALIDA'
-            LEFT JOIN clientes c ON ns.cliente_id = c.id
+            ${clienteJoin}
             WHERE 1=1
         `;
 
@@ -337,7 +393,7 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (cliente_nombre) {
-            sql += ` AND COALESCE(ni.proveedor, c.razon_social) LIKE ?`;
+            sql += ` AND ${clienteFilterExpr} LIKE ?`;
             params.push(`%${cliente_nombre}%`);
         }
 
@@ -379,7 +435,7 @@ async function kardexRoutes(fastify, options) {
             worksheet.addRow({
                 fecha: new Date(mov.created_at).toLocaleString('es-PE'),
                 documento: mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : 'N/A',
-                cliente_nombre: mov.cliente_nombre || 'N/A',
+                cliente_nombre: mov.proveedor_ingreso || mov.cliente_nombre_salida || 'N/A',
                 codigo_producto: mov.codigo_producto || 'N/A',
                 descripcion: mov.descripcion_producto || 'N/A',
                 lote_numero: mov.lote_numero || '-',

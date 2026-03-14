@@ -21,7 +21,7 @@ module.exports = new EntitySchema({
         },
         estado: {
             type: 'enum',
-            enum: ['REGISTRADA', 'COMPLETADA', 'PARCIAL'],
+            enum: ['REGISTRADA', 'DESPACHO_PENDIENTE', 'DESPACHADA', 'COMPLETADA', 'PARCIAL'],
             default: 'REGISTRADA'
         },
         observaciones: {

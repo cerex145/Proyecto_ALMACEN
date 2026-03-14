@@ -116,7 +116,8 @@ async function salidasRoutes(fastify, options) {
         for (const alias of aliases) {
             const idx = headerMap.get(normalizarEncabezado(alias));
             if (idx !== undefined && idx < valores.length) {
-                return String(valores[idx] ?? '').trim();
+                const valor = String(valores[idx] ?? '').trim();
+                if (valor !== '') return valor;
             }
         }
 
@@ -175,8 +176,22 @@ async function salidasRoutes(fastify, options) {
                 const anio = p3;
                 // año epoch cero de Excel (1900/1899) → inválido
                 if (anio < 2000 || anio > 2099) return null;
-                const mes = p1 > 12 ? p2 : p1;
-                const dia = p1 > 12 ? p1 : p2;
+
+                const mesAuxNum = Number(mesAux);
+                const diaAuxNum = Number(diaAux);
+                if (!Number.isNaN(mesAuxNum) && !Number.isNaN(diaAuxNum) && mesAuxNum >= 1 && mesAuxNum <= 12 && diaAuxNum >= 1 && diaAuxNum <= 31) {
+                    const isoAux = `${anio}-${String(mesAuxNum).padStart(2, '0')}-${String(diaAuxNum).padStart(2, '0')}`;
+                    const fechaAux = new Date(`${isoAux}T00:00:00`);
+                    if (!Number.isNaN(fechaAux.getTime())) return fechaAux;
+                }
+
+                let dia = p1;
+                let mes = p2;
+                if (p2 > 12 && p1 <= 12) {
+                    mes = p1;
+                    dia = p2;
+                }
+
                 const iso = `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
                 const fecha = new Date(`${iso}T00:00:00`);
                 return Number.isNaN(fecha.getTime()) ? null : fecha;
@@ -194,6 +209,16 @@ async function salidasRoutes(fastify, options) {
         if (linea.includes('\t')) return '\t';
         if (linea.includes(';')) return ';';
         return ',';
+    };
+
+    const toSqlDate = (dateValue) => {
+        if (!dateValue) return null;
+        const dateObj = dateValue instanceof Date ? dateValue : new Date(dateValue);
+        if (Number.isNaN(dateObj.getTime())) return null;
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
     };
 
     const extraerStringCeldaExcel = (valor) => {
@@ -227,6 +252,7 @@ async function salidasRoutes(fastify, options) {
                     fecha_hasta: { type: 'string', format: 'date' },
                     cliente_id: { type: 'integer' },
                     estado: { type: 'string' },
+                    include_detalles: { type: 'boolean', default: false },
                     page: { type: 'integer', minimum: 1, default: 1 },
                     limit: { type: 'integer', minimum: 1, default: 50 }
                 }
@@ -236,7 +262,18 @@ async function salidasRoutes(fastify, options) {
                     type: 'object',
                     properties: {
                         success: { type: 'boolean' },
-                        data: { type: 'array', items: NotaSalidaSchema },
+                        data: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                additionalProperties: true,
+                                properties: {
+                                    ...NotaSalidaSchema.properties,
+                                    detalles: { type: 'array', items: NotaSalidaDetalleSchema },
+                                    cliente: { type: 'object', nullable: true, additionalProperties: true }
+                                }
+                            }
+                        },
                         pagination: PaginationSchema
                     }
                 }
@@ -250,6 +287,7 @@ async function salidasRoutes(fastify, options) {
             estado,
             fecha_desde,
             fecha_hasta,
+            include_detalles = false,
             page = 1,
             limit = 50,
             orderBy = 'created_at',
@@ -286,15 +324,148 @@ async function salidasRoutes(fastify, options) {
 
         const [notas, total] = await queryBuilder.getManyAndCount();
 
+        let data = notas;
+        if (include_detalles && notas.length > 0) {
+            const notaIds = notas.map(n => Number(n.id)).filter(Number.isFinite);
+            const detalles = await notaSalidaDetalleRepo
+                .createQueryBuilder('detalle')
+                .leftJoinAndSelect('detalle.producto', 'producto')
+                .where('detalle.nota_salida_id IN (:...notaIds)', { notaIds })
+                .orderBy('detalle.id', 'ASC')
+                .getMany();
+
+            const detallesPorNota = new Map();
+            for (const detalle of detalles) {
+                const key = Number(detalle.nota_salida_id);
+                if (!detallesPorNota.has(key)) detallesPorNota.set(key, []);
+                detallesPorNota.get(key).push(detalle);
+            }
+
+            data = notas.map(nota => ({
+                ...nota,
+                detalles: detallesPorNota.get(Number(nota.id)) || []
+            }));
+        }
+
         return {
             success: true,
-            data: notas,
+            data,
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
                 total,
                 totalPages: Math.ceil(total / limit)
             }
+        };
+    });
+
+    // GET /api/salidas/:id - Obtener nota con detalles
+    fastify.get('/api/salidas/historial', {
+        schema: {
+            tags: ['Salidas'],
+            description: 'Historial de salidas optimizado (filas de detalle) con búsqueda por código, producto o número de salida',
+            querystring: {
+                type: 'object',
+                properties: {
+                    q: { type: 'string' },
+                    limit: { type: 'integer', minimum: 1, default: 2000 }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        const { q = '', limit = 2000 } = request.query;
+        const termino = String(q || '').trim();
+        const like = `%${termino}%`;
+
+        const sql = `
+            SELECT
+                nota.id AS nota_id,
+                nota.numero_salida,
+                nota.fecha,
+                nota.estado,
+                detalle.id AS detalle_id,
+                detalle.producto_id,
+                                COALESCE(NULLIF(detalle.lote_numero, ''), NULLIF(detalle.lote_numero, '-'), kardex_fallback.lote_numero) AS lote_numero,
+                                COALESCE(detalle.fecha_vencimiento, lote_fallback.fecha_vencimiento) AS fecha_vencimiento,
+                                COALESCE(NULLIF(NULLIF(detalle.um, ''), '-'), NULLIF(prod.unidad_medida, ''), um_fallback.um) AS um,
+                detalle.cantidad,
+                                COALESCE(detalle.cantidad_total, detalle.cantidad) AS cantidad_total,
+                                CASE
+                                    WHEN COALESCE(detalle.cant_bulto, 0) = 0
+                                     AND COALESCE(detalle.cant_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_x_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_fraccion, 0) = 0
+                                     AND COALESCE(detalle.cantidad_total, detalle.cantidad, 0) > 0
+                                    THEN 1
+                                    ELSE COALESCE(detalle.cant_bulto, 0)
+                                END AS cant_bulto,
+                                CASE
+                                    WHEN COALESCE(detalle.cant_bulto, 0) = 0
+                                     AND COALESCE(detalle.cant_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_x_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_fraccion, 0) = 0
+                                     AND COALESCE(detalle.cantidad_total, detalle.cantidad, 0) > 0
+                                    THEN 1
+                                    ELSE COALESCE(detalle.cant_caja, 0)
+                                END AS cant_caja,
+                                CASE
+                                    WHEN COALESCE(detalle.cant_bulto, 0) = 0
+                                     AND COALESCE(detalle.cant_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_x_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_fraccion, 0) = 0
+                                     AND COALESCE(detalle.cantidad_total, detalle.cantidad, 0) > 0
+                                    THEN COALESCE(detalle.cantidad_total, detalle.cantidad)
+                                    ELSE COALESCE(detalle.cant_x_caja, 0)
+                                END AS cant_x_caja,
+                                CASE
+                                    WHEN COALESCE(detalle.cant_bulto, 0) = 0
+                                     AND COALESCE(detalle.cant_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_x_caja, 0) = 0
+                                     AND COALESCE(detalle.cant_fraccion, 0) = 0
+                                     AND COALESCE(detalle.cantidad_total, detalle.cantidad, 0) > 0
+                                    THEN 0
+                                    ELSE COALESCE(detalle.cant_fraccion, 0)
+                                END AS cant_fraccion,
+                prod.codigo AS producto_codigo,
+                prod.descripcion AS producto_descripcion,
+                prod.unidad_medida AS producto_unidad_medida
+            FROM nota_salida_detalles detalle
+            INNER JOIN notas_salida nota ON nota.id = detalle.nota_salida_id
+            LEFT JOIN productos prod ON prod.id = detalle.producto_id
+                        LEFT JOIN (
+                                SELECT referencia_id, producto_id, MIN(NULLIF(lote_numero, '')) AS lote_numero
+                                FROM kardex
+                                WHERE tipo_movimiento = 'SALIDA'
+                                    AND lote_numero IS NOT NULL
+                                    AND lote_numero <> ''
+                                GROUP BY referencia_id, producto_id
+                        ) kardex_fallback
+                            ON kardex_fallback.referencia_id = nota.id
+                         AND kardex_fallback.producto_id = detalle.producto_id
+                        LEFT JOIN lotes lote_fallback
+                            ON lote_fallback.producto_id = detalle.producto_id
+                         AND lote_fallback.numero_lote = COALESCE(NULLIF(detalle.lote_numero, ''), NULLIF(detalle.lote_numero, '-'), kardex_fallback.lote_numero)
+                        LEFT JOIN (
+                                SELECT producto_id, MAX(CASE WHEN um IS NOT NULL AND um <> '' AND um <> '-' THEN um END) AS um
+                                FROM nota_salida_detalles
+                                GROUP BY producto_id
+                        ) um_fallback
+                            ON um_fallback.producto_id = detalle.producto_id
+            WHERE (
+                ? = ''
+                OR nota.numero_salida LIKE ?
+                OR prod.codigo LIKE ?
+                OR prod.descripcion LIKE ?
+            )
+            ORDER BY nota.fecha DESC, nota.id DESC, detalle.id ASC
+            LIMIT ?
+        `;
+
+        const rows = await fastify.db.query(sql, [termino, like, like, like, Number(limit)]);
+
+        return {
+            success: true,
+            data: rows
         };
     });
 
@@ -323,6 +494,8 @@ async function salidasRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Nota de salida no encontrada' });
         }
 
+        const cliente = nota.cliente_id ? await clienteRepo.findOneBy({ id: Number(nota.cliente_id) }) : null;
+
         // Obtener detalles con JOIN para traer los productos
         const detalles = await notaSalidaDetalleRepo
             .createQueryBuilder('detalle')
@@ -334,6 +507,7 @@ async function salidasRoutes(fastify, options) {
             success: true,
             data: {
                 ...nota,
+                cliente,
                 detalles: detalles
             }
         };
@@ -492,13 +666,16 @@ async function salidasRoutes(fastify, options) {
                         const detalleNota = notaSalidaDetalleRepo.create({
                             nota_salida_id: notaGuardada.id,
                             producto_id: pid,
-                            lote_id: lote.id,
+                            lote_numero: lote.numero_lote || null,
+                            fecha_vencimiento: lote.fecha_vencimiento || null,
+                            um: producto.unidad_medida || null,
+                            fabricante: producto.fabricante || null,
                             cantidad: cantidadSolicitada,
-                            cant_bulto: cantBulto,
-                            cant_caja: cantCaja,
-                            cant_x_caja: cantXCaja,
-                            cant_fraccion: cantFraccion,
-                            precio_unitario: precioUnitario
+                            cant_bulto: detalle.cant_bulto != null ? Number(cantBulto) : null,
+                            cant_caja: detalle.cant_caja != null ? Number(cantCaja) : null,
+                            cant_x_caja: detalle.cant_x_caja != null ? Number(cantXCaja) : null,
+                            cant_fraccion: detalle.cant_fraccion != null ? Number(cantFraccion) : null,
+                            cantidad_total: cantidadSolicitada
                         });
                         await tx.save('NotaSalidaDetalle', detalleNota);
 
@@ -546,13 +723,16 @@ async function salidasRoutes(fastify, options) {
                             const detalleNota = notaSalidaDetalleRepo.create({
                                 nota_salida_id: notaGuardada.id,
                                 producto_id: pid,
-                                lote_id: lote.id,
+                                lote_numero: lote.numero_lote || null,
+                                fecha_vencimiento: lote.fecha_vencimiento || null,
+                                um: producto.unidad_medida || null,
+                                fabricante: producto.fabricante || null,
                                 cantidad: aTomar,
-                                cant_bulto: cantBulto,
-                                cant_caja: cantCaja,
-                                cant_x_caja: cantXCaja,
-                                cant_fraccion: cantFraccion,
-                                precio_unitario: precioUnitario
+                                cant_bulto: detalle.cant_bulto != null ? Number(cantBulto) : null,
+                                cant_caja: detalle.cant_caja != null ? Number(cantCaja) : null,
+                                cant_x_caja: detalle.cant_x_caja != null ? Number(cantXCaja) : null,
+                                cant_fraccion: detalle.cant_fraccion != null ? Number(cantFraccion) : null,
+                                cantidad_total: aTomar
                             });
                             await tx.save('NotaSalidaDetalle', detalleNota);
 
@@ -755,7 +935,7 @@ async function salidasRoutes(fastify, options) {
                 const headerMap = mapearEncabezados(fila.headers);
 
                 const codigoProducto = obtenerValor(fila.valores, headerMap, ['codigo_producto', 'cod. producto', 'cod producto', 'codproducto'], 3);
-                const codigoCliente = obtenerValor(fila.valores, headerMap, ['codigo_cliente', 'codigo cliente', 'codcli'], 1);
+                const codigoCliente = obtenerValor(fila.valores, headerMap, ['codigo_cliente', 'codigo cliente', 'codcli'], null);
                 const ruc = obtenerValor(fila.valores, headerMap, ['ruc', 'cuit'], null);
                 const cantidadTexto = obtenerValor(fila.valores, headerMap, ['cantidad', 'cant.total_salida', 'cant total salida', 'canttotalsalida'], 4);
                 const precioTexto = obtenerValor(fila.valores, headerMap, ['precio', 'precio_unitario'], 5);
@@ -766,6 +946,7 @@ async function salidasRoutes(fastify, options) {
                 const motivoSalida = obtenerValor(fila.valores, headerMap, ['motivo de salida', 'motivo_salida'], null);
                 const loteNumero = obtenerValor(fila.valores, headerMap, ['lote', 'numero_lote'], null);
                 const fechaVctoTexto = obtenerValor(fila.valores, headerMap, ['fecha vcto', 'fecha_vencimiento'], null);
+                const umTexto = obtenerValor(fila.valores, headerMap, ['um', 'unidad_medida', 'unidad de medida'], null);
 
                 const fechaSalidaTexto = obtenerValor(fila.valores, headerMap, ['fecha', 'fecha de h_salida', 'fecha_salida', 'ano', 'año', 'columna1'], 0);
                 const mesAux = obtenerValor(fila.valores, headerMap, ['mes'], null);
@@ -792,13 +973,27 @@ async function salidasRoutes(fastify, options) {
 
                 try {
                     let cliente = null;
+                    const clienteTieneCuit = clienteRepo.metadata.columns.some(c => c.propertyName === 'cuit');
+                    const rucLimpio = String(ruc || '').trim();
+                    const codigoClienteLimpio = String(codigoCliente || '').trim();
 
-                    if (codigoCliente) {
-                        cliente = await clienteRepo.findOneBy({ codigo: String(codigoCliente) });
+                    if (codigoClienteLimpio) {
+                        cliente = await clienteRepo.findOneBy({ codigo: codigoClienteLimpio });
                     }
 
-                    if (!cliente && ruc) {
-                        cliente = await clienteRepo.findOneBy({ cuit: String(ruc) });
+                    if (!cliente && rucLimpio) {
+                        cliente = await clienteRepo.findOneBy({ codigo: rucLimpio });
+                    }
+
+                    if (!cliente && rucLimpio && clienteTieneCuit) {
+                        cliente = await clienteRepo.findOneBy({ cuit: rucLimpio });
+                    }
+
+                    if (!cliente && rucLimpio && rucLimpio !== '-') {
+                        cliente = await clienteRepo.save(clienteRepo.create({
+                            codigo: rucLimpio,
+                            razon_social: `CLIENTE ${rucLimpio}`
+                        }));
                     }
 
                     if (!cliente) {
@@ -826,7 +1021,7 @@ async function salidasRoutes(fastify, options) {
                         };
 
                         if (fechaVcto) {
-                            whereLote.fecha_vencimiento = fechaVcto.toISOString().slice(0, 10);
+                            whereLote.fecha_vencimiento = toSqlDate(fechaVcto);
                         }
 
                         const lote = await loteRepo.findOne({ where: whereLote });
@@ -838,7 +1033,7 @@ async function salidasRoutes(fastify, options) {
                     const nota = notaSalidaRepo.create({
                         numero_salida: numeroSalida,
                         cliente_id: cliente.id,
-                        fecha,
+                        fecha: toSqlDate(fecha),
                         responsable_id: 1,
                         motivo_salida: motivoSalida || null,
                         observaciones: null,
@@ -850,13 +1045,16 @@ async function salidasRoutes(fastify, options) {
                     const detalle = notaSalidaDetalleRepo.create({
                         nota_salida_id: notaGuardada.id,
                         producto_id: producto.id,
-                        lote_id: loteId,
+                        lote_numero: loteNumero || null,
+                        fecha_vencimiento: toSqlDate(parsearFecha(fechaVctoTexto)),
+                        um: umTexto || producto.unidad_medida || null,
+                        fabricante: producto.fabricante || null,
                         cantidad: Number(cantidad),
-                        cant_bulto: cantBulto,
-                        cant_caja: cantCaja,
-                        cant_x_caja: cantXCaja,
-                        cant_fraccion: cantFraccion,
-                        precio_unitario: precio > 0 ? Number(precio) : null
+                        cant_bulto: String(cantBultoTexto || '').trim() !== '' ? Number(cantBulto) : null,
+                        cant_caja: String(cantCajaTexto || '').trim() !== '' ? Number(cantCaja) : null,
+                        cant_x_caja: String(cantXCajaTexto || '').trim() !== '' ? Number(cantXCaja) : null,
+                        cant_fraccion: String(cantFraccionTexto || '').trim() !== '' ? Number(cantFraccion) : null,
+                        cantidad_total: Number(cantidad)
                     });
                     await notaSalidaDetalleRepo.save(detalle);
 

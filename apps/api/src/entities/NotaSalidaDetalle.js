@@ -28,6 +28,30 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: false
         },
+        cant_bulto: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true
+        },
+        cant_caja: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true
+        },
+        cant_x_caja: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true
+        },
+        cant_fraccion: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true
+        },
         fecha_vencimiento: {
             type: 'date',
             nullable: true

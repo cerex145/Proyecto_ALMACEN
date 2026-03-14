@@ -1,17 +1,24 @@
 const { DataSource } = require('typeorm');
 require('dotenv').config();
 
+const useUrl = !!process.env.DATABASE_URL;
+const useSsl = process.env.DB_SSL !== 'false';
+
 const AppDataSource = new DataSource({
-  type: 'mysql',
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT),
-  username: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  type: 'postgres',
+  ...(useUrl
+    ? { url: process.env.DATABASE_URL }
+    : {
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT) || 5432,
+        username: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+      }),
   entities: [__dirname + '/../entities/*.js'],
-  synchronize: String(process.env.DB_SYNC).toLowerCase() === 'true',
+  synchronize: false,
   logging: String(process.env.DB_LOGGING).toLowerCase() === 'true',
-  charset: 'utf8mb4',
+  ...(useUrl && useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
 module.exports = AppDataSource;

@@ -1,125 +1,100 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
-import { clientesService } from '../../services/clientes.service';
 
 export const HistorialSalidasFuncional = () => {
     const [salidas, setSalidas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filtro, setFiltro] = useState('');
     const [detalleRows, setDetalleRows] = useState([]);
-    const [clientesMap, setClientesMap] = useState({});
+    const requestSeqRef = useRef(0);
+    const activeControllerRef = useRef(null);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        cargarClientes();
-    }, []);
+    const formatearFecha = (valor) => {
+        if (!valor) return '-';
+        const texto = String(valor);
+        const fechaSolo = texto.slice(0, 10);
+        const m = fechaSolo.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (m) {
+            const [, y, mo, d] = m;
+            return `${d}/${mo}/${y}`;
+        }
+        const fecha = new Date(valor);
+        return Number.isNaN(fecha.getTime()) ? '-' : fecha.toLocaleDateString('es-PE');
+    };
 
     useEffect(() => {
         cargarSalidas();
-    }, [filtro, clientesMap]);
+    }, [filtro]);
 
-    const cargarClientes = async () => {
-        try {
-            const clientsResponse = await clientesService.listar();
-            const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
-            const map = {};
-            clientsArray.forEach((c) => {
-                if (c.id != null) {
-                    map[String(c.id)] = c.cuit || '';
-                }
-            });
-            setClientesMap(map);
-        } catch (error) {
-            console.error('Error al cargar clientes:', error);
-            setClientesMap({});
-        }
-    };
+    useEffect(() => {
+        return () => {
+            if (activeControllerRef.current) {
+                activeControllerRef.current.abort();
+            }
+        };
+    }, []);
 
     const cargarSalidas = async () => {
+        const requestId = ++requestSeqRef.current;
+        if (activeControllerRef.current) {
+            activeControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        activeControllerRef.current = controller;
+
         try {
             setLoading(true);
-            const params = filtro ? `?numero_salida=${filtro}` : '';
-            const response = await fetch(`http://localhost:3000/api/salidas${params}`);
+            const query = new URLSearchParams({ limit: '8000' });
+            if (filtro) query.set('q', filtro);
+            const params = `?${query.toString()}`;
+            const response = await fetch(`http://localhost:3000/api/salidas/historial${params}`, {
+                cache: 'no-store',
+                signal: controller.signal
+            });
             const result = await response.json();
-            const notas = result.data || [];
-            setSalidas(notas);
-
-            const detallesResponses = await Promise.all(
-                notas.map(async (nota) => {
-                    try {
-                        const detRes = await fetch(`http://localhost:3000/api/salidas/${nota.id}`);
-                        const detJson = await detRes.json();
-                        return detJson?.data || { detalles: [], cliente: null };
-                    } catch (err) {
-                        console.error('Error al cargar detalles:', err);
-                        return { detalles: [], cliente: null };
-                    }
-                })
-            );
+            if (requestId !== requestSeqRef.current) return;
+            const filas = result.data || [];
+            setSalidas([]);
 
             const rows = [];
-            detallesResponses.forEach((data, idx) => {
-                const nota = notas[idx];
-                const fechaObj = new Date(nota.fecha);
+            filas.forEach((fila) => {
+                const fechaObj = new Date(fila.fecha);
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
-                const ruc = clientesMap[String(nota.cliente_id)] || data?.cliente?.cuit || '-';
-                const detalles = data?.detalles || [];
-
-                if (detalles.length === 0) {
-                    rows.push({
-                        key: `${nota.id}-empty`,
-                        codigo: '-',
-                        producto: '-',
-                        lote: '-',
-                        vencimiento: '-',
-                        um: '-',
-                        cantBulto: '-',
-                        cantCajas: '-',
-                        cantPorCaja: '-',
-                        cantFraccion: '-',
-                        cantTotal: '-',
-                        fechaSalida: new Date(nota.fecha).toLocaleDateString('es-PE'),
-                        mes,
-                        dia,
-                        ruc,
-                        anio
-                    });
-                    return;
-                }
-
-                detalles.forEach((d, index) => {
-                    const fmt = (v) => (v != null && Number(v) !== 0) ? parseFloat(v).toFixed(2) : '-';
-                    rows.push({
-                        key: `${nota.id}-${index}`,
-                        codigo: d.producto?.codigo || '-',
-                        producto: d.producto?.descripcion || '-',
-                        lote: d.lote_numero || '-',
-                        vencimiento: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
-                        um: d.um || d.producto?.um || '-',
-                        cantBulto: fmt(d.cantidad_bultos),
-                        cantCajas: fmt(d.cantidad_cajas),
-                        cantPorCaja: fmt(d.cantidad_por_caja),
-                        cantFraccion: fmt(d.cantidad_fraccion),
-                        cantTotal: d.cantidad_total ?? d.cantidad ?? '-',
-                        fechaSalida: new Date(nota.fecha).toLocaleDateString('es-PE'),
-                        mes,
-                        dia,
-                        ruc,
-                        anio
-                    });
+                const fmt = (v) => (v == null || v === '') ? '-' : parseFloat(v).toFixed(2);
+                rows.push({
+                    key: `${fila.nota_id}-${fila.detalle_id}`,
+                    numeroSalida: fila.numero_salida || '-',
+                    codigo: fila.producto_codigo || '-',
+                    producto: fila.producto_descripcion || '-',
+                    lote: fila.lote_numero || '-',
+                    vencimiento: formatearFecha(fila.fecha_vencimiento),
+                    um: fila.um || fila.producto_unidad_medida || '-',
+                    cantBulto: fmt(fila.cant_bulto),
+                    cantCajas: fmt(fila.cant_caja),
+                    cantPorCaja: fmt(fila.cant_x_caja),
+                    cantFraccion: fmt(fila.cant_fraccion),
+                    cantTotal: fmt(fila.cantidad_total ?? fila.cantidad),
+                    fechaSalida: formatearFecha(fila.fecha),
+                    mes,
+                    dia,
+                    ruc: '-',
+                    anio
                 });
             });
-
             setDetalleRows(rows);
         } catch (error) {
+            if (error?.name === 'AbortError') return;
+            if (requestId !== requestSeqRef.current) return;
             console.error('Error al cargar salidas:', error);
             setDetalleRows([]);
         } finally {
+            if (requestId !== requestSeqRef.current) return;
             setLoading(false);
         }
     };
@@ -139,9 +114,9 @@ export const HistorialSalidasFuncional = () => {
             <Card className="p-6">
                 <div className="flex gap-4 items-end mb-6">
                     <div className="flex-1">
-                        <label className="label-premium">Buscar por Número de Salida</label>
+                        <label className="label-premium">Buscar por N° salida / Código / Producto / RUC</label>
                         <Input
-                            placeholder="Ej: SAL-2026-001"
+                            placeholder="Ej: 53610002, OB0810T, 00000059"
                             value={filtro}
                             onChange={(e) => setFiltro(e.target.value)}
                             className="input-premium"
