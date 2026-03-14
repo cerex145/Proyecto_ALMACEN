@@ -1,7 +1,8 @@
 // API Server - Production ready with proper schema and data enrichment
 // Prefer IPv4 so Supabase/Postgres connects when IPv6 is unreachable (ENETUNREACH)
 require('dns').setDefaultResultOrder('ipv4first');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env'), override: true });
 
 const fastify = require('fastify')({
     logger: {

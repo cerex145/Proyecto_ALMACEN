@@ -21,7 +21,7 @@ module.exports = new EntitySchema({
             nullable: false
         },
         activo: {
-            type: 'tinyint',
+            type: 'smallint',
             default: 1,
             nullable: true
         }

@@ -1,5 +1,6 @@
 const { DataSource } = require('typeorm');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), override: true });
 
 const useUrl = !!process.env.DATABASE_URL;
 const useSsl = process.env.DB_SSL !== 'false';
