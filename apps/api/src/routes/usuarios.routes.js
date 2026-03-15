@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 // Schemas para documentación Swagger
 const UsuarioSchema = {
