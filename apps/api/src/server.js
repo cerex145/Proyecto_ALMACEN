@@ -20,9 +20,12 @@ const start = async () => {
         await buildApp(fastify);
         console.log('2️⃣ después de buildApp');
 
+        const port = Number(process.env.PORT) || 3000;
+        const host = process.env.HOST || '0.0.0.0';
+
         console.log('3️⃣ antes de listen');
-        await fastify.listen({ port: 3000, host: '127.0.0.1' });
-        console.log('🚀 Fastify server running on http://localhost:3000');
+        await fastify.listen({ port, host });
+        console.log(`🚀 Fastify server running on http://${host}:${port}`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
