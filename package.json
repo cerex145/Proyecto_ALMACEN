@@ -12,11 +12,12 @@
     "packages/shared-utils"
   ],
   "scripts": {
-    "dev": "npm run dev:clean && concurrently \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev": "npm run dev:clean && concurrently \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:full": "npm run dev:clean && concurrently \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
     "dev:clean": "fuser -k 3000/tcp || true && fuser -k 5173/tcp || true",
     "dev:api": "npm run dev --workspace=@sistema-almacen/api",
     "dev:renderer": "npm run dev --workspace=@sistema-almacen/renderer",
-    "dev:electron": "wait-on http://localhost:5173 http://localhost:3000 && npm run dev --workspace=@sistema-almacen/electron",
+    "dev:electron": "wait-on http://localhost:5173 && npm run dev --workspace=@sistema-almacen/electron",
     "migrate:supabase": "npm run migrate:mysql-to-postgres:init --workspace=@sistema-almacen/api",
     "verify:migrate:supabase": "npm run verify:mysql-to-postgres --workspace=@sistema-almacen/api",
     "stock:rebuild": "npm run stock:rebuild --workspace=@sistema-almacen/api",
