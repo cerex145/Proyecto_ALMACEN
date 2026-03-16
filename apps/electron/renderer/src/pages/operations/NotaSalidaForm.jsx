@@ -102,13 +102,37 @@ export const NotaSalidaForm = () => {
         return (nota?.detalles || []).reduce((acc, detalle) => acc + getDetalleDisponible(detalle), 0);
     };
 
-    const getNotaStockSeleccionado = (notaId) => {
+    const getNotaStockSeleccionado = (notaId, notaDetalles = []) => {
         return fields.reduce((acc, field) => {
-            if (Number(field.nota_ingreso_id) === Number(notaId)) {
+            const notaFieldId = Number(field.nota_ingreso_id || 0);
+            if (notaFieldId === Number(notaId)) {
                 return acc + Number(field.cantidad || 0);
             }
+
+            // Fallback para líneas antiguas sin nota_ingreso_id: match por producto + lote
+            if (notaFieldId === 0) {
+                const coincide = (notaDetalles || []).some((detalle) => (
+                    Number(detalle.producto_id) === Number(field.producto_id)
+                    && String(detalle.lote_numero || '') === String(field.lote_numero || '')
+                ));
+                if (coincide) {
+                    return acc + Number(field.cantidad || 0);
+                }
+            }
+
             return acc;
         }, 0);
+    };
+
+    const getNotaIngresoIdByProductoLote = (productoId, loteNumero) => {
+        for (const nota of (notasIngreso || [])) {
+            const existe = (nota.detalles || []).some((detalle) => (
+                Number(detalle.producto_id) === Number(productoId)
+                && String(detalle.lote_numero || '') === String(loteNumero || '')
+            ));
+            if (existe) return Number(nota.id || 0);
+        }
+        return 0;
     };
 
     const formatCantidad = (valor) => Number(valor || 0).toFixed(2);
@@ -289,7 +313,12 @@ export const NotaSalidaForm = () => {
                         const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
                         const detJson = await detRes.json();
                         const detallesRaw = detJson?.data?.detalles || [];
-                        const detallesFiltrados = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
+                        const detallesFiltrados = detallesRaw
+                            .filter((detalle) => getDetalleDisponible(detalle) > 0)
+                            .map((detalle) => ({
+                                ...detalle,
+                                nota_ingreso_id: Number(detalle.nota_ingreso_id || nota.id)
+                            }));
                         return { ...nota, detalles: detallesFiltrados };
                     } catch (err) {
                         console.error('Error al cargar detalles:', err);
@@ -386,15 +415,17 @@ export const NotaSalidaForm = () => {
             let agregados = 0;
             disponibles.forEach(detalle => {
                 const disponible = getDetalleDisponible(detalle);
+                const detalleNotaId = Number(detalle.nota_ingreso_id || nota.id || 0);
                 const existingIndex = fields.findIndex(
                     f => Number(f.producto_id) === Number(detalle.producto_id) &&
-                        f.lote_numero === detalle.lote_numero
+                        f.lote_numero === detalle.lote_numero &&
+                        Number(f.nota_ingreso_id || 0) === detalleNotaId
                 );
 
                 if (existingIndex < 0) {
                     append({
                         producto_id: Number(detalle.producto_id),
-                        nota_ingreso_id: Number(detalle.nota_ingreso_id || nota.id),
+                        nota_ingreso_id: detalleNotaId,
                         producto_codigo: detalle.producto?.codigo || '',
                         producto_nombre: detalle.producto?.descripcion || '',
                         lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
@@ -438,7 +469,12 @@ export const NotaSalidaForm = () => {
         }
 
         // Abrir modal con todos los productos de la nota
-        const disponibles = nota.detalles.filter((detalle) => getDetalleDisponible(detalle) > 0);
+        const disponibles = nota.detalles
+            .filter((detalle) => getDetalleDisponible(detalle) > 0)
+            .map((detalle) => ({
+                ...detalle,
+                nota_ingreso_id: Number(detalle.nota_ingreso_id || notaId)
+            }));
         setDetallesAEditar(disponibles);
         
         // Inicializar cantidades con los disponibles
@@ -470,7 +506,7 @@ export const NotaSalidaForm = () => {
             });
         } else {
             // Seleccionar - abrir modal de edición
-            setDetallesAEditar([detalle]);
+            setDetallesAEditar([{ ...detalle, nota_ingreso_id: Number(detalle.nota_ingreso_id || notaId) }]);
             const disponible = getDetalleDisponible(detalle);
             setCantidadesEditadas({ [detalle.id]: disponible });
             setMostrarModalEdicionCantidades(true);
@@ -489,9 +525,11 @@ export const NotaSalidaForm = () => {
             }
             
             // Verificar si ya existe este producto con el mismo lote
+            const detalleNotaId = Number(detalle.nota_ingreso_id || 0);
             const existingIndex = fields.findIndex(
                 f => Number(f.producto_id) === Number(detalle.producto_id) &&
-                    f.lote_numero === detalle.lote_numero
+                    f.lote_numero === detalle.lote_numero &&
+                    Number(f.nota_ingreso_id || 0) === detalleNotaId
             );
 
             if (existingIndex >= 0) {
@@ -506,7 +544,7 @@ export const NotaSalidaForm = () => {
                 // Agregar nuevo producto
                 append({
                     producto_id: Number(detalle.producto_id),
-                    nota_ingreso_id: Number(detalle.nota_ingreso_id || 0),
+                    nota_ingreso_id: detalleNotaId,
                     producto_codigo: detalle.producto?.codigo || '',
                     producto_nombre: detalle.producto?.descripcion || '',
                     lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
@@ -568,6 +606,7 @@ export const NotaSalidaForm = () => {
 
         append({
             producto_id: parseInt(selectedProduct),
+            nota_ingreso_id: getNotaIngresoIdByProductoLote(parseInt(selectedProduct), numeroFinal),
             producto_codigo: product?.codigo || '',
             producto_nombre: product?.descripcion || '',
             lote_id: loteIdFinal,
@@ -823,7 +862,7 @@ export const NotaSalidaForm = () => {
                                             <tbody className="divide-y divide-slate-100">
                                                 {notasIngreso.map((nota) => {
                                                     const disponible = getNotaStockDisponible(nota);
-                                                    const descontar = getNotaStockSeleccionado(nota.id);
+                                                    const descontar = getNotaStockSeleccionado(nota.id, nota.detalles || []);
                                                     const saldo = Math.max(disponible - descontar, 0);
                                                     return (
                                                         <tr key={`resumen-${nota.id}`}>
@@ -907,8 +946,8 @@ export const NotaSalidaForm = () => {
                                                 </p>
                                                 <p className="text-xs mt-1 text-slate-600">
                                                     Stock disp.: <span className="font-semibold text-green-700">{formatCantidad(getNotaStockDisponible(nota))}</span>
-                                                    {' '}| A descontar: <span className="font-semibold text-amber-700">{formatCantidad(getNotaStockSeleccionado(nota.id))}</span>
-                                                    {' '}| Saldo: <span className="font-semibold text-blue-700">{formatCantidad(Math.max(getNotaStockDisponible(nota) - getNotaStockSeleccionado(nota.id), 0))}</span>
+                                                    {' '}| A descontar: <span className="font-semibold text-amber-700">{formatCantidad(getNotaStockSeleccionado(nota.id, nota.detalles || []))}</span>
+                                                    {' '}| Saldo: <span className="font-semibold text-blue-700">{formatCantidad(Math.max(getNotaStockDisponible(nota) - getNotaStockSeleccionado(nota.id, nota.detalles || []), 0))}</span>
                                                 </p>
                                             </div>
                                             <Button
