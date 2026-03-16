@@ -81,10 +81,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         codigo: '', descripcion: '', lote: '', fabricante: '',
         fecha_vencimiento: '', um: '',
         fecha_ingreso: '',
-        temperatura_min_c: '', temperatura_max_c: '',
-        cantidad_bultos: '0', cantidad_cajas: '0',
-        cantidad_por_caja: '0', cantidad_fraccion: '0',
-        cantidad_total: '0', observaciones: ''
+        observaciones: ''
     });
 
     // ── Cargar clientes al montar ──
@@ -169,24 +166,21 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             categoria_ingreso: categoriaIngreso || null,
         };
 
-        const productos = previewRows.map(p => {
-            const { r_i, codigo_gln, codigo_interno, ...resto } = p;
-            return { ...globales, ...resto, temperatura: 25.0 };
-        });
+        const productos = previewRows.map(p => ({ ...globales, ...p }));
 
         try {
             setUploading(true);
             let insertados = 0, actualizados = 0;
             for (const prod of productos) {
                 try {
-                    await productService.createProduct({ ...prod, stock_actual: prod.cantidad_total, activo: true });
+                    await productService.createProduct({ ...prod, activo: true });
                     insertados++;
                 } catch {
                     try {
                         const existing = await productService.getProducts({ busqueda: prod.codigo });
                         const found = (existing || []).find(p => p.codigo === prod.codigo);
                         if (found) {
-                            await productService.updateProduct(found.id, { ...prod, stock_actual: prod.cantidad_total });
+                            await productService.updateProduct(found.id, { ...prod });
                             actualizados++;
                         }
                     } catch (e2) {
@@ -212,10 +206,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             codigo: '', descripcion: '', lote: '', fabricante: '',
             fecha_vencimiento: '', um: '',
             fecha_ingreso: '',
-            temperatura_min_c: '', temperatura_max_c: '',
-            cantidad_bultos: '0', cantidad_cajas: '0',
-            cantidad_por_caja: '0', cantidad_fraccion: '0',
-            cantidad_total: '0', observaciones: ''
+            observaciones: ''
         });
     };
 
@@ -245,13 +236,6 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     fecha_vencimiento: row.fecha_vencimiento || null,
                     fecha_ingreso: row.fecha_ingreso || null,
                     um: row.um || null,
-                    temperatura: 25.0,
-                    cantidad_bultos: Number(row.cantidad_bultos || 0),
-                    cantidad_cajas: Number(row.cantidad_cajas || 0),
-                    cantidad_por_caja: Number(row.cantidad_por_caja || 0),
-                    cantidad_fraccion: Number(row.cantidad_fraccion || 0),
-                    cantidad_total: Number(row.cantidad_total || 0),
-                    stock_actual: Number(row.cantidad_total || 0),
                     observaciones: row.observaciones || null,
                     activo: true
                 };
@@ -476,7 +460,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                     <div className="text-sm text-blue-800 space-y-1">
                                         <p className="font-bold">¿Cómo funciona la plantilla?</p>
                                         <p>La plantilla Excel ya tiene las columnas listas con colores y ejemplos de relleno. Solo borra los ejemplos y escribe tus productos desde la fila 4.</p>
-                                        <p>Las columnas marcadas con <strong>⭐</strong> en verde son las únicas obligatorias: <strong>Código</strong>, <strong>Descripción</strong> y <strong>Cant. Total</strong>. Todo lo demás es opcional.</p>
+                                        <p>Las columnas marcadas con <strong>⭐</strong> en verde son las únicas obligatorias: <strong>Código</strong> y <strong>Descripción</strong>. Todo lo demás es opcional.</p>
                                         <p>La columna <strong>UM</strong> tiene un menú desplegable para elegir la unidad.</p>
                                     </div>
                                 </div>
@@ -503,7 +487,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             <table className="w-full text-xs">
                                                 <thead className="bg-slate-50 text-slate-500 uppercase">
                                                     <tr>
-                                                        {['#', 'Código', 'Descripción', 'Lote', 'Fabricante', 'F. Venc.', 'UM', 'Cant. Total'].map(h => (
+                                                        {['#', 'Código', 'Descripción', 'Lote', 'Fabricante', 'F. Venc.', 'UM'].map(h => (
                                                             <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                                                         ))}
                                                     </tr>
@@ -518,7 +502,6 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                                             <td className="px-3 py-2">{row.fabricante || '-'}</td>
                                                             <td className="px-3 py-2">{row.fecha_vencimiento || '-'}</td>
                                                             <td className="px-3 py-2">{row.um || '-'}</td>
-                                                            <td className="px-3 py-2 font-bold text-blue-700 text-right">{row.cantidad_total}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -585,22 +568,6 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             <input value="25" readOnly className="w-full h-9 rounded border border-gray-300 bg-gray-50 px-2 text-sm text-gray-500" />
                                         </div>
 
-                                        {/* Cantidades */}
-                                        {[
-                                            { key: 'cantidad_bultos', label: 'Cant. Bultos' },
-                                            { key: 'cantidad_cajas', label: 'Cant. Cajas' },
-                                            { key: 'cantidad_por_caja', label: 'Cant. x Caja' },
-                                            { key: 'cantidad_fraccion', label: 'Cant. Fracción' },
-                                            { key: 'cantidad_total', label: 'Cant. TOTAL *' },
-                                        ].map(({ key, label }) => (
-                                            <div key={key}>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
-                                                <input type="number" step="0.01" value={manualForm[key]}
-                                                    onChange={e => setManualForm(p => ({ ...p, [key]: e.target.value }))}
-                                                    className="w-full h-9 rounded border border-gray-300 text-sm px-2" />
-                                            </div>
-                                        ))}
-
                                         <div className="col-span-2 sm:col-span-3">
                                             <label className="block text-xs font-bold text-gray-700 mb-1">Observaciones</label>
                                             <input value={manualForm.observaciones}
@@ -627,7 +594,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             <table className="w-full text-xs">
                                                 <thead className="bg-slate-50 text-slate-500 uppercase">
                                                     <tr>
-                                                        {['Código', 'Descripción', 'Lote', 'Fabricante', 'F. Venc.', 'UM', 'Cant. Total', ''].map(h => (
+                                                        {['Código', 'Descripción', 'Lote', 'Fabricante', 'F. Venc.', 'UM', ''].map(h => (
                                                             <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                                                         ))}
                                                     </tr>
@@ -641,7 +608,6 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                                             <td className="px-3 py-2">{row.fabricante || '-'}</td>
                                                             <td className="px-3 py-2">{row.fecha_vencimiento || '-'}</td>
                                                             <td className="px-3 py-2">{row.um || '-'}</td>
-                                                            <td className="px-3 py-2 font-bold text-blue-700 text-right">{row.cantidad_total}</td>
                                                             <td className="px-3 py-2 text-center">
                                                                 <button
                                                                     type="button"

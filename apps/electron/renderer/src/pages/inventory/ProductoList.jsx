@@ -45,12 +45,6 @@ export const ProductoList = () => {
         setPage(1);
     }, [searchDoc, searchName]);
 
-    const getStockStatus = (stock, min) => {
-        if (stock <= 0) return { label: 'Sin Stock', variant: 'anulado' };
-        if (stock <= min) return { label: 'Stock Bajo', variant: 'observado' };
-        return { label: 'Normal', variant: 'aprobado' };
-    };
-
     const handleCreate = () => {
         setEditingProduct(null);
         setIsEditing(true);
@@ -137,14 +131,15 @@ export const ProductoList = () => {
                         ) : (
                             <div className="grid gap-4 p-4">
                                 {products.map(product => {
-                                    const status = getStockStatus(product.stock_actual, product.stock_minimo);
                                     return (
                                         <div key={product.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                                             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                                                 <div className="text-sm font-semibold text-slate-800">
                                                     {product.codigo || '-'} - {product.descripcion || '-'}
                                                 </div>
-                                                <Badge variant={status.variant}>{status.label}</Badge>
+                                                <Badge variant={Number(product.activo || 0) === 1 ? 'aprobado' : 'anulado'}>
+                                                    {Number(product.activo || 0) === 1 ? 'Activo' : 'Inactivo'}
+                                                </Badge>
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs text-slate-600">
@@ -161,8 +156,6 @@ export const ProductoList = () => {
                                                 <div><span className="font-semibold">Unidad:</span> {product.unidad || 'UND'}{product.unidad === 'OTRO' && product.unidad_otro ? ` (${product.unidad_otro})` : ''}</div>
                                                 <div><span className="font-semibold">UM:</span> {product.um || '-'}</div>
                                                 <div><span className="font-semibold">Temperatura (°C):</span> {product.temperatura ?? '25'}</div>
-                                                <div><span className="font-semibold">Por Caja:</span> {product.cantidad_por_caja ?? 0}</div>
-                                                <div><span className="font-semibold">Stock:</span> {product.stock_actual ?? 0}</div>
                                                 <div><span className="font-semibold">Categoría Ingreso:</span> {product.categoria_ingreso || '-'}</div>
                                                 <div className="md:col-span-2 lg:col-span-3"><span className="font-semibold">Observaciones:</span> {product.observaciones || '-'}</div>
                                             </div>

@@ -6,12 +6,7 @@ import { productService } from '../../services/product.service';
 export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
     const { register, handleSubmit, watch, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
         defaultValues: productToEdit || {
-            unidad: 'UND',
-            cantidad_bultos: 0,
-            cantidad_cajas: 0,
-            cantidad_por_caja: 0,
-            cantidad_fraccion: 0,
-            cantidad_total: 0
+            unidad: 'UND'
         }
     });
 
@@ -22,9 +17,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
 
     const unidadSeleccionada = watch('unidad');
     const codigoProducto = watch('codigo');
-    const cantidadCajas = watch('cantidad_cajas');
-    const cantidadPorCaja = watch('cantidad_por_caja');
-    const cantidadFraccion = watch('cantidad_fraccion');
 
     useEffect(() => {
         loadClients();
@@ -57,14 +49,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
             }
         }
     }, [selectedClientCode, clients, setValue]);
-
-    useEffect(() => {
-        const cajas = Number(cantidadCajas || 0);
-        const porCaja = Number(cantidadPorCaja || 0);
-        const fraccion = Number(cantidadFraccion || 0);
-        const total = (cajas * porCaja) + fraccion;
-        setValue('cantidad_total', Number.isFinite(total) ? total : 0);
-    }, [cantidadCajas, cantidadPorCaja, cantidadFraccion, setValue]);
 
     useEffect(() => {
         if (productToEdit?.id) {
@@ -133,13 +117,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                 unidad_otro: data.unidad === 'OTRO' ? (data.unidad_otro || null) : null,
                 um: data.um ? data.um : null,
                 temperatura: 25.0,
-                cantidad_bultos: data.cantidad_bultos !== '' && data.cantidad_bultos !== undefined ? Number(data.cantidad_bultos) : 0,
-                cantidad_cajas: data.cantidad_cajas !== '' && data.cantidad_cajas !== undefined ? Number(data.cantidad_cajas) : 0,
-                cantidad_por_caja: data.cantidad_por_caja !== '' && data.cantidad_por_caja !== undefined ? Number(data.cantidad_por_caja) : 0,
-                cantidad_fraccion: data.cantidad_fraccion !== '' && data.cantidad_fraccion !== undefined ? Number(data.cantidad_fraccion) : 0,
-                cantidad_total: data.cantidad_total !== '' && data.cantidad_total !== undefined ? Number(data.cantidad_total) : 0,
-                observaciones: data.observaciones || null,
-                stock_actual: data.stock_actual !== '' && data.stock_actual !== undefined ? Number(data.stock_actual) : 0
+                observaciones: data.observaciones || null
             };
             // If editing
             if (productToEdit?.id) {
@@ -279,14 +257,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Stock Actual</label>
-                                    <input
-                                        {...register('stock_actual')}
-                                        type="number"
-                                        className="w-full h-9 rounded border-gray-300 border px-2 text-sm"
-                                    />
-                                </div>
-                                <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Categoría Ingreso</label>
                                     <select {...register('categoria_ingreso')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm">
                                         <option value="">Seleccione...</option>
@@ -335,26 +305,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura (°C)</label>
                                     <input value="25" readOnly className="w-full h-9 rounded border-gray-300 bg-gray-50 border px-2 text-sm text-gray-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Cantidad de Bultos</label>
-                                    <input {...register('cantidad_bultos')} type="number" step="0.01" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Cantidad de Cajas</label>
-                                    <input {...register('cantidad_cajas')} type="number" step="0.01" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Cantidad por Caja</label>
-                                    <input {...register('cantidad_por_caja')} type="number" step="0.01" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Cantidad de Fracción</label>
-                                    <input {...register('cantidad_fraccion')} type="number" step="0.01" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Cantidad Total</label>
-                                    <input {...register('cantidad_total')} readOnly className="w-full h-9 rounded border-gray-300 bg-gray-50 text-sm border px-2" />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Observaciones</label>
