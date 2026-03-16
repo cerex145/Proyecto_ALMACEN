@@ -3,6 +3,27 @@ import { productService } from '../../services/product.service';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent } from '../../components/common/Card';
 
+const parseSafeDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+    const str = String(value).trim();
+    if (!str) return null;
+
+    const candidate = /^\d{4}-\d{2}-\d{2}$/.test(str)
+        ? new Date(`${str}T00:00:00`)
+        : new Date(str);
+
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
+};
+
+const formatDatePE = (value) => {
+    const date = parseSafeDate(value);
+    if (!date) return null;
+    return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 // ─── Sub-componente: detalle de lotes de un producto ─────────────────────────
 const LotesDetalle = ({ productoId }) => {
     const [lotes, setLotes] = useState([]);
@@ -41,7 +62,8 @@ const LotesDetalle = ({ productoId }) => {
     const today = new Date();
     const getVencimientoStyle = (fecha) => {
         if (!fecha) return 'text-slate-400';
-        const d = new Date(fecha + 'T00:00:00');
+        const d = parseSafeDate(fecha);
+        if (!d) return 'text-slate-400';
         const dias = Math.floor((d - today) / 86400000);
         if (dias < 0) return 'text-red-600 font-semibold';
         if (dias <= 30) return 'text-red-500';
@@ -86,10 +108,7 @@ const LotesDetalle = ({ productoId }) => {
                                                 {lote.numero_lote || '-'}
                                             </td>
                                             <td className={`px-4 py-2 text-center ${getVencimientoStyle(lote.fecha_vencimiento)}`}>
-                                                {lote.fecha_vencimiento
-                                                    ? new Date(lote.fecha_vencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })
-                                                    : <span className="text-slate-300">—</span>
-                                                }
+                                                {formatDatePE(lote.fecha_vencimiento) || <span className="text-slate-300">—</span>}
                                             </td>
                                             <td className="px-4 py-2 text-right text-slate-500">{ingresado.toFixed(2)}</td>
                                             <td className={`px-4 py-2 text-right font-semibold ${disponible > 0 ? 'text-emerald-600' : 'text-red-400'}`}>
@@ -469,18 +488,24 @@ export const InventarioGeneral = () => {
                                                         )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        {producto.proximo_vencimiento ? (
-                                                            <span className={`text-xs font-medium px-2 py-1 rounded-lg ${new Date(producto.proximo_vencimiento) < new Date(Date.now() + 30 * 86400000)
+                                                        {(() => {
+                                                            const proximo = parseSafeDate(producto.proximo_vencimiento);
+                                                            if (!proximo) {
+                                                                return <span className="text-xs text-slate-400">Sin lotes</span>;
+                                                            }
+                                                            const now30 = new Date(Date.now() + 30 * 86400000);
+                                                            const now90 = new Date(Date.now() + 90 * 86400000);
+                                                            const colorClass = proximo < now30
                                                                 ? 'bg-red-100 text-red-700'
-                                                                : new Date(producto.proximo_vencimiento) < new Date(Date.now() + 90 * 86400000)
+                                                                : proximo < now90
                                                                     ? 'bg-amber-100 text-amber-700'
-                                                                    : 'bg-green-100 text-green-700'
-                                                                }`}>
-                                                                {new Date(producto.proximo_vencimiento + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-xs text-slate-400">Sin lotes</span>
-                                                        )}
+                                                                    : 'bg-green-100 text-green-700';
+                                                            return (
+                                                                <span className={`text-xs font-medium px-2 py-1 rounded-lg ${colorClass}`}>
+                                                                    {formatDatePE(proximo) || 'Sin lotes'}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-right">
                                                         <span className={`text-sm font-semibold ${producto.stock_calculado <= 0
