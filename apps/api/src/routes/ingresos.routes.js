@@ -337,7 +337,12 @@ async function ingresosRoutes(fastify, options) {
                                 cantidad: { type: 'number', minimum: 0 },
                                 precio_unitario: { type: 'number', minimum: 0 },
                                 lote_numero: { type: 'string' },
-                                fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+                                fecha_vencimiento: {
+                                    anyOf: [
+                                        { type: 'string', format: 'date' },
+                                        { type: 'null' }
+                                    ]
+                                },
                                 um: { type: 'string' },
                                 fabricante: { type: 'string' },
                                 temperatura_min: { type: 'number' },

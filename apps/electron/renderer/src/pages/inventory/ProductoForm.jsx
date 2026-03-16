@@ -107,6 +107,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
                 registro_sanitario: data.registro_sanitario || null,
+                categoria_ingreso: data.categoria_ingreso || null,
                 proveedor_ruc: data.proveedor_ruc || data.ruc_cliente || null,
                 fecha_ingreso: data.fecha_ingreso || null,
                 lote: data.lote || null,

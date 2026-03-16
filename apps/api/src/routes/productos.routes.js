@@ -74,6 +74,24 @@ const ProductoResponseWithMessageSchema = {
     }
 };
 
+const tipoDocumentoValues = ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'];
+const categoriaIngresoValues = ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'];
+const umValues = ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'];
+
+const nullableEnumSchema = (values) => ({
+    anyOf: [
+        { type: 'string', enum: values },
+        { type: 'null' }
+    ]
+});
+
+const nullableDateSchema = () => ({
+    anyOf: [
+        { type: 'string', format: 'date' },
+        { type: 'null' }
+    ]
+});
+
 async function productoRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
     const toActivoSmallint = (value) => (value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0);
@@ -364,19 +382,19 @@ async function productoRoutes(fastify, options) {
                     codigo: { type: 'string' },
                     descripcion: { type: 'string' },
                     proveedor: { type: 'string', nullable: true },
-                    tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
+                    tipo_documento: nullableEnumSchema(tipoDocumentoValues),
                     numero_documento: { type: 'string', nullable: true },
                     registro_sanitario: { type: 'string', nullable: true },
                     proveedor_ruc: { type: 'string', nullable: true },
-                    fecha_ingreso: { type: 'string', format: 'date', nullable: true },
+                    fecha_ingreso: nullableDateSchema(),
                     lote: { type: 'string', nullable: true },
                     fabricante: { type: 'string', nullable: true },
-                    categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'], nullable: true },
+                    categoria_ingreso: nullableEnumSchema(categoriaIngresoValues),
                     procedencia: { type: 'string', nullable: true },
-                    fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+                    fecha_vencimiento: nullableDateSchema(),
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
-                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
+                    um: nullableEnumSchema(umValues),
                     temperatura: { type: 'number', nullable: true },
                     observaciones: { type: 'string', nullable: true }
                 }
@@ -426,7 +444,7 @@ async function productoRoutes(fastify, options) {
         }
 
         // Validar categoría si se proporciona
-        const categoriasValidas = ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'];
+        const categoriasValidas = categoriaIngresoValues;
         if (categoria_ingreso && !categoriasValidas.includes(categoria_ingreso)) {
             return reply.status(400).send({
                 success: false,
@@ -484,19 +502,19 @@ async function productoRoutes(fastify, options) {
                     descripcion: { type: 'string' },
                     activo: { type: 'boolean' },
                     proveedor: { type: 'string', nullable: true },
-                    tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
+                    tipo_documento: nullableEnumSchema(tipoDocumentoValues),
                     numero_documento: { type: 'string', nullable: true },
                     registro_sanitario: { type: 'string', nullable: true },
                     proveedor_ruc: { type: 'string', nullable: true },
-                    fecha_ingreso: { type: 'string', format: 'date', nullable: true },
+                    fecha_ingreso: nullableDateSchema(),
                     lote: { type: 'string', nullable: true },
                     fabricante: { type: 'string', nullable: true },
-                    categoria_ingreso: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'], nullable: true },
+                    categoria_ingreso: nullableEnumSchema(categoriaIngresoValues),
                     procedencia: { type: 'string', nullable: true },
-                    fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+                    fecha_vencimiento: nullableDateSchema(),
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
-                    um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
+                    um: nullableEnumSchema(umValues),
                     temperatura: { type: 'number', nullable: true },
                     observaciones: { type: 'string', nullable: true }
                 }
