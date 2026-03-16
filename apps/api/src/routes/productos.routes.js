@@ -77,6 +77,15 @@ const ProductoResponseWithMessageSchema = {
 async function productoRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
     const toActivoSmallint = (value) => (value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0);
+    const mapTemperaturaEntrada = (value) => {
+        const parsed = Number(value);
+        const safe = Number.isFinite(parsed) ? parsed : 25;
+        return { temperatura_min_c: safe, temperatura_max_c: safe };
+    };
+    const mapProductoSalida = (producto) => ({
+        ...producto,
+        temperatura: Number(producto.temperatura_min_c ?? producto.temperatura_max_c ?? 25)
+    });
 
     // GET /api/productos - Listar con filtros y paginación
     fastify.get('/api/productos', {
@@ -187,7 +196,7 @@ async function productoRoutes(fastify, options) {
 
         return {
             success: true,
-            data: productosConLotes,
+            data: productosConLotes.map(mapProductoSalida),
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
@@ -340,7 +349,7 @@ async function productoRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Producto no encontrado' });
         }
 
-        return { success: true, data: producto };
+        return { success: true, data: mapProductoSalida(producto) };
     });
 
     // POST /api/productos - Crear producto
@@ -442,7 +451,7 @@ async function productoRoutes(fastify, options) {
             unidad: unidad || 'UND',
             unidad_otro: unidad_otro || null,
             um: um !== undefined ? um : null,
-            temperatura: temperatura !== undefined ? temperatura : 25,
+            ...mapTemperaturaEntrada(temperatura),
             observaciones: observaciones || null,
             activo: toActivoSmallint(true)
         });
@@ -563,12 +572,16 @@ async function productoRoutes(fastify, options) {
         if (unidad !== undefined) producto.unidad = unidad || 'UND';
         if (unidad_otro !== undefined) producto.unidad_otro = unidad_otro || null;
         if (um !== undefined) producto.um = um || null;
-        if (temperatura !== undefined) producto.temperatura = temperatura;
+        if (temperatura !== undefined) {
+            const mappedTemp = mapTemperaturaEntrada(temperatura);
+            producto.temperatura_min_c = mappedTemp.temperatura_min_c;
+            producto.temperatura_max_c = mappedTemp.temperatura_max_c;
+        }
         if (observaciones !== undefined) producto.observaciones = observaciones || null;
 
         await productoRepo.save(producto);
 
-        return { success: true, data: producto, message: 'Producto actualizado exitosamente' };
+        return { success: true, data: mapProductoSalida(producto), message: 'Producto actualizado exitosamente' };
     });
 
     // DELETE /api/productos/:id - Eliminar (lógico)
