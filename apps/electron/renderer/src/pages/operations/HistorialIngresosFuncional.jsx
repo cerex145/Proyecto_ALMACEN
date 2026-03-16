@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
+import { API_ORIGIN } from '../../services/api';
 
 import RegistrarIngreso from './RegistrarIngreso';
 import { clientesService } from '../../services/clientes.service';
@@ -45,7 +46,7 @@ export const HistorialIngresosFuncional = () => {
         try {
             setLoading(true);
             const params = filtro ? `?numero_ingreso=${filtro}` : '';
-            const response = await fetch(`http://localhost:3000/api/ingresos${params}`);
+            const response = await fetch(`${API_ORIGIN}/api/ingresos${params}`);
             const result = await response.json();
             const notas = result.data || [];
             setIngresos(notas);
@@ -53,7 +54,7 @@ export const HistorialIngresosFuncional = () => {
             const detallesResponses = await Promise.all(
                 notas.map(async (nota) => {
                     try {
-                        const detRes = await fetch(`http://localhost:3000/api/ingresos/${nota.id}`);
+                        const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
                         const detJson = await detRes.json();
                         return detJson?.data || { detalles: [], proveedor: null };
                     } catch (err) {

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
+export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
 
 const api = axios.create({
     baseURL: `${API_ORIGIN}/api`,

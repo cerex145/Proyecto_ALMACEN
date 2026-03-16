@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
+import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
@@ -186,7 +187,7 @@ export const NotaSalidaForm = () => {
             if (!client) return;
 
             // Buscar las notas de ingreso del cliente por proveedor (razon_social)
-            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
+            const response = await fetch(`${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
             const result = await response.json();
             const notas = result.data || [];
 
@@ -194,7 +195,7 @@ export const NotaSalidaForm = () => {
             const notasConDetalles = await Promise.all(
                 notas.map(async (nota) => {
                     try {
-                        const detRes = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+                        const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
                         const detJson = await detRes.json();
                         const detallesRaw = detJson?.data?.detalles || [];
                         const detallesFiltrados = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
@@ -256,7 +257,7 @@ export const NotaSalidaForm = () => {
         }
         setBuscandoDoc(true);
         try {
-            const response = await fetch(`http://127.0.0.1:3000/api/ingresos?numero_documento=${encodeURIComponent(numeroDocBusqueda)}`);
+            const response = await fetch(`${API_ORIGIN}/api/ingresos?numero_documento=${encodeURIComponent(numeroDocBusqueda)}`);
             const result = await response.json();
             const notas = result.data || [];
             if (notas.length === 0) {
@@ -277,7 +278,7 @@ export const NotaSalidaForm = () => {
             }
 
             // Cargar detalles de esa nota
-            const detRes = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+            const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
             const detJson = await detRes.json();
             const detallesRaw = detJson?.data?.detalles || [];
             const disponibles = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
@@ -617,7 +618,7 @@ export const NotaSalidaForm = () => {
             return;
         }
         try {
-            const pdfUrl = `http://localhost:3000/api/salidas/${lastSalidaId}/pdf`;
+            const pdfUrl = `${API_ORIGIN}/api/salidas/${lastSalidaId}/pdf`;
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
             } else {

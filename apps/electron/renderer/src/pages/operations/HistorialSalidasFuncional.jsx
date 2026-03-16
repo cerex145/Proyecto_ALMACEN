@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
+import { API_ORIGIN } from '../../services/api';
 
 export const HistorialSalidasFuncional = () => {
     const [salidas, setSalidas] = useState([]);
@@ -51,7 +52,7 @@ export const HistorialSalidasFuncional = () => {
             const query = new URLSearchParams({ limit: '8000' });
             if (filtro) query.set('q', filtro);
             const params = `?${query.toString()}`;
-            const response = await fetch(`http://localhost:3000/api/salidas/historial${params}`, {
+            const response = await fetch(`${API_ORIGIN}/api/salidas/historial${params}`, {
                 cache: 'no-store',
                 signal: controller.signal
             });

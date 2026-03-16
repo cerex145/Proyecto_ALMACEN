@@ -6,6 +6,7 @@ import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '.
 import { clientesService } from '../../services/clientes.service';
 import { productService } from '../../services/product.service';
 import { ingresosService } from '../../services/ingresos.service';
+import { API_ORIGIN } from '../../services/api';
 
 const RegistrarIngreso = ({ onCancel, onSuccess }) => {
     const [loading, setLoading] = useState(false);
@@ -206,7 +207,7 @@ const RegistrarIngreso = ({ onCancel, onSuccess }) => {
     const handleGeneratePDF = async () => {
         if (!lastSavedId) return;
         try {
-            const url = `http://127.0.0.1:3000/api/ingresos/${lastSavedId}/pdf`;
+            const url = `${API_ORIGIN}/api/ingresos/${lastSavedId}/pdf`;
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', url);
             } else {

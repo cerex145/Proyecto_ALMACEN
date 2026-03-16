@@ -1,7 +1,9 @@
 const axios = require('axios');
 
+const API_URL = (process.env.API_URL || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
+
 const api = axios.create({
-    baseURL: 'http://127.0.0.1:3000/api',
+    baseURL: `${API_URL}/api`,
     timeout: 5000
 });
 
@@ -44,7 +46,7 @@ async function testEndpoints() {
     // Test health check
     console.log('\n💚 Testeando /health...');
     try {
-        const res = await api.get('/health', { baseURL: 'http://127.0.0.1:3000' });
+        const res = await api.get('/health', { baseURL: API_URL });
         console.log(`  ✅ Status: ${res.status}`);
     } catch (e) {
         console.log(`  ⚠️  No existe endpoint /health`);

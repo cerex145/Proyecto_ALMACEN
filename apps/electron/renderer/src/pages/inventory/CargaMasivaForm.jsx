@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { clientesService } from '../../services/clientes.service';
 import { productService } from '../../services/product.service';
+import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/common/Card';
 
@@ -120,7 +121,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             const formData = new FormData();
             formData.append('file', f);
 
-            const res = await fetch('http://localhost:3000/api/productos/parsear-plantilla', {
+            const res = await fetch(`${API_ORIGIN}/api/productos/parsear-plantilla`, {
                 method: 'POST',
                 body: formData
             });

@@ -1,5 +1,7 @@
 const axios = require('axios');
 
+const API_URL = (process.env.API_URL || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
+
 async function verifyFIFO() {
     try {
         // 1. Check stock of product 14 before sale (we need to know what lot it has)
@@ -21,7 +23,7 @@ async function verifyFIFO() {
 
         console.log('Sending payload:', JSON.stringify(payload, null, 2));
 
-        const response = await axios.post('http://127.0.0.1:3000/api/salidas', payload);
+        const response = await axios.post(`${API_URL}/api/salidas`, payload);
         console.log('Response status:', response.status);
         console.log('Response data:', JSON.stringify(response.data, null, 2));
 

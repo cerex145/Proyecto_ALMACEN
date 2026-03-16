@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { ingresosService } from '../../services/ingresos.service';
+import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
@@ -99,7 +100,7 @@ export const NotaIngresoForm = () => {
 
     const handleDescargarPlantilla = async () => {
         try {
-            const url = 'http://localhost:3000/api/ingresos/plantilla/descargar';
+            const url = `${API_ORIGIN}/api/ingresos/plantilla/descargar`;
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('download-file', {
                     url,

@@ -35,8 +35,8 @@ async function buildApp(fastify, options) {
             },
             servers: [
                 {
-                    url: 'http://localhost:3000',
-                    description: 'Servidor de desarrollo'
+                    url: process.env.API_URL || 'http://localhost:3000',
+                    description: process.env.API_URL ? 'Servidor de producción' : 'Servidor de desarrollo'
                 }
             ],
             tags: [

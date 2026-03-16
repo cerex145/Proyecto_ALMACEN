@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { clientesService } from '../../services/clientes.service';
+import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
@@ -35,9 +37,8 @@ export const ClienteListForm = () => {
     const cargarClientes = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:3000/api/clientes?activo=true');
-            const result = await response.json();
-            setClientes(result.data || []);
+            const result = await clientesService.listar({ activo: 'true' });
+            setClientes(result.data || result || []);
         } catch (error) {
             console.error('Error al cargar clientes:', error);
         } finally {
@@ -59,8 +60,8 @@ export const ClienteListForm = () => {
             setLoading(true);
             const method = editId ? 'PUT' : 'POST';
             const url = editId
-                ? `http://localhost:3000/api/clientes/${editId}`
-                : 'http://localhost:3000/api/clientes';
+                ? `${API_ORIGIN}/api/clientes/${editId}`
+                : `${API_ORIGIN}/api/clientes`;
 
             const payload = {
                 codigo: formData.codigo,
@@ -140,7 +141,7 @@ export const ClienteListForm = () => {
     const handleDelete = async (id) => {
         if (!window.confirm('¿Eliminar cliente?')) return;
         try {
-            const response = await fetch(`http://localhost:3000/api/clientes/${id}`, { method: 'DELETE' });
+            const response = await fetch(`${API_ORIGIN}/api/clientes/${id}`, { method: 'DELETE' });
             if (!response.ok) {
                 const result = await response.json().catch(() => ({}));
                 throw new Error(result.error || 'No se pudo eliminar el cliente');

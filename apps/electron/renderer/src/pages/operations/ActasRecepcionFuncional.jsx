@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
+import { API_ORIGIN } from '../../services/api';
 
 export const ActasRecepcionFuncional = () => {
     const [actas, setActas] = useState([]);
@@ -15,7 +16,7 @@ export const ActasRecepcionFuncional = () => {
     const cargarActas = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:3000/api/actas');
+            const response = await fetch(`${API_ORIGIN}/api/actas`);
             const result = await response.json();
             setActas(result.data || []);
         } catch (error) {
@@ -27,7 +28,7 @@ export const ActasRecepcionFuncional = () => {
 
     const handleDownloadPDF = async (id) => {
         try {
-            const url = `http://localhost:3000/api/actas/${id}/pdf`;
+            const url = `${API_ORIGIN}/api/actas/${id}/pdf`;
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', url);
             } else {

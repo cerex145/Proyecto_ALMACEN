@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_ORIGIN } from '../../services/api';
 
 // ─── Constantes de empresa ──────────────────────────────────────────────────
 const EMPRESA = {
@@ -63,7 +64,7 @@ export const KardexFuncional = () => {
 
     const cargarClientes = async () => {
         try {
-            const res = await fetch('http://localhost:3000/api/clientes?limit=500&activo=true');
+            const res = await fetch(`${API_ORIGIN}/api/clientes?limit=500&activo=true`);
             const d = await res.json();
             setClientes(d.data || []);
         } catch (e) { console.error(e); }
@@ -71,7 +72,7 @@ export const KardexFuncional = () => {
 
     const cargarProveedores = async () => {
         try {
-            const res = await fetch('http://localhost:3000/api/ingresos?limit=500');
+            const res = await fetch(`${API_ORIGIN}/api/ingresos?limit=500`);
             const d = await res.json();
             const set = new Set();
             (d.data || []).forEach(n => { if (n.proveedor) set.add(n.proveedor); });
@@ -82,7 +83,7 @@ export const KardexFuncional = () => {
     const cargarKardex = async () => {
         try {
             setLoading(true);
-            let url = 'http://localhost:3000/api/kardex?limit=1000&order=ASC';
+            let url = `${API_ORIGIN}/api/kardex?limit=1000&order=ASC`;
             if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
             if (filtroLote) url += `&lote_numero=${encodeURIComponent(filtroLote)}`;
             if (filtroDocumento) url += `&documento_numero=${encodeURIComponent(filtroDocumento)}`;
@@ -115,7 +116,7 @@ export const KardexFuncional = () => {
     };
 
     const exportarExcel = () => {
-        let url = `http://localhost:3000/api/kardex/exportar?`;
+        let url = `${API_ORIGIN}/api/kardex/exportar?`;
         if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
         if (filtroFechaDesde) url += `&fecha_desde=${filtroFechaDesde}`;
         if (filtroFechaHasta) url += `&fecha_hasta=${filtroFechaHasta}`;

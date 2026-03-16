@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
+import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
@@ -496,7 +497,7 @@ export const NotaIngresoForm = () => {
             return;
         }
         try {
-            const pdfUrl = `http://localhost:3000/api/ingresos/${lastIngresoId}/pdf`;
+            const pdfUrl = `${API_ORIGIN}/api/ingresos/${lastIngresoId}/pdf`;
             const opened = window.open(pdfUrl, '_blank');
             if (!opened) {
                 alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');

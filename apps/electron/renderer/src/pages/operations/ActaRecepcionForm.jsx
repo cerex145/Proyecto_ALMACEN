@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
 import { ingresosService } from '../../services/ingresos.service';
+import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
@@ -181,7 +182,7 @@ export const ActaRecepcionForm = () => {
         try {
             let nota = notaParaCargar;
             if (nota && (!nota.detalles || nota.detalles.length === 0)) {
-                const notaResponse = await fetch(`http://127.0.0.1:3000/api/ingresos/${nota.id}`);
+                const notaResponse = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
                 if (notaResponse.ok) {
                     const notaDetalleResult = await notaResponse.json();
                     nota = notaDetalleResult.data || notaDetalleResult;
@@ -448,7 +449,7 @@ export const ActaRecepcionForm = () => {
             console.log('Payload a enviar:', payload);
 
             // Aquí se conectaría con el backend
-            const response = await fetch('http://127.0.0.1:3000/api/actas', {
+            const response = await fetch(`${API_ORIGIN}/api/actas`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -499,7 +500,7 @@ export const ActaRecepcionForm = () => {
             return;
         }
         try {
-            const pdfUrl = `http://localhost:3000/api/actas/${lastActaId}/pdf`;
+            const pdfUrl = `${API_ORIGIN}/api/actas/${lastActaId}/pdf`;
             window.open(pdfUrl, '_blank');
         } catch (error) {
             console.error(error);
