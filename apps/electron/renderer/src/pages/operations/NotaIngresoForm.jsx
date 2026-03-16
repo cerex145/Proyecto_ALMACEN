@@ -32,7 +32,7 @@ export const NotaIngresoForm = () => {
     const [selectedClient, setSelectedClient] = useState('');
     const [clienteRuc, setClienteRuc] = useState('');
     const [proveedorNombre, setProveedorNombre] = useState('');
-    const [showAllProducts, setShowAllProducts] = useState(false);
+    const [showAllProducts, setShowAllProducts] = useState(true);
     const [lotesDisponibles, setLotesDisponibles] = useState([]);
     const [selectedLoteId, setSelectedLoteId] = useState('');
     const [lastIngresoId, setLastIngresoId] = useState(null);
@@ -58,11 +58,22 @@ export const NotaIngresoForm = () => {
     const [archivoCSV, setArchivoCSV] = useState(null);
     const [erroresImportacion, setErroresImportacion] = useState([]);
 
-    // Estados para carga masiva por número de documento
-    const [numeroDocumentoMasivo, setNumeroDocumentoMasivo] = useState('');
-    const [productosMasivos, setProductosMasivos] = useState([]);
-    const [productosMasivosSeleccionados, setProductosMasivosSeleccionados] = useState({});
-    const [buscandoMasivo, setBuscandoMasivo] = useState(false);
+    // Estados para selector masivo de productos
+    const [filtroProductosMasivos, setFiltroProductosMasivos] = useState('');
+    const [productoDetalleModal, setProductoDetalleModal] = useState(null);
+    const [mostrarModalDetalleProducto, setMostrarModalDetalleProducto] = useState(false);
+    const [detalleProductoDraft, setDetalleProductoDraft] = useState({
+        lote_numero: '',
+        fecha_vencimiento: '',
+        um: '',
+        fabricante: '',
+        temperatura: '25',
+        cantidad_bultos: 0,
+        cantidad_cajas: 0,
+        cantidad_por_caja: 0,
+        cantidad_fraccion: 0,
+        cantidad_total: 0
+    });
     const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
 
     useEffect(() => {
@@ -168,10 +179,6 @@ export const NotaIngresoForm = () => {
 
     const loadProducts = async () => {
         try {
-            if (!showAllProducts && !selectedClient) {
-                setProducts([]);
-                return;
-            }
             const filters = showAllProducts ? {} : { cliente_id: Number(selectedClient) };
             const productsResponse = await productService.getProducts(filters);
             console.log('Productos cargados:', productsResponse);
@@ -327,119 +334,116 @@ export const NotaIngresoForm = () => {
         setPrecio('');
     };
 
-    const handleBuscarProductosMasivos = async () => {
-        if (!numeroDocumentoMasivo.trim()) {
-            alert('Ingrese un número de documento para buscar');
-            return;
+    const agregarDetalleProducto = (producto, detalle) => {
+        const loteFinal = String(detalle.lote_numero || '').trim();
+        const cantidadTotal = Number(detalle.cantidad_total || 0);
+
+        if (!loteFinal || cantidadTotal <= 0 || !detalle.fecha_vencimiento) {
+            alert('Complete lote, vencimiento y cantidad total mayor a 0');
+            return false;
         }
 
-        setBuscandoMasivo(true);
-        try {
-            const filters = { numero_documento: numeroDocumentoMasivo.trim() };
-            const productosEncontrados = await productService.getProducts(filters);
-            const productos = Array.isArray(productosEncontrados) ? productosEncontrados : [];
-
-            if (productos.length === 0) {
-                alert(`No se encontraron productos con el número de documento: ${numeroDocumentoMasivo}`);
-                setBuscandoMasivo(false);
-                return;
-            }
-
-            setProductosMasivos(productos);
-            setMostrarModalMasivo(true);
-            setProductosMasivosSeleccionados({});
-        } catch (error) {
-            console.error('Error buscando productos:', error);
-            alert('Error al buscar productos por número de documento');
-        } finally {
-            setBuscandoMasivo(false);
-        }
-    };
-
-    const handleToggleProductoMasivo = (productoId) => {
-        setProductosMasivosSeleccionados(prev => ({
-            ...prev,
-            [productoId]: !prev[productoId]
-        }));
-    };
-
-    const handleSeleccionarTodosMasivos = () => {
-        const todosSeleccionados = {};
-        productosMasivos.forEach(p => {
-            todosSeleccionados[p.id] = true;
-        });
-        setProductosMasivosSeleccionados(todosSeleccionados);
-    };
-
-    const handleDeseleccionarTodosMasivos = () => {
-        setProductosMasivosSeleccionados({});
-    };
-
-    const handleAgregarProductosMasivos = () => {
-        const idsSeleccionados = Object.keys(productosMasivosSeleccionados).filter(
-            id => productosMasivosSeleccionados[id]
+        const existingIndex = fields.findIndex(
+            field => Number(field.producto_id) === Number(producto.id) && String(field.lote_numero) === loteFinal
         );
 
-        if (idsSeleccionados.length === 0) {
-            alert('Seleccione al menos un producto para agregar');
+        const payload = {
+            producto_id: Number(producto.id),
+            producto_codigo: producto.codigo || '',
+            producto_nombre: producto.descripcion || '',
+            cantidad: cantidadTotal,
+            lote_numero: loteFinal,
+            fecha_vencimiento: detalle.fecha_vencimiento,
+            um: detalle.um || producto.um || producto.unidad || '',
+            fabricante: detalle.fabricante || producto.fabricante || '',
+            temperatura_min: Number(detalle.temperatura || 25),
+            temperatura_max: Number(detalle.temperatura || 25),
+            cantidad_bultos: Number(detalle.cantidad_bultos || 0),
+            cantidad_cajas: Number(detalle.cantidad_cajas || 0),
+            cantidad_por_caja: Number(detalle.cantidad_por_caja || 0),
+            cantidad_fraccion: Number(detalle.cantidad_fraccion || 0),
+            cantidad_total: cantidadTotal,
+            precio_unitario: Number.isFinite(Number(precio)) ? Number(precio) : 0,
+            detalle_calculo: `Bultos: ${detalle.cantidad_bultos || 0}, Cajas: ${detalle.cantidad_cajas || 0}, Und/Caja: ${detalle.cantidad_por_caja || 0}, Frac: ${detalle.cantidad_fraccion || 0}`
+        };
+
+        if (existingIndex >= 0) {
+            const existing = fields[existingIndex];
+            update(existingIndex, {
+                ...existing,
+                cantidad: Number(existing.cantidad || 0) + payload.cantidad,
+                cantidad_total: Number(existing.cantidad_total || 0) + payload.cantidad_total,
+                cantidad_bultos: Number(existing.cantidad_bultos || 0) + payload.cantidad_bultos,
+                cantidad_cajas: Number(existing.cantidad_cajas || 0) + payload.cantidad_cajas,
+                cantidad_por_caja: Number(existing.cantidad_por_caja || 0) + payload.cantidad_por_caja,
+                cantidad_fraccion: Number(existing.cantidad_fraccion || 0) + payload.cantidad_fraccion,
+                um: payload.um || existing.um,
+                fabricante: payload.fabricante || existing.fabricante,
+                temperatura_min: payload.temperatura_min,
+                temperatura_max: payload.temperatura_max,
+                fecha_vencimiento: payload.fecha_vencimiento || existing.fecha_vencimiento
+            });
+        } else {
+            append(payload);
+        }
+
+        return true;
+    };
+
+    const abrirModalDetalleProducto = (producto) => {
+        setProductoDetalleModal(producto);
+        setDetalleProductoDraft({
+            lote_numero: producto.lote || '',
+            fecha_vencimiento: producto.fecha_vencimiento || '',
+            um: producto.um || producto.unidad || '',
+            fabricante: producto.fabricante || '',
+            temperatura: String(producto.temperatura ?? producto.temperatura_min_c ?? 25),
+            cantidad_bultos: Number(producto.cantidad_bultos || 0),
+            cantidad_cajas: Number(producto.cantidad_cajas || 0),
+            cantidad_por_caja: Number(producto.cantidad_por_caja || 0),
+            cantidad_fraccion: Number(producto.cantidad_fraccion || 0),
+            cantidad_total: Number(producto.cantidad_total || 0)
+        });
+        setMostrarModalDetalleProducto(true);
+    };
+
+    const handleDetalleDraftChange = (field, value) => {
+        setDetalleProductoDraft((prev) => {
+            const next = {
+                ...prev,
+                [field]: value
+            };
+
+            if (['cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion'].includes(field)) {
+                const total = (Number(next.cantidad_cajas) || 0) * (Number(next.cantidad_por_caja) || 0)
+                    + (Number(next.cantidad_fraccion) || 0);
+                next.cantidad_total = total;
+            }
+
+            return next;
+        });
+    };
+
+    const handleGuardarDetalleProductoModal = () => {
+        if (!productoDetalleModal) {
             return;
         }
 
-        let agregados = 0;
-        idsSeleccionados.forEach(id => {
-            const producto = productosMasivos.find(p => p.id === parseInt(id));
-            if (!producto) return;
+        const agregado = agregarDetalleProducto(productoDetalleModal, detalleProductoDraft);
+        if (!agregado) {
+            return;
+        }
 
-            // Verificar si tiene lote y vencimiento
-            if (!producto.lote || !producto.fecha_vencimiento) {
-                console.warn(`Producto ${producto.codigo} no tiene lote o vencimiento`);
-                return;
-            }
-
-            // Verificar si ya existe
-            const existingIndex = fields.findIndex(
-                field => Number(field.producto_id) === Number(producto.id) && field.lote_numero === producto.lote
-            );
-
-            if (existingIndex >= 0) {
-                // Ya existe, actualizar cantidad
-                const existing = fields[existingIndex];
-                update(existingIndex, {
-                    ...existing,
-                    cantidad: Number(existing.cantidad || 0) + Number(producto.cantidad_total || 0),
-                    cantidad_total: Number(existing.cantidad_total || 0) + Number(producto.cantidad_total || 0)
-                });
-            } else {
-                // Agregar nuevo
-                append({
-                    producto_id: producto.id,
-                    producto_codigo: producto.codigo || '',
-                    producto_nombre: producto.descripcion || '',
-                    cantidad: parseFloat(producto.cantidad_total || 0),
-                    lote_numero: producto.lote || '',
-                    fecha_vencimiento: producto.fecha_vencimiento || '',
-                    um: producto.um || producto.unidad || '',
-                    fabricante: producto.fabricante || '',
-                    temperatura_min: Number(producto.temperatura ?? producto.temperatura_min_c ?? 25),
-                    temperatura_max: Number(producto.temperatura ?? producto.temperatura_max_c ?? 25),
-                    cantidad_bultos: parseFloat(producto.cantidad_bultos || 0),
-                    cantidad_cajas: parseFloat(producto.cantidad_cajas || 0),
-                    cantidad_por_caja: parseFloat(producto.cantidad_por_caja || 0),
-                    cantidad_fraccion: parseFloat(producto.cantidad_fraccion || 0),
-                    cantidad_total: parseFloat(producto.cantidad_total || 0),
-                    precio_unitario: 0,
-                    detalle_calculo: `Bultos: ${producto.cantidad_bultos || 0}, Cajas: ${producto.cantidad_cajas || 0}, Und/Caja: ${producto.cantidad_por_caja || 0}, Frac: ${producto.cantidad_fraccion || 0}`
-                });
-            }
-            agregados++;
-        });
-
-        alert(`✅ Se agregaron ${agregados} producto(s) a la nota de ingreso`);
-        setMostrarModalMasivo(false);
-        setProductosMasivos([]);
-        setProductosMasivosSeleccionados({});
-        setNumeroDocumentoMasivo('');
+        setMostrarModalDetalleProducto(false);
+        setProductoDetalleModal(null);
     };
+
+    const productosMasivosFiltrados = products.filter((producto) => {
+        const termino = filtroProductosMasivos.trim().toLowerCase();
+        if (!termino) return true;
+        return String(producto.codigo || '').toLowerCase().includes(termino)
+            || String(producto.descripcion || '').toLowerCase().includes(termino);
+    });
 
     const handleToggleDetalle = (id) => {
         setSelectedDetalleIds((prev) => ({
@@ -530,6 +534,45 @@ export const NotaIngresoForm = () => {
         setTemperatura('25');
         setLastIngresoId(null);
         setSelectedDetalleIds({});
+        setFiltroProductosMasivos('');
+        setMostrarModalMasivo(false);
+        setMostrarModalDetalleProducto(false);
+        setProductoDetalleModal(null);
+    };
+
+    const handleUpdateDetalle = (index, field, value) => {
+        const detalleActual = fields[index];
+        if (!detalleActual) {
+            return;
+        }
+
+        const next = {
+            ...detalleActual,
+            [field]: value
+        };
+
+        if (['cantidad_bultos', 'cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion', 'cantidad_total'].includes(field)) {
+            next[field] = value === '' ? 0 : Number(value);
+        }
+
+        if (['cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion'].includes(field)) {
+            const total = (Number(next.cantidad_cajas) || 0) * (Number(next.cantidad_por_caja) || 0)
+                + (Number(next.cantidad_fraccion) || 0);
+            next.cantidad_total = total;
+            next.cantidad = total;
+        }
+
+        if (field === 'cantidad_total') {
+            next.cantidad = Number(next.cantidad_total || 0);
+        }
+
+        if (field === 'temperatura') {
+            const t = Number(value || 25);
+            next.temperatura_min = t;
+            next.temperatura_max = t;
+        }
+
+        update(index, next);
     };
 
     const handleImportarCSV = async (event) => {
@@ -737,7 +780,6 @@ export const NotaIngresoForm = () => {
                                 value={selectedProduct}
                                 onChange={(e) => setSelectedProduct(e.target.value)}
                                 className="input-premium"
-                                disabled={!showAllProducts && !selectedClient}
                             >
                                 <option value="">Seleccione producto...</option>
                                 {products.map(p => (
@@ -816,42 +858,26 @@ export const NotaIngresoForm = () => {
 
                 {/* Agregar Productos */}
                 <Card className="p-6 bg-blue-50/50 border-blue-100">
-                    {/* Carga Masiva por Número de Documento */}
+                    {/* Selector Masivo por Lista de Productos */}
                     <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
                         <h4 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                             </svg>
-                            Carga Masiva por N° de Documento
+                            Selector Masivo de Productos
                         </h4>
-                        <div className="flex gap-3">
-                            <div className="flex-1">
-                                <input
-                                    type="text"
-                                    value={numeroDocumentoMasivo}
-                                    onChange={(e) => setNumeroDocumentoMasivo(e.target.value)}
-                                    className="input-premium"
-                                    placeholder="Ej: 110, F001-000213, etc."
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleBuscarProductosMasivos();
-                                        }
-                                    }}
-                                />
-                            </div>
+                        <div className="flex gap-3 items-center">
                             <Button
                                 type="button"
-                                onClick={handleBuscarProductosMasivos}
+                                onClick={() => setMostrarModalMasivo(true)}
                                 variant="primary"
-                                disabled={buscandoMasivo}
                                 className="bg-purple-600 hover:bg-purple-700"
                             >
-                                {buscandoMasivo ? 'Buscando...' : 'Buscar Productos'}
+                                Seleccionar productos
                             </Button>
                         </div>
                         <p className="text-xs text-purple-600 mt-2">
-                            💡 Ingrese un número de documento para cargar todos los productos asociados a ese documento.
+                            💡 Elige productos de la lista, configura bultos/cajas/unidades/fracción y agrégalos al detalle.
                         </p>
                     </div>
 
@@ -1003,16 +1029,86 @@ export const NotaIngresoForm = () => {
                                     </td>
                                     <td className="px-6 py-3 font-mono text-xs">{field.producto_codigo || '-'}</td>
                                     <td className="px-6 py-3 font-medium text-slate-700">{field.producto_nombre}</td>
-                                    <td className="px-6 py-3">{field.lote_numero}</td>
-                                    <td className="px-6 py-3">{field.fecha_vencimiento}</td>
-                                    <td className="px-6 py-3">{field.um || '-'}</td>
-                                    <td className="px-6 py-3">{field.fabricante || '-'}</td>
-                                    <td className="px-6 py-3">{field.temperatura_min ?? field.temperatura_max ?? 25}</td>
-                                    <td className="px-6 py-3">{field.cantidad_bultos ?? 0}</td>
-                                    <td className="px-6 py-3">{field.cantidad_cajas ?? 0}</td>
-                                    <td className="px-6 py-3">{field.cantidad_por_caja ?? 0}</td>
-                                    <td className="px-6 py-3">{field.cantidad_fraccion ?? 0}</td>
-                                    <td className="px-6 py-3 text-right font-bold text-blue-600">{field.cantidad_total ?? field.cantidad}</td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="text"
+                                            value={field.lote_numero || ''}
+                                            onChange={(e) => handleUpdateDetalle(index, 'lote_numero', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 min-w-[120px]"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="date"
+                                            value={field.fecha_vencimiento || ''}
+                                            onChange={(e) => handleUpdateDetalle(index, 'fecha_vencimiento', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 min-w-[140px]"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="text"
+                                            value={field.um || ''}
+                                            onChange={(e) => handleUpdateDetalle(index, 'um', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 min-w-[70px]"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="text"
+                                            value={field.fabricante || ''}
+                                            onChange={(e) => handleUpdateDetalle(index, 'fabricante', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 min-w-[120px]"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="number"
+                                            value={field.temperatura_min ?? field.temperatura_max ?? 25}
+                                            onChange={(e) => handleUpdateDetalle(index, 'temperatura', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 w-20"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="number"
+                                            value={field.cantidad_bultos ?? 0}
+                                            onChange={(e) => handleUpdateDetalle(index, 'cantidad_bultos', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 w-20"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="number"
+                                            value={field.cantidad_cajas ?? 0}
+                                            onChange={(e) => handleUpdateDetalle(index, 'cantidad_cajas', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 w-20"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="number"
+                                            value={field.cantidad_por_caja ?? 0}
+                                            onChange={(e) => handleUpdateDetalle(index, 'cantidad_por_caja', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 w-20"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3">
+                                        <input
+                                            type="number"
+                                            value={field.cantidad_fraccion ?? 0}
+                                            onChange={(e) => handleUpdateDetalle(index, 'cantidad_fraccion', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 w-20"
+                                        />
+                                    </td>
+                                    <td className="px-6 py-3 text-right font-bold text-blue-600">
+                                        <input
+                                            type="number"
+                                            value={field.cantidad_total ?? field.cantidad ?? 0}
+                                            onChange={(e) => handleUpdateDetalle(index, 'cantidad_total', e.target.value)}
+                                            className="input-premium h-8 text-xs p-1 w-24 text-right"
+                                        />
+                                    </td>
                                     <td className="px-6 py-3 text-center">
                                         <button
                                             type="button"
@@ -1216,7 +1312,7 @@ PROD002,LOTE-2024-002,500`}
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Productos Encontrados ({productosMasivos.length})
+                                Selección de Productos ({productosMasivosFiltrados.length})
                             </h3>
                             <button
                                 onClick={() => setMostrarModalMasivo(false)}
@@ -1229,48 +1325,23 @@ PROD002,LOTE-2024-002,500`}
                         </div>
 
                         <div className="p-6">
-                            <div className="flex justify-between items-center mb-4 pb-3 border-b">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 pb-3 border-b">
                                 <p className="text-sm text-slate-600">
-                                    Seleccione los productos que desea agregar a la nota de ingreso
+                                    Seleccione un producto y configure su detalle para agregarlo
                                 </p>
-                                <div className="flex gap-2">
-                                    <Button
-                                        type="button"
-                                        onClick={handleSeleccionarTodosMasivos}
-                                        variant="secondary"
-                                        className="text-sm"
-                                    >
-                                        ✓ Seleccionar todos
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        onClick={handleDeseleccionarTodosMasivos}
-                                        variant="secondary"
-                                        className="text-sm"
-                                    >
-                                        ✗ Deseleccionar todos
-                                    </Button>
-                                </div>
+                                <input
+                                    type="text"
+                                    value={filtroProductosMasivos}
+                                    onChange={(e) => setFiltroProductosMasivos(e.target.value)}
+                                    className="input-premium md:w-80"
+                                    placeholder="Filtrar por código o nombre"
+                                />
                             </div>
 
                             <div className="overflow-auto max-h-[50vh] border rounded-lg">
                                 <table className="w-full text-sm">
                                     <thead className="bg-slate-100 sticky top-0">
                                         <tr>
-                                            <th className="px-4 py-3 text-left w-12">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={productosMasivos.length > 0 && Object.keys(productosMasivosSeleccionados).filter(id => productosMasivosSeleccionados[id]).length === productosMasivos.length}
-                                                    onChange={(e) => {
-                                                        if (e.target.checked) {
-                                                            handleSeleccionarTodosMasivos();
-                                                        } else {
-                                                            handleDeseleccionarTodosMasivos();
-                                                        }
-                                                    }}
-                                                    className="w-4 h-4"
-                                                />
-                                            </th>
                                             <th className="px-4 py-3 text-left">Código</th>
                                             <th className="px-4 py-3 text-left">Producto</th>
                                             <th className="px-4 py-3 text-left">Lote</th>
@@ -1278,22 +1349,15 @@ PROD002,LOTE-2024-002,500`}
                                             <th className="px-4 py-3 text-left">Cantidad</th>
                                             <th className="px-4 py-3 text-left">UM</th>
                                             <th className="px-4 py-3 text-left">Fabricante</th>
+                                            <th className="px-4 py-3 text-center">Acción</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {productosMasivos.map((producto) => (
+                                        {productosMasivosFiltrados.map((producto) => (
                                             <tr
                                                 key={producto.id}
-                                                className={`border-b hover:bg-purple-50 transition-colors ${productosMasivosSeleccionados[producto.id] ? 'bg-purple-50' : ''}`}
+                                                className="border-b hover:bg-purple-50 transition-colors"
                                             >
-                                                <td className="px-4 py-3">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={productosMasivosSeleccionados[producto.id] || false}
-                                                        onChange={() => handleToggleProductoMasivo(producto.id)}
-                                                        className="w-4 h-4"
-                                                    />
-                                                </td>
                                                 <td className="px-4 py-3 font-mono text-xs">{producto.codigo}</td>
                                                 <td className="px-4 py-3">{producto.descripcion}</td>
                                                 <td className="px-4 py-3 font-mono text-xs">{producto.lote || '-'}</td>
@@ -1303,18 +1367,23 @@ PROD002,LOTE-2024-002,500`}
                                                 <td className="px-4 py-3 text-right font-semibold">{producto.cantidad_total || 0}</td>
                                                 <td className="px-4 py-3">{producto.um || producto.unidad || '-'}</td>
                                                 <td className="px-4 py-3 text-xs">{producto.fabricante || '-'}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() => abrirModalDetalleProducto(producto)}
+                                                        variant="primary"
+                                                        className="bg-purple-600 hover:bg-purple-700 text-xs"
+                                                    >
+                                                        Configurar
+                                                    </Button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
 
-                            <div className="flex justify-between items-center mt-6 pt-4 border-t">
-                                <p className="text-sm text-slate-600">
-                                    <span className="font-semibold text-purple-600">
-                                        {Object.keys(productosMasivosSeleccionados).filter(id => productosMasivosSeleccionados[id]).length}
-                                    </span> producto(s) seleccionado(s)
-                                </p>
+                            <div className="flex justify-end items-center mt-6 pt-4 border-t">
                                 <div className="flex gap-3">
                                     <Button
                                         type="button"
@@ -1323,17 +1392,138 @@ PROD002,LOTE-2024-002,500`}
                                     >
                                         Cancelar
                                     </Button>
-                                    <Button
-                                        type="button"
-                                        onClick={handleAgregarProductosMasivos}
-                                        variant="primary"
-                                        className="bg-purple-600 hover:bg-purple-700"
-                                        disabled={Object.keys(productosMasivosSeleccionados).filter(id => productosMasivosSeleccionados[id]).length === 0}
-                                    >
-                                        Agregar Seleccionados
-                                    </Button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Configuración de Detalle por Producto */}
+            {mostrarModalDetalleProducto && productoDetalleModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]" onClick={() => setMostrarModalDetalleProducto(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-purple-600 px-6 py-4 flex justify-between items-center rounded-t-xl">
+                            <h3 className="text-lg font-bold text-white">
+                                Configurar detalle: {productoDetalleModal.codigo} - {productoDetalleModal.descripcion}
+                            </h3>
+                            <button
+                                onClick={() => setMostrarModalDetalleProducto(false)}
+                                className="text-white hover:text-purple-200"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="label-premium">Lote</label>
+                                <input
+                                    type="text"
+                                    value={detalleProductoDraft.lote_numero}
+                                    onChange={(e) => handleDetalleDraftChange('lote_numero', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Vencimiento</label>
+                                <input
+                                    type="date"
+                                    value={detalleProductoDraft.fecha_vencimiento}
+                                    onChange={(e) => handleDetalleDraftChange('fecha_vencimiento', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Cant. Bulto</label>
+                                <input
+                                    type="number"
+                                    value={detalleProductoDraft.cantidad_bultos}
+                                    onChange={(e) => handleDetalleDraftChange('cantidad_bultos', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Cajas</label>
+                                <input
+                                    type="number"
+                                    value={detalleProductoDraft.cantidad_cajas}
+                                    onChange={(e) => handleDetalleDraftChange('cantidad_cajas', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Und/Caja</label>
+                                <input
+                                    type="number"
+                                    value={detalleProductoDraft.cantidad_por_caja}
+                                    onChange={(e) => handleDetalleDraftChange('cantidad_por_caja', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Cant. Fracción</label>
+                                <input
+                                    type="number"
+                                    value={detalleProductoDraft.cantidad_fraccion}
+                                    onChange={(e) => handleDetalleDraftChange('cantidad_fraccion', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">UM</label>
+                                <input
+                                    type="text"
+                                    value={detalleProductoDraft.um}
+                                    onChange={(e) => handleDetalleDraftChange('um', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Fabricante</label>
+                                <input
+                                    type="text"
+                                    value={detalleProductoDraft.fabricante}
+                                    onChange={(e) => handleDetalleDraftChange('fabricante', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Temperatura (°C)</label>
+                                <input
+                                    type="number"
+                                    value={detalleProductoDraft.temperatura}
+                                    onChange={(e) => handleDetalleDraftChange('temperatura', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Total Unidades</label>
+                                <input
+                                    type="number"
+                                    value={detalleProductoDraft.cantidad_total}
+                                    onChange={(e) => handleDetalleDraftChange('cantidad_total', e.target.value)}
+                                    className="input-premium font-bold"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 border-t flex justify-end gap-3">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setMostrarModalDetalleProducto(false)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                onClick={handleGuardarDetalleProductoModal}
+                                className="bg-purple-600 hover:bg-purple-700"
+                            >
+                                Guardar y agregar
+                            </Button>
                         </div>
                     </div>
                 </div>

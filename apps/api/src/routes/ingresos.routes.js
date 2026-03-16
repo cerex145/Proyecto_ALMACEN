@@ -406,17 +406,13 @@ async function ingresosRoutes(fastify, options) {
                     });
                     await transactionalEntityManager.save('Lote', lote);
 
-                    // Actualizar stock del producto
-                    producto.stock_actual = Number(producto.stock_actual) + Number(detalle.cantidad);
-                    await transactionalEntityManager.save('Producto', producto);
-
                     // Registrar en kardex
                     const movimiento = kardexRepo.create({
                         producto_id: detalle.producto_id,
                         lote_numero: detalle.lote_numero,
                         tipo_movimiento: 'INGRESO',
                         cantidad: detalle.cantidad,
-                        saldo: producto.stock_actual,
+                        saldo: Number(detalle.cantidad),
                         documento_tipo: 'NOTA_INGRESO',
                         documento_numero: numeroIngreso,
                         referencia_id: notaGuardada.id
@@ -629,17 +625,13 @@ async function ingresosRoutes(fastify, options) {
                 });
                 await loteRepo.save(lote);
 
-                // Actualizar stock
-                producto.stock_actual = Number(producto.stock_actual) + Number(detalle.cantidad);
-                await productoRepo.save(producto);
-
                 // Kardex
                 const movimiento = kardexRepo.create({
                     producto_id: producto.id,
                     lote_numero: detalle.lote_numero,
                     tipo_movimiento: 'INGRESO',
                     cantidad: detalle.cantidad,
-                    saldo: producto.stock_actual,
+                    saldo: Number(detalle.cantidad),
                     documento_tipo: 'NOTA_INGRESO',
                     documento_numero: numeroIngreso,
                     referencia_id: notaGuardada.id
