@@ -351,8 +351,8 @@ export const NotaIngresoForm = () => {
         const loteFinal = String(detalle.lote_numero || '').trim();
         const cantidadTotal = Number(detalle.cantidad_total || 0);
 
-        if (!loteFinal || cantidadTotal <= 0 || !detalle.fecha_vencimiento) {
-            showError('Complete lote, vencimiento y cantidad total mayor a 0.');
+        if (!loteFinal || cantidadTotal <= 0) {
+            showError('Complete lote y cantidad total mayor a 0.');
             return false;
         }
 
@@ -366,7 +366,7 @@ export const NotaIngresoForm = () => {
             producto_nombre: producto.descripcion || '',
             cantidad: cantidadTotal,
             lote_numero: loteFinal,
-            fecha_vencimiento: detalle.fecha_vencimiento,
+            fecha_vencimiento: detalle.fecha_vencimiento || null,
             um: detalle.um || producto.um || producto.unidad || '',
             fabricante: detalle.fabricante || producto.fabricante || '',
             temperatura_min: Number(detalle.temperatura || 25),

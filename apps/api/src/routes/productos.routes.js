@@ -445,7 +445,7 @@ async function productoRoutes(fastify, options) {
             fecha_ingreso: fecha_ingreso || null,
             lote: lote || null,
             fabricante: fabricante || null,
-            categoria_ingreso,
+            categoria_ingreso: categoria_ingreso || null,
             procedencia,
             fecha_vencimiento: fecha_vencimiento || null,
             unidad: unidad || 'UND',
@@ -566,7 +566,7 @@ async function productoRoutes(fastify, options) {
         if (fecha_ingreso !== undefined) producto.fecha_ingreso = fecha_ingreso || null;
         if (lote !== undefined) producto.lote = lote || null;
         if (fabricante !== undefined) producto.fabricante = fabricante || null;
-        if (categoria_ingreso) producto.categoria_ingreso = categoria_ingreso;
+        if (categoria_ingreso !== undefined) producto.categoria_ingreso = categoria_ingreso || null;
         if (procedencia) producto.procedencia = procedencia;
         if (fecha_vencimiento !== undefined) producto.fecha_vencimiento = fecha_vencimiento || null;
         if (unidad !== undefined) producto.unidad = unidad || 'UND';

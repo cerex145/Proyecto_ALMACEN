@@ -337,7 +337,7 @@ async function ingresosRoutes(fastify, options) {
                                 cantidad: { type: 'number', minimum: 0 },
                                 precio_unitario: { type: 'number', minimum: 0 },
                                 lote_numero: { type: 'string' },
-                                fecha_vencimiento: { type: 'string', format: 'date' },
+                                fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
                                 um: { type: 'string' },
                                 fabricante: { type: 'string' },
                                 temperatura_min: { type: 'number' },
@@ -405,19 +405,14 @@ async function ingresosRoutes(fastify, options) {
                         error: 'Cada detalle debe incluir lote_numero'
                     });
                 }
-                if (!detalle.fecha_vencimiento) {
-                    return reply.status(400).send({
-                        success: false,
-                        error: 'Cada detalle debe incluir fecha_vencimiento'
-                    });
-                }
-
-                const fechaVenc = new Date(detalle.fecha_vencimiento);
-                if (Number.isNaN(fechaVenc.getTime())) {
-                    return reply.status(400).send({
-                        success: false,
-                        error: 'fecha_vencimiento no es válida'
-                    });
+                if (detalle.fecha_vencimiento) {
+                    const fechaVenc = new Date(detalle.fecha_vencimiento);
+                    if (Number.isNaN(fechaVenc.getTime())) {
+                        return reply.status(400).send({
+                            success: false,
+                            error: 'fecha_vencimiento no es válida'
+                        });
+                    }
                 }
             }
 
@@ -450,11 +445,13 @@ async function ingresosRoutes(fastify, options) {
                     }
 
                     // Crear detalle
+                    const fechaVencimiento = detalle.fecha_vencimiento || null;
+
                     const detalleNota = notaIngresoDetalleRepo.create({
                         nota_ingreso_id: notaGuardada.id,
                         producto_id: detalle.producto_id,
                         lote_numero: detalle.lote_numero,
-                        fecha_vencimiento: detalle.fecha_vencimiento,
+                        fecha_vencimiento: fechaVencimiento,
                         um: detalle.um || null,
                         fabricante: detalle.fabricante || null,
                         temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || null,
@@ -473,7 +470,7 @@ async function ingresosRoutes(fastify, options) {
                     const lote = loteRepo.create({
                         producto_id: detalle.producto_id,
                         numero_lote: detalle.lote_numero,
-                        fecha_vencimiento: detalle.fecha_vencimiento,
+                        fecha_vencimiento: fechaVencimiento,
                         cantidad_ingresada: detalle.cantidad,
                         cantidad_disponible: detalle.cantidad,
                         nota_ingreso_id: notaGuardada.id
