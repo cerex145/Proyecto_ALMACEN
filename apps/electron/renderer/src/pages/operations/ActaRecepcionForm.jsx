@@ -8,7 +8,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 
 export const ActaRecepcionForm = () => {
-    const { register, control, handleSubmit, reset, setValue, getValues, watch, formState: { errors, isSubmitting } } = useForm({
+    const { register, control, handleSubmit, reset, setValue, getValues, watch, clearErrors, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             fecha: new Date().toISOString().split('T')[0],
             tipo_documento: '',
@@ -206,9 +206,12 @@ export const ActaRecepcionForm = () => {
                 }
             }
 
-            // Auto-llenar campos del documento
-            if (nota.tipo_documento) setValue('tipo_documento', nota.tipo_documento);
-            if (nota.numero_documento) setValue('numero_documento', nota.numero_documento);
+            // Auto-llenar campos del documento (con fallback)
+            const tipoDocumentoNota = nota.tipo_documento || 'NOTA_INGRESO';
+            const numeroDocumentoNota = nota.numero_documento || nota.numero_ingreso || '';
+            setValue('tipo_documento', tipoDocumentoNota, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+            setValue('numero_documento', numeroDocumentoNota, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+            clearErrors(['tipo_documento', 'numero_documento']);
             if (nota.fecha) setValue('fecha', nota.fecha.split('T')[0]);
 
             if (nota.observaciones) {
@@ -393,14 +396,18 @@ export const ActaRecepcionForm = () => {
                 alert('Seleccione un cliente');
                 return;
             }
-            if (!data.tipo_documento || !data.numero_documento) {
-                alert('Tipo y número de documento deben provenir de la Nota de Ingreso seleccionada.');
-                return;
-            }
             if (!data.detalles || data.detalles.length === 0) {
                 alert('Agregue al menos un producto');
                 return;
             }
+
+            const notaActual = notasIngreso.find(n => String(n.id) === String(notaSeleccionada));
+            const tipoDocumentoFinal = data.tipo_documento || notaActual?.tipo_documento || 'NOTA_INGRESO';
+            const numeroDocumentoFinal = data.numero_documento || notaActual?.numero_documento || notaActual?.numero_ingreso || '';
+
+            setValue('tipo_documento', tipoDocumentoFinal, { shouldValidate: false });
+            setValue('numero_documento', numeroDocumentoFinal, { shouldValidate: false });
+            clearErrors(['tipo_documento', 'numero_documento']);
 
             const detallesFuente = fields.length > 0 ? fields : (data.detalles || []);
             const detallesNormalizados = detallesFuente.map((detalle, index) => {
@@ -432,8 +439,8 @@ export const ActaRecepcionForm = () => {
 
             const payload = {
                 fecha: data.fecha,
-                tipo_documento: data.tipo_documento,
-                numero_documento: data.numero_documento,
+                tipo_documento: tipoDocumentoFinal,
+                numero_documento: numeroDocumentoFinal,
                 cliente_id: Number(selectedClient),
                 proveedor: normalizeNullable(proveedorNombre || clienteRuc),
                 tipo_operacion: normalizeNullable(data.tipo_operacion),
@@ -601,7 +608,6 @@ export const ActaRecepcionForm = () => {
                                 placeholder="Se carga desde la Nota de Ingreso"
                                 readOnly
                             />
-                            {errors.tipo_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
                             <label className="label-premium">Número de Documento (Nota de Ingreso) *</label>
@@ -611,7 +617,6 @@ export const ActaRecepcionForm = () => {
                                 placeholder="Se carga desde la Nota de Ingreso"
                                 readOnly
                             />
-                            {errors.numero_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
                             <label className="label-premium">Fecha *</label>
