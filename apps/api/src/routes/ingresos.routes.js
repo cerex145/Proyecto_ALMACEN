@@ -804,7 +804,9 @@ async function ingresosRoutes(fastify, options) {
         if (fs.existsSync(logoPath)) {
             logoImage = {
                 image: logoPath,
-                width: 150
+                fit: [140, 55],
+                alignment: 'left',
+                margin: [0, 0, 0, 5]
             };
         } else {
             logoImage = { text: 'AGUPAL PERU', style: 'brand', fontSize: 20 };
@@ -821,11 +823,24 @@ async function ingresosRoutes(fastify, options) {
                 // Encabezado
                 {
                     columns: [
-                        logoImage,
-                        { text: 'NOTA DE INGRESO', style: 'headerTitle', alignment: 'center', margin: [0, 10, 0, 0] },
-                        { text: `N° ${Number(nota.numero_ingreso)}`, style: 'headerNumber', alignment: 'right', margin: [0, 10, 0, 0] }
+                        { width: 170, stack: [logoImage] },
+                        {
+                            width: '*',
+                            text: 'NOTA DE INGRESO',
+                            style: 'headerTitle',
+                            alignment: 'center',
+                            margin: [0, 12, 0, 0]
+                        },
+                        {
+                            width: 150,
+                            text: `N° ${Number(nota.numero_ingreso)}`,
+                            style: 'headerNumber',
+                            alignment: 'right',
+                            margin: [0, 12, 0, 0]
+                        }
                     ],
-                    margin: [0, 0, 0, 10]
+                    columnGap: 10,
+                    margin: [0, 0, 0, 12]
                 },
                 { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 800, y2: 0, lineWidth: 1 }] },
 
