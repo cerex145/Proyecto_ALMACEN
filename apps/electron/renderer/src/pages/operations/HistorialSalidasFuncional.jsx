@@ -70,6 +70,7 @@ export const HistorialSalidasFuncional = () => {
                 const fmt = (v) => (v == null || v === '') ? '-' : parseFloat(v).toFixed(2);
                 rows.push({
                     key: `${fila.nota_id}-${fila.detalle_id}`,
+                    notaId: fila.nota_id,
                     numeroSalida: fila.numero_salida || '-',
                     codigo: fila.producto_codigo || '-',
                     producto: fila.producto_descripcion || '-',
@@ -97,6 +98,24 @@ export const HistorialSalidasFuncional = () => {
         } finally {
             if (requestId !== requestSeqRef.current) return;
             setLoading(false);
+        }
+    };
+
+    const handleDescargarPdf = async (notaId) => {
+        if (!notaId) return;
+        const pdfUrl = `${API_ORIGIN}/api/salidas/${notaId}/pdf`;
+        try {
+            if (window.electron?.ipcRenderer) {
+                await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
+            } else {
+                const opened = window.open(pdfUrl, '_blank');
+                if (!opened) {
+                    alert('No se pudo abrir el PDF. Verifica bloqueadores de ventanas emergentes.');
+                }
+            }
+        } catch (error) {
+            console.error('Error al abrir PDF de salida:', error);
+            alert('Error al abrir PDF de salida.');
         }
     };
 
@@ -151,6 +170,7 @@ export const HistorialSalidasFuncional = () => {
                                         <th className="px-4 py-3">DIA</th>
                                         <th className="px-4 py-3">RUC</th>
                                         <th className="px-4 py-3">AÑO</th>
+                                        <th className="px-4 py-3 text-center">PDF</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -171,6 +191,16 @@ export const HistorialSalidasFuncional = () => {
                                             <td className="px-4 py-2">{row.dia}</td>
                                             <td className="px-4 py-2">{row.ruc}</td>
                                             <td className="px-4 py-2">{row.anio}</td>
+                                            <td className="px-4 py-2 text-center">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    onClick={() => handleDescargarPdf(row.notaId)}
+                                                >
+                                                    PDF
+                                                </Button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

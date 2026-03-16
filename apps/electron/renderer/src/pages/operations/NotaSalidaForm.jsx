@@ -98,6 +98,21 @@ export const NotaSalidaForm = () => {
         return Math.max(0, fallback);
     };
 
+    const getNotaStockDisponible = (nota) => {
+        return (nota?.detalles || []).reduce((acc, detalle) => acc + getDetalleDisponible(detalle), 0);
+    };
+
+    const getNotaStockSeleccionado = (notaId) => {
+        return fields.reduce((acc, field) => {
+            if (Number(field.nota_ingreso_id) === Number(notaId)) {
+                return acc + Number(field.cantidad || 0);
+            }
+            return acc;
+        }, 0);
+    };
+
+    const formatCantidad = (valor) => Number(valor || 0).toFixed(2);
+
     useEffect(() => {
         loadClients();
         // Cargar productos iniciales (sin filtro o todos)
@@ -317,6 +332,7 @@ export const NotaSalidaForm = () => {
                 if (existingIndex < 0) {
                     append({
                         producto_id: Number(detalle.producto_id),
+                        nota_ingreso_id: Number(detalle.nota_ingreso_id || nota.id),
                         producto_codigo: detalle.producto?.codigo || '',
                         producto_nombre: detalle.producto?.descripcion || '',
                         lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
@@ -428,6 +444,7 @@ export const NotaSalidaForm = () => {
                 // Agregar nuevo producto
                 append({
                     producto_id: Number(detalle.producto_id),
+                    nota_ingreso_id: Number(detalle.nota_ingreso_id || 0),
                     producto_codigo: detalle.producto?.codigo || '',
                     producto_nombre: detalle.producto?.descripcion || '',
                     lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
@@ -726,6 +743,39 @@ export const NotaSalidaForm = () => {
                         </h3>
 
                         <div className="space-y-3">
+                            {notasIngreso.length > 0 && (
+                                <div className="bg-white rounded-lg border border-purple-200 p-4">
+                                    <p className="text-sm font-semibold text-purple-900 mb-2">Stock para descontar por Nota de Ingreso</p>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                            <thead className="bg-purple-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left font-semibold text-purple-800">Nota Ingreso</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">Stock Disponible</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">A Descontar</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">Saldo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {notasIngreso.map((nota) => {
+                                                    const disponible = getNotaStockDisponible(nota);
+                                                    const descontar = getNotaStockSeleccionado(nota.id);
+                                                    const saldo = Math.max(disponible - descontar, 0);
+                                                    return (
+                                                        <tr key={`resumen-${nota.id}`}>
+                                                            <td className="px-3 py-2 font-medium text-slate-800">{nota.numero_ingreso || `NI-${nota.id}`}</td>
+                                                            <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(disponible)}</td>
+                                                            <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(descontar)}</td>
+                                                            <td className="px-3 py-2 text-right text-blue-700 font-semibold">{formatCantidad(saldo)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
                             {cargandoNotas ? (
                                 <div className="text-center py-10 text-purple-600">
                                     <p className="text-sm font-medium animate-pulse">⏳ Cargando notas de ingreso...</p>
@@ -756,6 +806,11 @@ export const NotaSalidaForm = () => {
                                                 </div>
                                                 <p className="text-sm text-slate-500 mt-1">
                                                     📦 {nota.detalles?.length || 0} producto(s) disponible(s)
+                                                </p>
+                                                <p className="text-xs mt-1 text-slate-600">
+                                                    Stock disp.: <span className="font-semibold text-green-700">{formatCantidad(getNotaStockDisponible(nota))}</span>
+                                                    {' '}| A descontar: <span className="font-semibold text-amber-700">{formatCantidad(getNotaStockSeleccionado(nota.id))}</span>
+                                                    {' '}| Saldo: <span className="font-semibold text-blue-700">{formatCantidad(Math.max(getNotaStockDisponible(nota) - getNotaStockSeleccionado(nota.id), 0))}</span>
                                                 </p>
                                             </div>
                                             <Button
