@@ -443,7 +443,7 @@ export const NotaSalidaForm = () => {
     };
 
     const handleCambiarCantidad = (detalleId, nuevaCantidad) => {
-        const cantidad = Math.max(0, Number(nuevaCantidad) || 0);
+        const cantidad = Math.max(0, Math.floor(Number(nuevaCantidad) || 0));
         setCantidadesEditadas(prev => ({
             ...prev,
             [detalleId]: cantidad
@@ -1042,16 +1042,17 @@ export const NotaSalidaForm = () => {
                                         <input
                                             type="number"
                                             min="0"
-                                            step="0.01"
+                                            step="1"
                                             value={field.cantidad ?? 0}
                                             onChange={(event) => {
                                                 const raw = Number(event.target.value);
                                                 const max = field.cantidad_disponible != null
                                                     ? Number(field.cantidad_disponible)
                                                     : null;
-                                                const next = Number.isNaN(raw)
+                                                const nextBase = Number.isNaN(raw)
                                                     ? 0
                                                     : (max != null ? Math.min(raw, max) : raw);
+                                                const next = Math.max(0, Math.floor(nextBase));
                                                 update(index, {
                                                     ...field,
                                                     cantidad: next,
@@ -1201,7 +1202,7 @@ export const NotaSalidaForm = () => {
                                                         type="number"
                                                         min="0"
                                                         max={disponible}
-                                                        step="0.01"
+                                                        step="1"
                                                         value={cantidad}
                                                         onChange={(e) => handleCambiarCantidad(detalle.id, e.target.value)}
                                                         className="input-premium text-lg font-bold text-right"
