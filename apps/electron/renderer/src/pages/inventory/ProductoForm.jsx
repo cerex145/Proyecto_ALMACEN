@@ -4,7 +4,7 @@ import { clientesService } from '../../services/clientes.service';
 import { productService } from '../../services/product.service';
 
 export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
-    const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm({
+    const { register, handleSubmit, watch, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
         defaultValues: productToEdit || {
             unidad: 'UND',
             cantidad_bultos: 0,
@@ -17,8 +17,11 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
 
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [codigoExistente, setCodigoExistente] = useState(null);
+    const [mensajeFormulario, setMensajeFormulario] = useState('');
 
     const unidadSeleccionada = watch('unidad');
+    const codigoProducto = watch('codigo');
     const cantidadCajas = watch('cantidad_cajas');
     const cantidadPorCaja = watch('cantidad_por_caja');
     const cantidadFraccion = watch('cantidad_fraccion');
@@ -63,20 +66,65 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
         setValue('cantidad_total', Number.isFinite(total) ? total : 0);
     }, [cantidadCajas, cantidadPorCaja, cantidadFraccion, setValue]);
 
+    useEffect(() => {
+        if (productToEdit?.id) {
+            setCodigoExistente(null);
+            setMensajeFormulario('');
+            return;
+        }
+
+        const codigo = String(codigoProducto || '').trim();
+        if (!codigo) {
+            setCodigoExistente(null);
+            setMensajeFormulario('');
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            try {
+                const productos = await productService.getProducts({ busqueda: codigo, limit: 20, page: 1 });
+                const existente = (productos || []).find(
+                    (p) => String(p.codigo || '').toLowerCase() === codigo.toLowerCase()
+                );
+
+                if (existente) {
+                    setCodigoExistente(existente);
+                    setMensajeFormulario('Este código ya existe. Se autocompletaron datos base del producto; registra otro código para crear uno nuevo.');
+
+                    if (!String(getValues('descripcion') || '').trim()) setValue('descripcion', existente.descripcion || '');
+                    if (!String(getValues('proveedor') || '').trim()) setValue('proveedor', existente.proveedor || '');
+                    if (!String(getValues('fabricante') || '').trim()) setValue('fabricante', existente.fabricante || '');
+                    if (!String(getValues('procedencia') || '').trim()) setValue('procedencia', existente.procedencia || '');
+                    if (!String(getValues('unidad') || '').trim()) setValue('unidad', existente.unidad || 'UND');
+                    if (!String(getValues('um') || '').trim()) setValue('um', existente.um || '');
+                } else {
+                    setCodigoExistente(null);
+                    setMensajeFormulario('');
+                }
+            } catch (error) {
+                console.error('Error validando código de producto:', error);
+            }
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [codigoProducto, productToEdit?.id, getValues, setValue]);
+
 
     const onSubmit = async (data) => {
         try {
+            if (!productToEdit?.id && codigoExistente) {
+                alert('El código de producto ya existe. Usa otro código para crear uno nuevo.');
+                return;
+            }
+
             const payload = {
                 ...data,
                 proveedor: data.proveedor || data.razon_social || '',
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
                 registro_sanitario: data.registro_sanitario || null,
-                r_i: data.r_i || null,
-                codigo_gln: data.codigo_gln || null,
                 proveedor_ruc: data.proveedor_ruc || data.ruc_cliente || null,
                 fecha_ingreso: data.fecha_ingreso || null,
-                codigo_interno: data.codigo_interno || null,
                 lote: data.lote || null,
                 fabricante: data.fabricante || null,
                 procedencia: data.procedencia || null,
@@ -104,7 +152,11 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
         } catch (error) {
             console.error(error);
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Error al guardar producto';
-            alert(mensaje);
+            if (String(mensaje).toLowerCase().includes('código ya existe') || String(mensaje).toLowerCase().includes('codigo ya existe')) {
+                alert('Dicho producto ya existe (código duplicado). Usa otro código.');
+            } else {
+                alert(mensaje);
+            }
         }
     };
 
@@ -185,6 +237,12 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                             <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-b pb-2">Detalle de Producto</h3>
 
+                            {mensajeFormulario ? (
+                                <div className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    {mensajeFormulario}
+                                </div>
+                            ) : null}
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Código de Producto *</label>
@@ -203,18 +261,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                         placeholder="Descripción del producto"
                                     />
                                     {errors.descripcion && <span className="text-red-500 text-xs">Requerido</span>}
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">R/I</label>
-                                    <input {...register('r_i')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Código GLN</label>
-                                    <input {...register('codigo_gln')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Código Interno</label>
-                                    <input {...register('codigo_interno')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de Ingreso</label>

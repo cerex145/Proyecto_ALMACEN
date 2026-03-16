@@ -79,8 +79,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
     const [manualRows, setManualRows] = useState([]);
     const [manualForm, setManualForm] = useState({
         codigo: '', descripcion: '', lote: '', fabricante: '',
-        fecha_vencimiento: '', um: '', r_i: '', codigo_gln: '',
-        fecha_ingreso: '', codigo_interno: '',
+        fecha_vencimiento: '', um: '',
+        fecha_ingreso: '',
         temperatura_min_c: '', temperatura_max_c: '',
         cantidad_bultos: '0', cantidad_cajas: '0',
         cantidad_por_caja: '0', cantidad_fraccion: '0',
@@ -169,7 +169,10 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             categoria_ingreso: categoriaIngreso || null,
         };
 
-        const productos = previewRows.map(p => ({ ...globales, ...p, temperatura: 25.0 }));
+        const productos = previewRows.map(p => {
+            const { r_i, codigo_gln, codigo_interno, ...resto } = p;
+            return { ...globales, ...resto, temperatura: 25.0 };
+        });
 
         try {
             setUploading(true);
@@ -207,8 +210,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         setManualRows(prev => [...prev, { ...manualForm, id: Date.now() }]);
         setManualForm({
             codigo: '', descripcion: '', lote: '', fabricante: '',
-            fecha_vencimiento: '', um: '', r_i: '', codigo_gln: '',
-            fecha_ingreso: '', codigo_interno: '',
+            fecha_vencimiento: '', um: '',
+            fecha_ingreso: '',
             temperatura_min_c: '', temperatura_max_c: '',
             cantidad_bultos: '0', cantidad_cajas: '0',
             cantidad_por_caja: '0', cantidad_fraccion: '0',
@@ -240,10 +243,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     lote: row.lote || null,
                     fabricante: row.fabricante || null,
                     fecha_vencimiento: row.fecha_vencimiento || null,
-                    r_i: row.r_i || null,
-                    codigo_gln: row.codigo_gln || null,
                     fecha_ingreso: row.fecha_ingreso || null,
-                    codigo_interno: row.codigo_interno || null,
                     um: row.um || null,
                     temperatura: 25.0,
                     cantidad_bultos: Number(row.cantidad_bultos || 0),
@@ -553,10 +553,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             { key: 'lote', label: 'Lote', placeholder: 'L-2024-001' },
                                             { key: 'fabricante', label: 'Fabricante', placeholder: 'Laboratorio...' },
                                             { key: 'fecha_vencimiento', label: 'F. Vencimiento', type: 'date' },
-                                            { key: 'r_i', label: 'R/I' },
-                                            { key: 'codigo_gln', label: 'Código GLN' },
                                             { key: 'fecha_ingreso', label: 'Fecha Ingreso', type: 'date' },
-                                            { key: 'codigo_interno', label: 'Cod. Interno' },
                                         ].map(({ key, label, placeholder, type, span }) => (
                                             <div key={key} className={span ? `col-span-${span}` : ''}>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
