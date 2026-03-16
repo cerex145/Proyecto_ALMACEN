@@ -47,8 +47,7 @@ export const NotaIngresoForm = () => {
     const [bultos, setBultos] = useState('');
     const [um, setUm] = useState('');
     const [fabricante, setFabricante] = useState('');
-    const [temperaturaMin, setTemperaturaMin] = useState('');
-    const [temperaturaMax, setTemperaturaMax] = useState('');
+    const [temperatura, setTemperatura] = useState('25');
 
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
@@ -97,8 +96,7 @@ export const NotaIngresoForm = () => {
         setSelectedLoteId(product?.lote ? 'PRODUCTO_LOTE' : '');
         setUm(product?.um || '');
         setFabricante(product?.fabricante || '');
-        setTemperaturaMin(product?.temperatura_min_c ?? '');
-        setTemperaturaMax(product?.temperatura_max_c ?? '');
+        setTemperatura(String(product?.temperatura ?? product?.temperatura_min_c ?? 25));
         setLote(product?.lote || '');
         setVencimiento(product?.fecha_vencimiento || '');
         setBultos(product?.cantidad_bultos ?? '');
@@ -218,8 +216,7 @@ export const NotaIngresoForm = () => {
             if (productoDetalle) {
                 setUm(productoDetalle.um || '');
                 setFabricante(productoDetalle.fabricante || '');
-                setTemperaturaMin(productoDetalle.temperatura_min_c ?? '');
-                setTemperaturaMax(productoDetalle.temperatura_max_c ?? '');
+                setTemperatura(String(productoDetalle.temperatura ?? productoDetalle.temperatura_min_c ?? 25));
                 setBultos(productoDetalle.cantidad_bultos ?? '');
                 setCajas(productoDetalle.cantidad_cajas ?? '');
                 setUnidadesCaja(productoDetalle.cantidad_por_caja ?? '');
@@ -247,8 +244,13 @@ export const NotaIngresoForm = () => {
 
     const handleAddProduct = () => {
         const loteFinal = lote;
-        if (!selectedProduct || !quantity || !loteFinal || !vencimiento) {
-            alert("Por favor complete todos los datos del producto (Lote y Vencimiento son obligatorios)");
+        if (!selectedProduct || !quantity || !loteFinal) {
+            alert('Seleccione producto, lote y cantidad para agregar el ítem');
+            return;
+        }
+
+        if (!vencimiento) {
+            alert('Ingrese o seleccione una fecha de vencimiento válida');
             return;
         }
 
@@ -282,8 +284,8 @@ export const NotaIngresoForm = () => {
                 fecha_vencimiento: vencimiento || existing.fecha_vencimiento,
                 um: um || existing.um,
                 fabricante: fabricante || existing.fabricante,
-                temperatura_min: temperaturaMin || existing.temperatura_min,
-                temperatura_max: temperaturaMax || existing.temperatura_max,
+                temperatura_min: Number(temperatura || existing.temperatura_min || 25),
+                temperatura_max: Number(temperatura || existing.temperatura_max || 25),
                 precio_unitario: Number.isFinite(Number(precio)) ? Number(precio) : existing.precio_unitario
             });
         } else {
@@ -296,8 +298,8 @@ export const NotaIngresoForm = () => {
                 fecha_vencimiento: vencimiento,
                 um: um || '',
                 fabricante: fabricante || '',
-                temperatura_min: temperaturaMin || '',
-                temperatura_max: temperaturaMax || '',
+                temperatura_min: Number(temperatura || 25),
+                temperatura_max: Number(temperatura || 25),
                 cantidad_bultos: parseFloat(bultos || 0),
                 cantidad_cajas: parseFloat(cajas || 0),
                 cantidad_por_caja: parseFloat(unidadesCaja || 0),
@@ -319,8 +321,7 @@ export const NotaIngresoForm = () => {
         setBultos('');
         setUm('');
         setFabricante('');
-        setTemperaturaMin('');
-        setTemperaturaMax('');
+        setTemperatura('25');
         setLote('');
         setVencimiento('');
         setPrecio('');
@@ -419,8 +420,8 @@ export const NotaIngresoForm = () => {
                     fecha_vencimiento: producto.fecha_vencimiento || '',
                     um: producto.um || producto.unidad || '',
                     fabricante: producto.fabricante || '',
-                    temperatura_min: producto.temperatura_min_c || '',
-                    temperatura_max: producto.temperatura_max_c || '',
+                    temperatura_min: Number(producto.temperatura ?? producto.temperatura_min_c ?? 25),
+                    temperatura_max: Number(producto.temperatura ?? producto.temperatura_max_c ?? 25),
                     cantidad_bultos: parseFloat(producto.cantidad_bultos || 0),
                     cantidad_cajas: parseFloat(producto.cantidad_cajas || 0),
                     cantidad_por_caja: parseFloat(producto.cantidad_por_caja || 0),
@@ -526,8 +527,7 @@ export const NotaIngresoForm = () => {
         setBultos('');
         setUm('');
         setFabricante('');
-        setTemperaturaMin('');
-        setTemperaturaMax('');
+        setTemperatura('25');
         setLastIngresoId(null);
         setSelectedDetalleIds({});
     };
@@ -599,8 +599,8 @@ export const NotaIngresoForm = () => {
                             precio_unitario: parseFloat(row.precio_unitario || 0),
                             um: row.um || productoEncontrado.um || productoEncontrado.unidad || '',
                             fabricante: row.fabricante || productoEncontrado.fabricante || '',
-                            temperatura_min_c: row.temperatura_min ? parseFloat(row.temperatura_min) : (productoEncontrado.temperatura_min_c || null),
-                            temperatura_max_c: row.temperatura_max ? parseFloat(row.temperatura_max) : (productoEncontrado.temperatura_max_c || null)
+                            temperatura_min_c: parseFloat(row.temperatura || row.temperatura_min || productoEncontrado.temperatura || productoEncontrado.temperatura_min_c || 25),
+                            temperatura_max_c: parseFloat(row.temperatura || row.temperatura_max || productoEncontrado.temperatura || productoEncontrado.temperatura_max_c || 25)
                         };
 
                         // Validar cantidad_total
@@ -651,15 +651,14 @@ export const NotaIngresoForm = () => {
             'precio_unitario',
             'um',
             'fabricante',
-            'temperatura_min',
-            'temperatura_max'
+            'temperatura'
         ];
 
         // Usar códigos reales del sistema
         const ejemplos = [
-            ['MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', '25.50', 'UND', 'Laboratorio ABC', '2', '8'],
-            ['MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', '15.75', 'UND', 'Farmacia XYZ', '15', '30'],
-            ['INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', '42.00', 'UND', 'Insumos Med', '20', '28']
+            ['MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', '25.50', 'UND', 'Laboratorio ABC', '25'],
+            ['MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', '15.75', 'UND', 'Farmacia XYZ', '25'],
+            ['INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', '42.00', 'UND', 'Insumos Med', '25']
         ];
 
         const csvContent = headers.join(',') + '\n' + ejemplos.map(e => e.join(',')).join('\n');
@@ -817,21 +816,6 @@ export const NotaIngresoForm = () => {
 
                 {/* Agregar Productos */}
                 <Card className="p-6 bg-blue-50/50 border-blue-100">
-                    <div className="flex flex-wrap gap-2 justify-end mb-4">
-                        <Button type="button" onClick={handleAddProduct} variant="primary">
-                            Ingresar
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleRemoveSelected} disabled={fields.length === 0}>
-                            Quitar seleccionados
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleLimpiar}>
-                            Limpiar
-                        </Button>
-                        <Button type="button" variant="secondary" onClick={handleExportPdf}>
-                            PDF
-                        </Button>
-                    </div>
-
                     {/* Carga Masiva por Número de Documento */}
                     <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg">
                         <h4 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
@@ -912,20 +896,10 @@ export const NotaIngresoForm = () => {
                             />
                         </div>
                         <div className="md:col-span-2">
-                            <label className="label-premium">Temp. Min (°C)</label>
+                            <label className="label-premium">Temperatura (°C)</label>
                             <input
-                                value={temperaturaMin}
-                                onChange={(e) => setTemperaturaMin(e.target.value)}
-                                type="number"
-                                step="0.01"
-                                className="input-premium"
-                            />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="label-premium">Temp. Max (°C)</label>
-                            <input
-                                value={temperaturaMax}
-                                onChange={(e) => setTemperaturaMax(e.target.value)}
+                                value={temperatura}
+                                onChange={(e) => setTemperatura(e.target.value)}
                                 type="number"
                                 step="0.01"
                                 className="input-premium"
@@ -1008,8 +982,7 @@ export const NotaIngresoForm = () => {
                                 <th className="px-6 py-4">Vencimiento</th>
                                 <th className="px-6 py-4">UM</th>
                                 <th className="px-6 py-4">Fabri.</th>
-                                <th className="px-6 py-4">Temp. Min</th>
-                                <th className="px-6 py-4">Temp. Max</th>
+                                <th className="px-6 py-4">Temp (°C)</th>
                                 <th className="px-6 py-4">Cant.Bulto</th>
                                 <th className="px-6 py-4">Cant.Cajas</th>
                                 <th className="px-6 py-4">Cant.x Caja</th>
@@ -1034,8 +1007,7 @@ export const NotaIngresoForm = () => {
                                     <td className="px-6 py-3">{field.fecha_vencimiento}</td>
                                     <td className="px-6 py-3">{field.um || '-'}</td>
                                     <td className="px-6 py-3">{field.fabricante || '-'}</td>
-                                    <td className="px-6 py-3">{field.temperatura_min ?? '-'}</td>
-                                    <td className="px-6 py-3">{field.temperatura_max ?? '-'}</td>
+                                    <td className="px-6 py-3">{field.temperatura_min ?? field.temperatura_max ?? 25}</td>
                                     <td className="px-6 py-3">{field.cantidad_bultos ?? 0}</td>
                                     <td className="px-6 py-3">{field.cantidad_cajas ?? 0}</td>
                                     <td className="px-6 py-3">{field.cantidad_por_caja ?? 0}</td>
@@ -1059,7 +1031,7 @@ export const NotaIngresoForm = () => {
                             ))}
                             {fields.length === 0 && (
                                 <tr>
-                                    <td colSpan={15} className="px-6 py-8 text-center text-slate-400 italic">
+                                    <td colSpan={14} className="px-6 py-8 text-center text-slate-400 italic">
                                         No hay productos agregados a la nota.
                                     </td>
                                 </tr>
@@ -1169,7 +1141,7 @@ export const NotaIngresoForm = () => {
                                         Ver todas las columnas disponibles (13 en total)
                                     </summary>
                                     <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
-                                        <p className="font-mono">codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, precio_unitario, um, fabricante, temperatura_min, temperatura_max</p>
+                                        <p className="font-mono">codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, precio_unitario, um, fabricante, temperatura</p>
                                     </div>
                                 </details>
                             </div>
