@@ -36,12 +36,20 @@ function parseCSV(text) {
 }
 
 /** Descarga la plantilla Excel formateada desde el backend */
-function descargarPlantilla() {
-    const url = 'http://localhost:3000/api/productos/plantilla';
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plantilla_carga_masiva.xlsx';
-    a.click();
+async function descargarPlantilla() {
+    try {
+        const blob = await productService.descargarPlantilla();
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'plantilla_carga_masiva_productos.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        alert(`No se pudo descargar la plantilla: ${error.message || 'Error desconocido'}`);
+    }
 }
 
 // ─── Componente principal ──────────────────────────────────────────────────────

@@ -220,13 +220,13 @@ async function productoRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla');
 
         // Título e instrucciones
-        worksheet.mergeCells('A1', 'N1');
+        worksheet.mergeCells('A1', 'W1');
         worksheet.getCell('A1').value = 'PLANTILLA DE IMPORTACIÓN DE PRODUCTOS';
         worksheet.getCell('A1').font = { bold: true, size: 14 };
         worksheet.getCell('A1').alignment = { horizontal: 'center' };
 
-        worksheet.mergeCells('A2', 'N2');
-        worksheet.getCell('A2').value = 'Instrucciones: Llenar los datos desde la fila 4. Los campos Código, Descripción y Cant. Total son obligatorios.';
+        worksheet.mergeCells('A2', 'W2');
+        worksheet.getCell('A2').value = 'Instrucciones: Llenar los datos desde la fila 4. Los campos Código, Descripción y Cant. Total son obligatorios. Revisa la hoja "Ejemplo" para una referencia completa.';
         worksheet.getCell('A2').font = { italic: true };
         worksheet.getCell('A2').alignment = { horizontal: 'center' };
 
@@ -272,8 +272,74 @@ async function productoRoutes(fastify, options) {
             worksheet.getColumn(i + 1).width = col.width;
         });
 
-        // Algunas filas de ejemplo (Opcional)
-        // worksheet.addRow(['PROD-001', 'Paracetamol 500mg', 'L-2023', 'Laboratorio A', '2025-12-31', 'CAJ', 15, 25, 1, 10, 100, 0, 1000, 'Sin observaciones']);
+        // Hoja secundaria con ejemplo completo (no afecta el parseo, que usa la primera hoja)
+        const ejemplo = workbook.addWorksheet('Ejemplo');
+        const rowEjemploHeader = ejemplo.getRow(1);
+        columnas.forEach((col, i) => {
+            const cell = rowEjemploHeader.getCell(i + 1);
+            cell.value = col.header;
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D4ED8' } };
+            cell.border = {
+                top: { style: 'thin' },
+                left: { style: 'thin' },
+                bottom: { style: 'thin' },
+                right: { style: 'thin' }
+            };
+            ejemplo.getColumn(i + 1).width = col.width;
+        });
+
+        ejemplo.addRow([
+            'PROD-001',
+            'Paracetamol 500 mg Tabletas x 100',
+            'L240315A',
+            'RS-12345',
+            'R-001',
+            'GLN-7751234567890',
+            '20123456789',
+            'DISTRIBUIDORA MÉDICA S.A.C.',
+            '2026-03-15',
+            '2028-03-15',
+            'Factura',
+            'F001-000123',
+            'INT-0001',
+            'Caja',
+            'UND',
+            10,
+            20,
+            10,
+            0,
+            200,
+            'Laboratorios Salud',
+            'Perú',
+            'Ejemplo referencial para carga masiva'
+        ]);
+
+        ejemplo.addRow([
+            'PROD-002',
+            'Ibuprofeno 400 mg Tabletas x 50',
+            'L240315B',
+            'RS-67890',
+            'R-002',
+            'GLN-7750987654321',
+            '20987654321',
+            'IMPORTADORA FARMACÉUTICA S.R.L.',
+            '2026-03-15',
+            '2027-12-31',
+            'Guía de Remisión Remitente',
+            'T001-000456',
+            'INT-0002',
+            'Blíster',
+            'UND',
+            5,
+            10,
+            5,
+            0,
+            50,
+            'Pharma Global',
+            'Colombia',
+            'Segundo ejemplo de referencia'
+        ]);
 
         const buffer = await workbook.xlsx.writeBuffer();
 

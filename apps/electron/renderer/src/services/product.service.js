@@ -65,6 +65,13 @@ export const productService = {
         return response.data;
     },
 
+    descargarPlantilla: async () => {
+        const response = await api.get('/productos/plantilla', {
+            responseType: 'blob'
+        });
+        return response.data;
+    },
+
     // Inventario General
     getInventario: async (filters = {}) => {
         const response = await api.get('/productos/inventario', { params: filters });
