@@ -64,6 +64,16 @@ export const ActaRecepcionForm = () => {
     const [notaSeleccionada, setNotaSeleccionada] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [notaParaCargar, setNotaParaCargar] = useState(null);
+    const [toastMessage, setToastMessage] = useState('');
+    const [toastType, setToastType] = useState('success');
+
+    const showToast = (message, type = 'success') => {
+        setToastMessage(message);
+        setToastType(type);
+        setTimeout(() => {
+            setToastMessage('');
+        }, 3500);
+    };
 
     useEffect(() => {
         loadClients();
@@ -240,9 +250,9 @@ export const ActaRecepcionForm = () => {
                 }));
 
                 replace(detallesNota);
-                alert(`✅ Se cargaron los datos básicos y ${detallesNota.length} producto(s) desde el documento.`);
+                showToast(`Se cargaron los datos básicos y ${detallesNota.length} producto(s) desde el documento.`, 'success');
             } else {
-                alert('Se cargaron los datos básicos, pero la nota de ingreso no tiene detalles de productos.');
+                showToast('Se cargaron los datos básicos, pero la nota de ingreso no tiene detalles de productos.', 'info');
             }
 
             setNotaSeleccionada(nota.id.toString());
@@ -466,7 +476,7 @@ export const ActaRecepcionForm = () => {
             const result = await response.json();
             setLastActaId(result.data?.id || null);
 
-            alert('✅ Acta de Recepción creada exitosamente');
+            showToast('Acta de recepción creada exitosamente.', 'success');
             handleLimpiar();
         } catch (error) {
             console.error(error);
@@ -519,6 +529,17 @@ export const ActaRecepcionForm = () => {
                 <p className="text-slate-500">Control de calidad y verificación de mercadería recibida</p>
             </div>
 
+            {toastMessage && (
+                <div className={`rounded-lg border px-4 py-3 text-sm ${toastType === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : toastType === 'info'
+                        ? 'border-blue-200 bg-blue-50 text-blue-700'
+                        : 'border-red-200 bg-red-50 text-red-700'
+                    }`}>
+                    {toastMessage}
+                </div>
+            )}
+
             {/* Aviso informativo */}
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -555,7 +576,7 @@ export const ActaRecepcionForm = () => {
 
             {/* Modal de Confirmación */}
             {showModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleCancelarModal}>
+                <div className="fixed inset-0 bg-black/25 backdrop-blur-[1px] flex items-center justify-center z-50" onClick={handleCancelarModal}>
                     <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start gap-4 mb-4">
                             <div className="text-4xl">❓</div>

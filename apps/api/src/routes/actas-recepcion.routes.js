@@ -290,6 +290,21 @@ module.exports = async function (fastify, opts) {
             const AUXILIAR_RECEPCION = 'ROGER E. BLANCAS RAMOS';
             const JEFA_ALMACEN = 'JANETH T. NARVAEZ HUAMANI';
 
+            const logoPath = path.join(__dirname, '../assets/logo.png');
+            const logoCell = fs.existsSync(logoPath)
+                ? {
+                    image: logoPath,
+                    fit: [110, 38],
+                    alignment: 'center',
+                    margin: [0, 4, 0, 4],
+                    border: [true, true, true, true]
+                }
+                : {
+                    text: 'AGUPAL PERU',
+                    style: 'brandLogo',
+                    border: [true, true, true, true]
+                };
+
             // Determinar checkboxes según tipo_documento
             const tipoDoc = (acta.tipo_documento || '').toLowerCase();
             const checkPackingList = tipoDoc.includes('packing') || tipoDoc.includes('package');
@@ -330,11 +345,7 @@ module.exports = async function (fastify, opts) {
                             widths: [120, '*', 80],
                             body: [
                                 [
-                                    {
-                                        text: 'AGUPAL PERU',
-                                        style: 'brandLogo',
-                                        border: [true, true, true, true]
-                                    },
+                                    logoCell,
                                     {
                                         text: 'ACTA DE RECEPCION',
                                         style: 'mainTitle',
@@ -381,7 +392,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'PACKING LIST', width: 80, style: 'labelSmall' },
-                                            { text: checkPackingList ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: checkPackingList ? 'X' : '', width: 15, style: 'checkbox' },
                                             { text: '', width: '*', style: 'dataText' }
                                         ],
                                         border: [true, true, true, true]
@@ -389,7 +400,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'IMPORTACION', width: 80, style: 'labelSmall' },
-                                            { text: checkImportacion ? '✓' : '', width: 15, style: 'checkbox' }
+                                            { text: checkImportacion ? 'X' : '', width: 15, style: 'checkbox' }
                                         ],
                                         colSpan: 2,
                                         border: [true, true, true, true]
@@ -408,7 +419,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'INVOICE', width: 50, style: 'labelSmall' },
-                                            { text: checkInvoice ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: checkInvoice ? 'X' : '', width: 15, style: 'checkbox' },
                                             { text: acta.numero_documento || '', width: '*', style: 'dataTextSmall' }
                                         ],
                                         border: [true, true, true, true]
@@ -416,7 +427,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'COMPRA LOCAL', width: 80, style: 'labelSmall' },
-                                            { text: checkCompraLocal ? '✓' : '', width: 15, style: 'checkbox' }
+                                            { text: checkCompraLocal ? 'X' : '', width: 15, style: 'checkbox' }
                                         ],
                                         colSpan: 2,
                                         border: [true, true, true, true]
@@ -435,7 +446,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'GUIA REMISION', width: 80, style: 'labelSmall' },
-                                            { text: checkGuiaRemision ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: checkGuiaRemision ? 'X' : '', width: 15, style: 'checkbox' },
                                             { text: '', width: '*', style: 'dataText' }
                                         ],
                                         border: [true, true, true, true]
@@ -443,7 +454,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'TRASLADO', width: 80, style: 'labelSmall' },
-                                            { text: checkTraslado ? '✓' : '', width: 15, style: 'checkbox' }
+                                            { text: checkTraslado ? 'X' : '', width: 15, style: 'checkbox' }
                                         ],
                                         colSpan: 2,
                                         border: [true, true, true, true]
@@ -456,7 +467,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'FACTURA', width: 50, style: 'labelSmall' },
-                                            { text: checkFactura ? '✓' : '', width: 15, style: 'checkbox' },
+                                            { text: checkFactura ? 'X' : '', width: 15, style: 'checkbox' },
                                             { text: '', width: '*', style: 'dataText' }
                                         ],
                                         border: [true, true, true, true]
@@ -464,7 +475,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'DEVOLUCION', width: 80, style: 'labelSmall' },
-                                            { text: checkDevolucion ? '✓' : '', width: 15, style: 'checkbox' }
+                                            { text: checkDevolucion ? 'X' : '', width: 15, style: 'checkbox' }
                                         ],
                                         colSpan: 2,
                                         border: [true, true, true, true]
@@ -494,17 +505,17 @@ module.exports = async function (fastify, opts) {
                                 [
                                     { text: 'CONTEO AL 100%', style: 'labelSmall' },
                                     { text: 'A', style: 'labelBoldSmall', alignment: 'center' },
-                                    { text: checkConteo100 ? '✓' : '', style: 'checkbox', alignment: 'center' }
+                                    { text: checkConteo100 ? 'X' : '', style: 'checkbox', alignment: 'center' }
                                 ],
                                 [
                                     { text: 'CONTEO POR MUESTREO', style: 'labelSmall' },
                                     { text: 'B', style: 'labelBoldSmall', alignment: 'center' },
-                                    { text: checkConteoMuestreo ? '✓' : '', style: 'checkbox', alignment: 'center' }
+                                    { text: checkConteoMuestreo ? 'X' : '', style: 'checkbox', alignment: 'center' }
                                 ],
                                 [
                                     { text: 'CONT. SIM APERT. DE CAJA', style: 'labelSmall' },
                                     { text: 'C', style: 'labelBoldSmall', alignment: 'center' },
-                                    { text: checkConteoSinApertura ? '✓' : '', style: 'checkbox', alignment: 'center' }
+                                    { text: checkConteoSinApertura ? 'X' : '', style: 'checkbox', alignment: 'center' }
                                 ]
                             ]
                         },
@@ -518,7 +529,7 @@ module.exports = async function (fastify, opts) {
                             paddingTop: () => 2,
                             paddingBottom: () => 2
                         },
-                        absolutePosition: { x: 550, y: 70 },
+                        absolutePosition: { x: 640, y: 92 },
                         margin: [0, 0, 0, 2]
                     },
 
@@ -561,8 +572,8 @@ module.exports = async function (fastify, opts) {
                                     { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '', style: 'tableCellSmall' },
                                     { text: parseFloat(d.cantidad_solicitada || 0).toFixed(0), style: 'tableCell' },
                                     { text: parseFloat(d.cantidad_recibida || 0).toFixed(0), style: 'tableCell' },
-                                    { text: d.aspecto === 'EMB' ? '✓' : '', style: 'tableCell' },
-                                    { text: d.aspecto === 'ENV' ? '✓' : '', style: 'tableCell' }
+                                    { text: d.aspecto === 'EMB' ? 'X' : '', style: 'tableCell' },
+                                    { text: d.aspecto === 'ENV' ? 'X' : '', style: 'tableCell' }
                                 ])
                             ]
                         },
