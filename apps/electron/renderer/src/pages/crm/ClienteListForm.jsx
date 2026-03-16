@@ -9,6 +9,7 @@ import { Badge } from '../../components/common/Badge';
 
 export const ClienteListForm = () => {
     const [clientes, setClientes] = useState([]);
+    const [mensaje, setMensaje] = useState({ tipo: '', texto: '' });
     const [formData, setFormData] = useState({
         codigo: '',
         numero_ruc: '',
@@ -57,6 +58,7 @@ export const ClienteListForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            setMensaje({ tipo: '', texto: '' });
             setLoading(true);
             const method = editId ? 'PUT' : 'POST';
             const url = editId
@@ -110,12 +112,12 @@ export const ClienteListForm = () => {
                     estado: 'Activo'
                 });
                 setEditId(null);
-                cargarClientes();
-                alert(editId ? 'Cliente actualizado' : 'Cliente creado');
+                await cargarClientes();
+                setMensaje({ tipo: 'success', texto: editId ? 'Cliente actualizado' : 'Cliente creado' });
             }
         } catch (error) {
             console.error('Error:', error);
-            alert(error.message || 'Error al guardar cliente');
+            setMensaje({ tipo: 'error', texto: error.message || 'Error al guardar cliente' });
         } finally {
             setLoading(false);
         }
@@ -157,6 +159,21 @@ export const ClienteListForm = () => {
     return (
         <div style={{ padding: '2rem' }}>
             <h1 style={{ marginBottom: '2rem', color: 'var(--primary-color)' }}>Gestión de Clientes</h1>
+
+            {mensaje.texto ? (
+                <div
+                    style={{
+                        marginBottom: '1rem',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '8px',
+                        border: `1px solid ${mensaje.tipo === 'error' ? '#b42318' : '#067647'}`,
+                        background: mensaje.tipo === 'error' ? '#fef3f2' : '#ecfdf3',
+                        color: mensaje.tipo === 'error' ? '#b42318' : '#067647'
+                    }}
+                >
+                    {mensaje.texto}
+                </div>
+            ) : null}
 
             {/* Formulario */}
             <div style={{ background: 'var(--surface-color)', padding: '2rem', borderRadius: '8px', marginBottom: '2rem', border: '1px solid var(--border-color)' }}>
