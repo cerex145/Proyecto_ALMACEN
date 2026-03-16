@@ -1277,7 +1277,7 @@ async function salidasRoutes(fastify, options) {
         const totalBultos = detalles.reduce((acc, d) => acc + Number(d.cant_bulto || 0), 0);
         const totalCajas = detalles.reduce((acc, d) => acc + Number(d.cant_caja || 0), 0);
         const totalFraccion = detalles.reduce((acc, d) => acc + Number(d.cant_fraccion || 0), 0);
-        const totalUnidades = detalles.reduce((acc, d) => acc + Number(d.cant_total || d.cantidad || 0), 0);
+        const totalUnidades = detalles.reduce((acc, d) => acc + Number(d.cantidad_total || d.cantidad || 0), 0);
 
         // Path del logo (si existe)
         const logoPath = require('path').join(__dirname, '../assets/logo.png');
@@ -1398,7 +1398,7 @@ async function salidasRoutes(fastify, options) {
                                 { text: parseFloat(d.cant_caja || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cant_por_caja || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cant_fraccion || 0).toFixed(2), style: 'tableCell' },
-                                { text: parseFloat(d.cant_total || d.cantidad).toFixed(2), style: 'tableCell' }
+                                { text: parseFloat(d.cantidad_total || d.cantidad).toFixed(2), style: 'tableCell' }
                             ])
                         ]
                     },

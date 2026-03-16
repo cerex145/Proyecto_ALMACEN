@@ -109,6 +109,14 @@ module.exports = new EntitySchema({
             joinColumn: {
                 name: 'producto_id'
             }
+        },
+        lote: {
+            type: 'many-to-one',
+            target: 'Lote',
+            joinColumn: {
+                name: 'lote_id'
+            },
+            nullable: true
         }
     }
 });
