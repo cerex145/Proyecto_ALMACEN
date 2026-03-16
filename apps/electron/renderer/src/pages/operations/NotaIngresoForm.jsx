@@ -75,6 +75,18 @@ export const NotaIngresoForm = () => {
         cantidad_total: 0
     });
     const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
+    const [uiError, setUiError] = useState('');
+    const [uiSuccess, setUiSuccess] = useState('');
+
+    const showError = (message) => {
+        setUiSuccess('');
+        setUiError(message);
+    };
+
+    const showSuccess = (message) => {
+        setUiError('');
+        setUiSuccess(message);
+    };
 
     useEffect(() => {
         loadData();
@@ -173,7 +185,7 @@ export const NotaIngresoForm = () => {
             setClients(clientsArray);
         } catch (error) {
             console.error('Error cargando clientes:', error);
-            alert('Error al cargar la lista de Proveedores. Verifique la conexión con el servidor.');
+            showError('Error al cargar la lista de proveedores. Verifique la conexión con el servidor.');
         }
     };
 
@@ -185,7 +197,7 @@ export const NotaIngresoForm = () => {
             setProducts(Array.isArray(productsResponse) ? productsResponse : []);
         } catch (error) {
             console.error('Error cargando productos:', error);
-            alert('Error al cargar la lista de Productos. Verifique la conexión con el servidor.');
+            showError('Error al cargar la lista de productos. Verifique la conexión con el servidor.');
         }
     };
 
@@ -252,23 +264,23 @@ export const NotaIngresoForm = () => {
     const handleAddProduct = () => {
         const loteFinal = lote;
         if (!selectedProduct || !quantity || !loteFinal) {
-            alert('Seleccione producto, lote y cantidad para agregar el ítem');
+            showError('Seleccione producto, lote y cantidad para agregar el ítem.');
             return;
         }
 
         if (!vencimiento) {
-            alert('Ingrese o seleccione una fecha de vencimiento válida');
+            showError('Ingrese o seleccione una fecha de vencimiento válida.');
             return;
         }
 
         if (Number(quantity) <= 0) {
-            alert('La cantidad debe ser mayor a 0');
+            showError('La cantidad debe ser mayor a 0.');
             return;
         }
 
         const fechaVenc = new Date(vencimiento);
         if (Number.isNaN(fechaVenc.getTime())) {
-            alert('La fecha de vencimiento no es válida');
+            showError('La fecha de vencimiento no es válida.');
             return;
         }
 
@@ -332,6 +344,7 @@ export const NotaIngresoForm = () => {
         setLote('');
         setVencimiento('');
         setPrecio('');
+        showSuccess('Producto agregado al detalle con éxito.');
     };
 
     const agregarDetalleProducto = (producto, detalle) => {
@@ -339,7 +352,7 @@ export const NotaIngresoForm = () => {
         const cantidadTotal = Number(detalle.cantidad_total || 0);
 
         if (!loteFinal || cantidadTotal <= 0 || !detalle.fecha_vencimiento) {
-            alert('Complete lote, vencimiento y cantidad total mayor a 0');
+            showError('Complete lote, vencimiento y cantidad total mayor a 0.');
             return false;
         }
 
@@ -436,6 +449,7 @@ export const NotaIngresoForm = () => {
 
         setMostrarModalDetalleProducto(false);
         setProductoDetalleModal(null);
+        showSuccess('Producto guardado con éxito.');
     };
 
     const productosMasivosFiltrados = products.filter((producto) => {
@@ -461,18 +475,19 @@ export const NotaIngresoForm = () => {
         }, []);
 
         if (indices.length === 0) {
-            alert('Seleccione al menos un producto para quitar.');
+            showError('Seleccione al menos un producto para quitar.');
             return;
         }
 
         remove(indices);
         setSelectedDetalleIds({});
+        showSuccess('Producto(s) retirado(s) del detalle.');
     };
 
     const onSubmit = async (data) => {
         try {
             if (!selectedClient) {
-                alert('Seleccione un cliente antes de guardar.');
+                showError('Seleccione un cliente antes de guardar.');
                 return;
             }
             const payload = {
@@ -486,30 +501,30 @@ export const NotaIngresoForm = () => {
             };
             const created = await operationService.createIngreso(payload);
             setLastIngresoId(created?.id || null);
-            alert('✅ Nota de Ingreso registrada con éxito');
+            showSuccess('Nota de ingreso registrada con éxito.');
             reset();
             setQuantity(0);
         } catch (error) {
             console.error(error);
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
-            alert(`❌ Error al registrar ingreso. ${mensaje}`);
+            showError(`Error al registrar ingreso. ${mensaje}`);
         }
     };
 
     const handleExportPdf = async () => {
         if (!lastIngresoId) {
-            alert('Primero guarda la nota de ingreso para exportar PDF.');
+            showError('Primero guarda la nota de ingreso para exportar PDF.');
             return;
         }
         try {
             const pdfUrl = `${API_ORIGIN}/api/ingresos/${lastIngresoId}/pdf`;
             const opened = window.open(pdfUrl, '_blank');
             if (!opened) {
-                alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
+                showError('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
             }
         } catch (error) {
             console.error(error);
-            alert('Error al exportar PDF');
+            showError('Error al exportar PDF.');
         }
     };
 
@@ -538,6 +553,8 @@ export const NotaIngresoForm = () => {
         setMostrarModalMasivo(false);
         setMostrarModalDetalleProducto(false);
         setProductoDetalleModal(null);
+        setUiError('');
+        setUiSuccess('');
     };
 
     const handleUpdateDetalle = (index, field, value) => {
@@ -588,7 +605,7 @@ export const NotaIngresoForm = () => {
                 const lines = text.split('\n').filter(line => line.trim());
 
                 if (lines.length < 2) {
-                    alert('El archivo CSV está vacío o no tiene datos');
+                    showError('El archivo CSV está vacío o no tiene datos.');
                     return;
                 }
 
@@ -602,7 +619,7 @@ export const NotaIngresoForm = () => {
                 const faltantes = requeridos.filter(r => !headers.includes(r));
 
                 if (faltantes.length > 0) {
-                    alert(`Faltan columnas requeridas: ${faltantes.join(', ')}`);
+                    showError(`Faltan columnas requeridas: ${faltantes.join(', ')}`);
                     setErroresImportacion([`Columnas faltantes: ${faltantes.join(', ')}`]);
                     return;
                 }
@@ -661,7 +678,7 @@ export const NotaIngresoForm = () => {
                 // Agregar productos importados al formulario
                 if (productosImportados.length > 0) {
                     productosImportados.forEach(producto => append(producto));
-                    alert(`✅ ${productosImportados.length} productos importados correctamente`);
+                    showSuccess(`${productosImportados.length} productos importados correctamente.`);
                 }
 
                 // Mostrar errores si existen
@@ -674,7 +691,7 @@ export const NotaIngresoForm = () => {
                 event.target.value = ''; // Limpiar input file
             } catch (error) {
                 console.error('Error al procesar CSV:', error);
-                alert('Error al procesar el archivo CSV: ' + error.message);
+                showError('Error al procesar el archivo CSV: ' + error.message);
             }
         };
 
@@ -725,6 +742,18 @@ export const NotaIngresoForm = () => {
                     <p className="text-slate-500">Recepción de mercadería y alta de lotes</p>
                 </div>
             </div>
+
+            {uiError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {uiError}
+                </div>
+            )}
+
+            {uiSuccess && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    {uiSuccess}
+                </div>
+            )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                 {/* Datos Generales */}

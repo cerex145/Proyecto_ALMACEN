@@ -118,15 +118,6 @@ export const ActaRecepcionForm = () => {
             setCajas(product.cantidad_cajas || '');
             setUnidadesCaja(product.cantidad_por_caja || '');
             setFraccion(product.cantidad_fraccion || '');
-
-            const currentTipoDoc = getValues('tipo_documento');
-            if (product.tipo_documento && !currentTipoDoc) {
-                setValue('tipo_documento', product.tipo_documento);
-            }
-            const currentNumDoc = getValues('numero_documento');
-            if (product.numero_documento && !currentNumDoc) {
-                setValue('numero_documento', product.numero_documento);
-            }
         }
     }, [selectedProduct, products]);
 
@@ -394,8 +385,16 @@ export const ActaRecepcionForm = () => {
 
     const onSubmit = async (data) => {
         try {
+            if (!notaSeleccionada) {
+                alert('Seleccione una Nota de Ingreso para cargar los datos del documento.');
+                return;
+            }
             if (!selectedClient) {
                 alert('Seleccione un cliente');
+                return;
+            }
+            if (!data.tipo_documento || !data.numero_documento) {
+                alert('Tipo y número de documento deben provenir de la Nota de Ingreso seleccionada.');
                 return;
             }
             if (!data.detalles || data.detalles.length === 0) {
@@ -595,20 +594,22 @@ export const ActaRecepcionForm = () => {
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">📄 Información del Documento</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
-                            <label className="label-premium">Tipo de Documento *</label>
+                            <label className="label-premium">Tipo de Documento (Nota de Ingreso) *</label>
                             <input
-                                {...register('tipo_documento', { required: true })}
-                                className="input-premium"
-                                placeholder="Ej: Factura, Guía Remisión..."
+                                {...register('tipo_documento')}
+                                className="input-premium bg-slate-50"
+                                placeholder="Se carga desde la Nota de Ingreso"
+                                readOnly
                             />
                             {errors.tipo_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>
                         <div>
-                            <label className="label-premium">Número de Documento *</label>
+                            <label className="label-premium">Número de Documento (Nota de Ingreso) *</label>
                             <input
-                                {...register('numero_documento', { required: true })}
-                                className="input-premium"
-                                placeholder="Ej: F001-00045"
+                                {...register('numero_documento')}
+                                className="input-premium bg-slate-50"
+                                placeholder="Se carga desde la Nota de Ingreso"
+                                readOnly
                             />
                             {errors.numero_documento && <span className="text-xs text-red-500">Requerido</span>}
                         </div>

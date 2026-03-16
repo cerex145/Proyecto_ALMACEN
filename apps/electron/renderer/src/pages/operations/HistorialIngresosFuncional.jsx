@@ -9,7 +9,7 @@ import RegistrarIngreso from './RegistrarIngreso';
 import { clientesService } from '../../services/clientes.service';
 
 export const HistorialIngresosFuncional = () => {
-    const [ingresos, setIngresos] = useState([]);
+    const [, setIngresos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [filtro, setFiltro] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -77,6 +77,7 @@ export const HistorialIngresosFuncional = () => {
                 if (detalles.length === 0) {
                     rows.push({
                         key: `${nota.id}-empty`,
+                        ingresoId: nota.id,
                         codigo: '-',
                         producto: '-',
                         lote: '-',
@@ -107,9 +108,11 @@ export const HistorialIngresosFuncional = () => {
                         tempText = `${tempMin ?? '-'} a ${tempMax ?? '-'}`;
                     }
                     const fVcto = d.fecha_vencimiento || null;
+                    const totalIngreso = d.cantidad_total != null ? Number(d.cantidad_total) : Number(d.cantidad);
 
                     rows.push({
                         key: `${nota.id}-${index}`,
+                        ingresoId: nota.id,
                         codigo: d.producto?.codigo || '-',
                         producto: d.producto?.descripcion || '-',
                         lote: d.lote_numero || '-',
@@ -121,7 +124,7 @@ export const HistorialIngresosFuncional = () => {
                         cantCajas: fmt(d.cantidad_cajas),
                         cantPorCaja: fmt(d.cantidad_por_caja),
                         cantFraccion: fmt(d.cantidad_fraccion),
-                        cantTotal: d.cantidad_total ?? d.cantidad ?? '-',
+                        cantTotal: Number.isFinite(totalIngreso) ? totalIngreso.toFixed(2) : '-',
                         fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
                         mes,
                         dia,
@@ -137,6 +140,15 @@ export const HistorialIngresosFuncional = () => {
             setDetalleRows([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDescargarPdf = (ingresoId) => {
+        if (!ingresoId) return;
+        const pdfUrl = `${API_ORIGIN}/api/ingresos/${ingresoId}/pdf`;
+        const opened = window.open(pdfUrl, '_blank');
+        if (!opened) {
+            alert('No se pudo abrir el PDF. Verifica bloqueadores de ventanas emergentes.');
         }
     };
 
@@ -204,6 +216,7 @@ export const HistorialIngresosFuncional = () => {
                                         <th className="px-4 py-3">DIA</th>
                                         <th className="px-4 py-3">RUC</th>
                                         <th className="px-4 py-3">AÑO</th>
+                                        <th className="px-4 py-3 text-center">PDF</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -226,6 +239,16 @@ export const HistorialIngresosFuncional = () => {
                                             <td className="px-4 py-2">{row.dia}</td>
                                             <td className="px-4 py-2">{row.ruc}</td>
                                             <td className="px-4 py-2">{row.anio}</td>
+                                            <td className="px-4 py-2 text-center">
+                                                <Button
+                                                    type="button"
+                                                    variant="secondary"
+                                                    className="text-xs"
+                                                    onClick={() => handleDescargarPdf(row.ingresoId)}
+                                                >
+                                                    PDF
+                                                </Button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
