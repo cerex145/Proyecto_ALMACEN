@@ -110,6 +110,49 @@ async function buildApp(fastify, options) {
 
     await fastify.register(dbPlugin);
 
+    // Ejecutar migraciones de columnas críticas al iniciar (idempotente)
+    fastify.addHook('onReady', async () => {
+        try {
+            const qr = fastify.db.createQueryRunner();
+            await qr.connect();
+
+            const ensureCol = async (table, col, definition) => {
+                const exists = await qr.hasColumn(table, col);
+                if (!exists) {
+                    await qr.addColumn(table, new (require('typeorm').TableColumn)({ name: col, ...definition }));
+                    fastify.log.info(`✅ Columna añadida: ${table}.${col}`);
+                }
+            };
+
+            await ensureCol('lotes', 'cantidad_ingresada', { type: 'decimal', precision: 10, scale: 2, isNullable: false, default: '0' });
+            await ensureCol('lotes', 'cantidad_disponible', { type: 'decimal', precision: 10, scale: 2, isNullable: false, default: '0' });
+            await ensureCol('lotes', 'nota_ingreso_id', { type: 'int', isNullable: true });
+            await ensureCol('nota_salida_detalles', 'lote_id', { type: 'int', isNullable: true });
+            await ensureCol('nota_salida_detalles', 'precio_unitario', { type: 'decimal', precision: 10, scale: 2, isNullable: true });
+            await ensureCol('nota_salida_detalles', 'lote_numero', { type: 'varchar', length: '100', isNullable: true });
+            await ensureCol('nota_salida_detalles', 'fecha_vencimiento', { type: 'date', isNullable: true });
+            await ensureCol('nota_salida_detalles', 'um', { type: 'varchar', length: '50', isNullable: true });
+            await ensureCol('nota_salida_detalles', 'fabricante', { type: 'varchar', length: '200', isNullable: true });
+            await ensureCol('nota_salida_detalles', 'cant_bulto', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
+            await ensureCol('nota_salida_detalles', 'cant_caja', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
+            await ensureCol('nota_salida_detalles', 'cant_x_caja', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
+            await ensureCol('nota_salida_detalles', 'cant_fraccion', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
+            await ensureCol('nota_salida_detalles', 'cantidad_total', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
+
+            // Reparar cantidad_total = cantidad para detalles de ingreso sin total
+            await qr.query(`
+                UPDATE nota_ingreso_detalles
+                SET cantidad_total = cantidad
+                WHERE (cantidad_total IS NULL OR cantidad_total = 0) AND cantidad > 0
+            `);
+
+            await qr.release();
+            fastify.log.info('✅ Migraciones de arranque completadas');
+        } catch (err) {
+            fastify.log.warn('⚠️ Migraciones de arranque (no crítico):', err.message);
+        }
+    });
+
     fastify.decorate('authenticate', async function (request, reply) {
         try {
             await request.jwtVerify();

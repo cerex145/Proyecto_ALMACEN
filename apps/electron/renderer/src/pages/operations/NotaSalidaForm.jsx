@@ -62,6 +62,17 @@ export const NotaSalidaForm = () => {
     const [mostrarModalEdicionCantidades, setMostrarModalEdicionCantidades] = useState(false);
     const [detallesAEditar, setDetallesAEditar] = useState([]);
     const [cantidadesEditadas, setCantidadesEditadas] = useState({});
+    const [cargandoNotas, setCargandoNotas] = useState(false);
+    const [errorNotas, setErrorNotas] = useState('');
+
+    // Toast
+    const [toastMsg, setToastMsg] = useState('');
+    const [toastType, setToastType] = useState('success');
+    const showToast = (msg, type = 'success') => {
+        setToastMsg(msg);
+        setToastType(type);
+        setTimeout(() => setToastMsg(''), 4000);
+    };
 
     const normalizeDateInput = (value) => {
         if (!value) {
@@ -78,12 +89,13 @@ export const NotaSalidaForm = () => {
     };
 
     const getDetalleDisponible = (detalle) => {
-        const totalRaw = Number(detalle?.cantidad_total ?? detalle?.cantidad ?? 0);
-        const disponibleRaw = Number(detalle?.cantidad_disponible ?? totalRaw);
-        if (Number.isNaN(disponibleRaw)) {
-            return 0;
+        // Si el backend envía cantidad_disponible (real del lote), usarla directamente
+        if (detalle?.cantidad_disponible != null) {
+            return Math.max(0, Number(detalle.cantidad_disponible));
         }
-        return Math.max(0, Math.min(disponibleRaw, totalRaw || disponibleRaw));
+        // Fallback: usar cantidad_total o cantidad si no viene del lote
+        const fallback = Number(detalle?.cantidad_total || detalle?.cantidad || 0);
+        return Math.max(0, fallback);
     };
 
     useEffect(() => {
@@ -162,7 +174,7 @@ export const NotaSalidaForm = () => {
             setClients(clientsArray);
         } catch (error) {
             console.error('Error loading clients:', error);
-            alert('Error al cargar lista de Clientes.');
+            showToast('Error al cargar lista de Clientes.', 'error');
         }
     };
 
@@ -173,7 +185,7 @@ export const NotaSalidaForm = () => {
             setProducts(Array.isArray(productsResponse) ? productsResponse : []);
         } catch (error) {
             console.error('Error loading products:', error);
-            alert('Error al cargar lista de Productos.');
+            showToast('Error al cargar lista de Productos.', 'error');
         }
     };
 
@@ -182,9 +194,11 @@ export const NotaSalidaForm = () => {
             setNotasIngreso([]);
             return;
         }
+        setCargandoNotas(true);
+        setErrorNotas('');
         try {
             const client = clients.find(c => String(c.id) === String(clienteId));
-            if (!client) return;
+            if (!client) { setCargandoNotas(false); return; }
 
             // Buscar las notas de ingreso del cliente por proveedor (razon_social)
             const response = await fetch(`${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
@@ -220,6 +234,9 @@ export const NotaSalidaForm = () => {
         } catch (error) {
             console.error('Error loading notas de ingreso:', error);
             setNotasIngreso([]);
+            setErrorNotas('Error al cargar notas de ingreso. Intente de nuevo.');
+        } finally {
+            setCargandoNotas(false);
         }
     };
 
@@ -252,7 +269,7 @@ export const NotaSalidaForm = () => {
 
     const handleBuscarPorDocumento = async () => {
         if (!numeroDocBusqueda) {
-            alert('Ingrese un número de documento para buscar');
+            showToast('Ingrese un número de documento para buscar', 'warning');
             return;
         }
         setBuscandoDoc(true);
@@ -261,7 +278,7 @@ export const NotaSalidaForm = () => {
             const result = await response.json();
             const notas = result.data || [];
             if (notas.length === 0) {
-                alert('No se encontró ninguna nota de ingreso con ese número de documento.');
+                showToast('No se encontró ninguna nota de ingreso con ese número de documento.', 'warning');
                 setBuscandoDoc(false);
                 return;
             }
@@ -274,7 +291,7 @@ export const NotaSalidaForm = () => {
             if (client) {
                 setSelectedClient(client.id);
             } else {
-                alert(`Atención: No se encontró un cliente registrado con la razón social "${nota.proveedor}". Deberá seleccionarlo manualmente.`);
+                showToast(`No se encontró cliente para "${nota.proveedor}". Selecciónelo manualmente.`, 'warning');
             }
 
             // Cargar detalles de esa nota
@@ -284,7 +301,7 @@ export const NotaSalidaForm = () => {
             const disponibles = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
 
             if (disponibles.length === 0) {
-                alert('La nota de ingreso encontrada no tiene productos con saldo disponible.');
+                showToast('La nota de ingreso no tiene productos con saldo disponible.', 'warning');
                 setBuscandoDoc(false);
                 return;
             }
@@ -322,14 +339,14 @@ export const NotaSalidaForm = () => {
             });
 
             if (agregados > 0) {
-                alert(`✅ Se agregaron ${agregados} productos asociados a este documento.`);
+                showToast(`Se agregaron ${agregados} productos asociados a este documento.`, 'success');
             } else {
-                alert('Todos los productos con saldo de este documento ya estaban en la lista.');
+                showToast('Todos los productos con saldo ya estaban en la lista.', 'info');
             }
 
         } catch (error) {
             console.error('Error buscando por documento:', error);
-            alert('Ocurrió un error al buscar el documento.');
+            showToast('Ocurrió un error al buscar el documento.', 'error');
         } finally {
             setBuscandoDoc(false);
         }
@@ -338,7 +355,7 @@ export const NotaSalidaForm = () => {
     const handleSelectTodaNota = (notaId) => {
         const nota = notasIngreso.find(n => n.id === notaId);
         if (!nota || !nota.detalles || nota.detalles.length === 0) {
-            alert('Esta nota no tiene productos');
+            showToast('Esta nota no tiene productos disponibles.', 'warning');
             return;
         }
 
@@ -362,7 +379,7 @@ export const NotaSalidaForm = () => {
         const disponible = getDetalleDisponible(detalle);
 
         if (!isSelected && disponible <= 0) {
-            alert('Este detalle ya no tiene saldo disponible');
+            showToast('Este detalle ya no tiene saldo disponible.', 'warning');
             return;
         }
 
@@ -433,7 +450,7 @@ export const NotaSalidaForm = () => {
         });
         
         if (agregados > 0) {
-            alert(`✅ Se agregaron ${agregados} producto(s) a la nota de salida`);
+            showToast(`Se agregaron ${agregados} producto(s) a la nota de salida.`, 'success');
         }
         
         setMostrarModalEdicionCantidades(false);
@@ -455,7 +472,7 @@ export const NotaSalidaForm = () => {
         const loteFinal = isOtro ? loteManual : selectedLoteOption;
         const hasLote = Boolean(loteFinal);
         if (!selectedProduct || !hasLote || Number(cantidadTotal) <= 0) {
-            alert('Complete producto, lote y cantidad total');
+            showToast('Complete producto, lote y cantidad total.', 'warning');
             return;
         }
 
@@ -463,7 +480,7 @@ export const NotaSalidaForm = () => {
         const lote = lotesDisponibles.find(l => String(l.numero_lote) === String(selectedLoteOption));
         const disponible = lote?.cantidad_disponible != null ? Number(lote.cantidad_disponible) : null;
         if (disponible != null && Number(cantidadTotal) > disponible) {
-            alert(`La cantidad supera el disponible del lote (${disponible})`);
+            showToast(`La cantidad supera el disponible del lote (${disponible}).`, 'error');
             return;
         }
         const fechaFinal = normalizeDateInput(fechaVencimiento || lote?.fecha_vencimiento || '');
@@ -515,7 +532,7 @@ export const NotaSalidaForm = () => {
         }, []);
 
         if (indices.length === 0) {
-            alert('Seleccione al menos un producto para quitar.');
+            showToast('Seleccione al menos un producto para quitar.', 'warning');
             return;
         }
 
@@ -559,7 +576,7 @@ export const NotaSalidaForm = () => {
         try {
             // Validación robusta de detalles
             if (!data.detalles || data.detalles.length === 0) {
-                alert('❌ Debe agregar al menos un producto a la nota');
+                showToast('Debe agregar al menos un producto a la nota.', 'error');
                 return;
             }
 
@@ -567,19 +584,19 @@ export const NotaSalidaForm = () => {
             for (let i = 0; i < data.detalles.length; i++) {
                 const det = data.detalles[i];
                 if (!det.producto_id || Number.isNaN(Number(det.producto_id))) {
-                    alert(`❌ Detalle ${i + 1}: Producto no válido`);
+                    showToast(`Detalle ${i + 1}: Producto no válido.`, 'error');
                     return;
                 }
                 if (!det.cantidad || Number.isNaN(Number(det.cantidad))) {
-                    alert(`❌ Detalle ${i + 1}: Cantidad no es un número`);
+                    showToast(`Detalle ${i + 1}: Cantidad no es un número.`, 'error');
                     return;
                 }
                 if (Number(det.cantidad) <= 0) {
-                    alert(`❌ Detalle ${i + 1}: Cantidad debe ser mayor a 0`);
+                    showToast(`Detalle ${i + 1}: Cantidad debe ser mayor a 0.`, 'error');
                     return;
                 }
                 if (det.cantidad_disponible != null && Number(det.cantidad) > Number(det.cantidad_disponible)) {
-                    alert(`❌ Detalle ${i + 1}: Cantidad supera el disponible (${det.cantidad_disponible})`);
+                    showToast(`Detalle ${i + 1}: Cantidad supera el disponible (${det.cantidad_disponible}).`, 'error');
                     return;
                 }
             }
@@ -603,18 +620,18 @@ export const NotaSalidaForm = () => {
             console.log('📤 Enviando payload:', JSON.stringify(payload, null, 2));
             const created = await operationService.createSalida(payload);
             setLastSalidaId(created?.id || null);
-            alert('✅ Nota de salida registrada correctamente');
+            showToast('Nota de salida registrada correctamente.', 'success');
             resetAllStates();
         } catch (error) {
             console.error(error);
             const mensaje = error?.response?.data?.error || error?.message || 'Verifique los datos.';
-            alert(`❌ Error al registrar salida. ${mensaje}`);
+            showToast(`Error al registrar salida: ${mensaje}`, 'error');
         }
     };
 
     const handleExportPdf = async () => {
         if (!lastSalidaId) {
-            alert('Primero guarda la nota de salida para exportar PDF.');
+            showToast('Primero guarda la nota de salida para exportar PDF.', 'warning');
             return;
         }
         try {
@@ -624,12 +641,12 @@ export const NotaSalidaForm = () => {
             } else {
                 const opened = window.open(pdfUrl, '_blank');
                 if (!opened) {
-                    alert('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
+                    showToast('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.', 'warning');
                 }
             }
         } catch (error) {
             console.error(error);
-            alert('Error al exportar PDF');
+            showToast('Error al exportar PDF.', 'error');
         }
     };
 
@@ -640,6 +657,13 @@ export const NotaSalidaForm = () => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
+            {/* Toast */}
+            {toastMsg && (
+                <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-medium transition-all
+                    ${toastType === 'success' ? 'bg-emerald-600' : toastType === 'error' ? 'bg-red-600' : toastType === 'info' ? 'bg-blue-600' : 'bg-amber-500'}`}>
+                    {toastMsg}
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800">Registro de Nota de Salida</h2>
@@ -702,10 +726,20 @@ export const NotaSalidaForm = () => {
                         </h3>
 
                         <div className="space-y-3">
-                            {notasIngreso.length === 0 ? (
+                            {cargandoNotas ? (
+                                <div className="text-center py-10 text-purple-600">
+                                    <p className="text-sm font-medium animate-pulse">⏳ Cargando notas de ingreso...</p>
+                                </div>
+                            ) : errorNotas ? (
+                                <div className="text-center py-8 text-red-600 bg-red-50 rounded-lg px-4">
+                                    <p className="text-sm font-medium">{errorNotas}</p>
+                                    <button type="button" onClick={() => loadNotasIngreso(selectedClient)}
+                                        className="mt-2 text-xs underline text-red-700 hover:text-red-900">Reintentar</button>
+                                </div>
+                            ) : notasIngreso.length === 0 ? (
                                 <div className="text-center py-12 text-slate-500">
-                                    <p className="text-lg">📭 No hay notas de ingreso para este cliente</p>
-                                    <p className="text-sm mt-2">Registra una nota de ingreso primero para poder crear salidas</p>
+                                    <p className="text-lg">📭 No hay notas de ingreso con saldo para este cliente</p>
+                                    <p className="text-sm mt-2">Registra una nota de ingreso o ya fueron entregadas completamente</p>
                                 </div>
                             ) : (
                                 notasIngreso.map(nota => (

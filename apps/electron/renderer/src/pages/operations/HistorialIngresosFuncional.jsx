@@ -100,7 +100,7 @@ export const HistorialIngresosFuncional = () => {
                 }
 
                 detalles.forEach((d, index) => {
-                    const fmt = (v) => (v != null && Number(v) !== 0) ? parseFloat(v).toFixed(2) : '-';
+                    const fmt = (v) => (v != null) ? parseFloat(v).toFixed(0) : '-';
                     const tempMin = d.temperatura_min_c ?? d.producto?.temperatura_min_c;
                     const tempMax = d.temperatura_max_c ?? d.producto?.temperatura_max_c;
                     let tempText = '-';

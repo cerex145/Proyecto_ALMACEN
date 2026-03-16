@@ -22,22 +22,23 @@ module.exports = new EntitySchema({
             type: 'date',
             nullable: true
         },
-        cantidad_inicial: {
+        cantidad_ingresada: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            nullable: true
+            nullable: false,
+            default: 0
         },
-        cantidad_actual: {
+        cantidad_disponible: {
             type: 'decimal',
             precision: 10,
             scale: 2,
-            nullable: true
+            nullable: false,
+            default: 0
         },
-        estado: {
-            type: 'enum',
-            enum: ['ACTIVO', 'VENCIDO', 'AGOTADO'],
-            default: 'ACTIVO'
+        nota_ingreso_id: {
+            type: 'int',
+            nullable: true
         },
         created_at: {
             type: 'timestamp',
@@ -55,6 +56,14 @@ module.exports = new EntitySchema({
             joinColumn: {
                 name: 'producto_id'
             }
+        },
+        notaIngreso: {
+            type: 'many-to-one',
+            target: 'NotaIngreso',
+            joinColumn: {
+                name: 'nota_ingreso_id'
+            },
+            nullable: true
         }
     }
 });

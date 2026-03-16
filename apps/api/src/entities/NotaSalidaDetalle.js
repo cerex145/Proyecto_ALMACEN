@@ -17,6 +17,16 @@ module.exports = new EntitySchema({
             type: 'int',
             nullable: false
         },
+        lote_id: {
+            type: 'int',
+            nullable: true
+        },
+        precio_unitario: {
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            nullable: true
+        },
         lote_numero: {
             type: 'varchar',
             length: 100,

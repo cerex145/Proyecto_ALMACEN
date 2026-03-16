@@ -229,11 +229,26 @@ async function ingresosRoutes(fastify, options) {
             .where('detalle.nota_ingreso_id = :notaId', { notaId: Number(id) })
             .getMany();
 
+        // Enriquecer cada detalle con la cantidad_disponible real del lote
+        const detallesEnriquecidos = await Promise.all(detalles.map(async (det) => {
+            try {
+                const lote = await loteRepo.findOne({
+                    where: { nota_ingreso_id: Number(id), numero_lote: det.lote_numero }
+                });
+                const disponible = lote != null
+                    ? Number(lote.cantidad_disponible)
+                    : Number(det.cantidad_total || det.cantidad || 0);
+                return { ...det, lote_id: lote?.id || null, cantidad_disponible: disponible };
+            } catch {
+                return { ...det, lote_id: null, cantidad_disponible: Number(det.cantidad_total || det.cantidad || 0) };
+            }
+        }));
+
         return {
             success: true,
             data: {
                 ...nota,
-                detalles: detalles
+                detalles: detallesEnriquecidos
             }
         };
     });
