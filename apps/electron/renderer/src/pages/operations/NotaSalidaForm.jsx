@@ -113,6 +113,68 @@ export const NotaSalidaForm = () => {
 
     const formatCantidad = (valor) => Number(valor || 0).toFixed(2);
 
+    const getStockPorProductoLote = () => {
+        const mapa = new Map();
+
+        (notasIngreso || []).forEach((nota) => {
+            (nota.detalles || []).forEach((detalle) => {
+                const productoId = Number(detalle.producto_id || 0);
+                const loteNumero = String(detalle.lote_numero || 'SIN_LOTE');
+                const key = `${productoId}__${loteNumero}`;
+                const disponible = getDetalleDisponible(detalle);
+
+                if (!mapa.has(key)) {
+                    mapa.set(key, {
+                        key,
+                        productoId,
+                        codigo: detalle.producto?.codigo || '-',
+                        producto: detalle.producto?.descripcion || '-',
+                        lote: detalle.lote_numero || '-',
+                        um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '-',
+                        disponible: 0,
+                        descontar: 0
+                    });
+                }
+
+                const actual = mapa.get(key);
+                actual.disponible += Number(disponible || 0);
+            });
+        });
+
+        (fields || []).forEach((field) => {
+            const productoId = Number(field.producto_id || 0);
+            const loteNumero = String(field.lote_numero || 'SIN_LOTE');
+            const key = `${productoId}__${loteNumero}`;
+
+            if (!mapa.has(key)) {
+                mapa.set(key, {
+                    key,
+                    productoId,
+                    codigo: field.producto_codigo || '-',
+                    producto: field.producto_nombre || '-',
+                    lote: field.lote_numero || '-',
+                    um: field.um || '-',
+                    disponible: Number(field.cantidad_disponible || 0),
+                    descontar: 0
+                });
+            }
+
+            const actual = mapa.get(key);
+            actual.descontar += Number(field.cantidad || 0);
+        });
+
+        return Array.from(mapa.values())
+            .map((item) => ({
+                ...item,
+                saldo: Math.max(Number(item.disponible || 0) - Number(item.descontar || 0), 0)
+            }))
+            .filter((item) => Number(item.disponible) > 0 || Number(item.descontar) > 0)
+            .sort((a, b) => {
+                if (a.codigo === b.codigo) return String(a.lote).localeCompare(String(b.lote));
+                return String(a.codigo).localeCompare(String(b.codigo));
+            });
+    };
+
     useEffect(() => {
         loadClients();
         // Cargar productos iniciales (sin filtro o todos)
@@ -672,6 +734,8 @@ export const NotaSalidaForm = () => {
         setLastSalidaId(null);
     };
 
+    const stockPorProductoLote = getStockPorProductoLote();
+
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             {/* Toast */}
@@ -770,6 +834,40 @@ export const NotaSalidaForm = () => {
                                                         </tr>
                                                     );
                                                 })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {stockPorProductoLote.length > 0 && (
+                                <div className="bg-white rounded-lg border border-blue-200 p-4">
+                                    <p className="text-sm font-semibold text-blue-900 mb-2">Stock actualizado por Producto y Lote</p>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                            <thead className="bg-blue-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">Código</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">Producto</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">Lote</th>
+                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">UM</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">Disponible</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">A Descontar</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">Saldo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {stockPorProductoLote.map((item) => (
+                                                    <tr key={`stock-lote-${item.key}`}>
+                                                        <td className="px-3 py-2 font-mono text-slate-700">{item.codigo}</td>
+                                                        <td className="px-3 py-2 text-slate-800">{item.producto}</td>
+                                                        <td className="px-3 py-2 text-slate-700">{item.lote}</td>
+                                                        <td className="px-3 py-2 text-slate-700">{item.um}</td>
+                                                        <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(item.disponible)}</td>
+                                                        <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(item.descontar)}</td>
+                                                        <td className={`px-3 py-2 text-right font-semibold ${item.saldo <= 0 ? 'text-red-700' : 'text-blue-700'}`}>{formatCantidad(item.saldo)}</td>
+                                                    </tr>
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>
