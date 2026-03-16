@@ -229,20 +229,79 @@ async function ingresosRoutes(fastify, options) {
             .where('detalle.nota_ingreso_id = :notaId', { notaId: Number(id) })
             .getMany();
 
-        // Enriquecer cada detalle con la cantidad_disponible real del lote
-        const detallesEnriquecidos = await Promise.all(detalles.map(async (det) => {
-            try {
-                const lote = await loteRepo.findOne({
-                    where: { nota_ingreso_id: Number(id), numero_lote: det.lote_numero }
-                });
-                const disponible = lote != null
-                    ? Number(lote.cantidad_disponible)
-                    : Number(det.cantidad_total || det.cantidad || 0);
-                return { ...det, lote_id: lote?.id || null, cantidad_disponible: disponible };
-            } catch {
-                return { ...det, lote_id: null, cantidad_disponible: Number(det.cantidad_total || det.cantidad || 0) };
-            }
-        }));
+        if (!detalles || detalles.length === 0) {
+            return {
+                success: true,
+                data: {
+                    ...nota,
+                    detalles: []
+                }
+            };
+        }
+
+        // Mapa de lotes por nota (preferido) y fallback por producto+lote (datos históricos sin nota_ingreso_id)
+        const lotesPorNotaRaw = await loteRepo
+            .createQueryBuilder('lote')
+            .select('lote.producto_id', 'producto_id')
+            .addSelect('lote.numero_lote', 'numero_lote')
+            .addSelect('MAX(lote.id)', 'lote_id')
+            .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
+            .where('lote.nota_ingreso_id = :notaId', { notaId: Number(id) })
+            .groupBy('lote.producto_id')
+            .addGroupBy('lote.numero_lote')
+            .getRawMany();
+
+        const productoIds = [...new Set(detalles.map((d) => Number(d.producto_id)).filter(Number.isFinite))];
+        const lotesNumeros = [...new Set(detalles.map((d) => String(d.lote_numero || '')).filter((v) => v !== ''))];
+
+        const lotesFallbackRaw = (productoIds.length > 0 && lotesNumeros.length > 0)
+            ? await loteRepo
+                .createQueryBuilder('lote')
+                .select('lote.producto_id', 'producto_id')
+                .addSelect('lote.numero_lote', 'numero_lote')
+                .addSelect('MAX(lote.id)', 'lote_id')
+                .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
+                .where('lote.producto_id IN (:...productoIds)', { productoIds })
+                .andWhere('lote.numero_lote IN (:...lotes)', { lotes: lotesNumeros })
+                .groupBy('lote.producto_id')
+                .addGroupBy('lote.numero_lote')
+                .getRawMany()
+            : [];
+
+        const mapNota = new Map();
+        for (const row of lotesPorNotaRaw) {
+            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
+            mapNota.set(key, {
+                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
+                cantidad_disponible: Number(row.cantidad_disponible || 0)
+            });
+        }
+
+        const mapFallback = new Map();
+        for (const row of lotesFallbackRaw) {
+            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
+            mapFallback.set(key, {
+                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
+                cantidad_disponible: Number(row.cantidad_disponible || 0)
+            });
+        }
+
+        // Enriquecer detalle con stock real (sin inflar disponible con cantidad inicial)
+        const detallesEnriquecidos = detalles.map((det) => {
+            const key = `${Number(det.producto_id)}__${String(det.lote_numero || '')}`;
+            const preferido = mapNota.get(key);
+            const fallback = mapFallback.get(key);
+            const referencia = preferido || fallback;
+            const cantidadInicial = Number(det.cantidad_total || det.cantidad || 0);
+
+            return {
+                ...det,
+                nota_ingreso_id: Number(id),
+                lote_id: referencia?.lote_id || null,
+                cantidad_inicial: cantidadInicial,
+                cantidad_disponible: Math.max(0, Number(referencia?.cantidad_disponible || 0))
+            };
+        });
 
         return {
             success: true,

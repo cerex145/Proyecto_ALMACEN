@@ -88,14 +88,17 @@ export const NotaSalidaForm = () => {
         return parsed.toISOString().split('T')[0];
     };
 
+    const getDetalleInicial = (detalle) => {
+        return Math.max(0, Number(detalle?.cantidad_inicial ?? detalle?.cantidad_total ?? detalle?.cantidad ?? 0));
+    };
+
     const getDetalleDisponible = (detalle) => {
-        // Si el backend envía cantidad_disponible (real del lote), usarla directamente
-        if (detalle?.cantidad_disponible != null) {
-            return Math.max(0, Number(detalle.cantidad_disponible));
-        }
-        // Fallback: usar cantidad_total o cantidad si no viene del lote
-        const fallback = Number(detalle?.cantidad_total || detalle?.cantidad || 0);
-        return Math.max(0, fallback);
+        // Disponible real por lote desde backend; no inflar con cantidad_total.
+        return Math.max(0, Number(detalle?.cantidad_disponible ?? 0));
+    };
+
+    const getNotaStockInicial = (nota) => {
+        return (nota?.detalles || []).reduce((acc, detalle) => acc + getDetalleInicial(detalle), 0);
     };
 
     const getNotaStockDisponible = (nota) => {
@@ -145,6 +148,7 @@ export const NotaSalidaForm = () => {
                 const productoId = Number(detalle.producto_id || 0);
                 const loteNumero = String(detalle.lote_numero || 'SIN_LOTE');
                 const key = `${productoId}__${loteNumero}`;
+                const inicial = getDetalleInicial(detalle);
                 const disponible = getDetalleDisponible(detalle);
 
                 if (!mapa.has(key)) {
@@ -155,12 +159,14 @@ export const NotaSalidaForm = () => {
                         producto: detalle.producto?.descripcion || '-',
                         lote: detalle.lote_numero || '-',
                         um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '-',
+                        inicial: 0,
                         disponible: 0,
                         descontar: 0
                     });
                 }
 
                 const actual = mapa.get(key);
+                actual.inicial += Number(inicial || 0);
                 actual.disponible += Number(disponible || 0);
             });
         });
@@ -178,6 +184,7 @@ export const NotaSalidaForm = () => {
                     producto: field.producto_nombre || '-',
                     lote: field.lote_numero || '-',
                     um: field.um || '-',
+                    inicial: Number(field.cantidad_inicial || field.cant_total || field.cantidad || 0),
                     disponible: Number(field.cantidad_disponible || 0),
                     descontar: 0
                 });
@@ -317,7 +324,8 @@ export const NotaSalidaForm = () => {
                             .filter((detalle) => getDetalleDisponible(detalle) > 0)
                             .map((detalle) => ({
                                 ...detalle,
-                                nota_ingreso_id: Number(detalle.nota_ingreso_id || nota.id)
+                                nota_ingreso_id: Number(detalle.nota_ingreso_id || nota.id),
+                                cantidad_inicial: getDetalleInicial(detalle)
                             }));
                         return { ...nota, detalles: detallesFiltrados };
                     } catch (err) {
@@ -404,7 +412,13 @@ export const NotaSalidaForm = () => {
             const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
             const detJson = await detRes.json();
             const detallesRaw = detJson?.data?.detalles || [];
-            const disponibles = detallesRaw.filter((detalle) => getDetalleDisponible(detalle) > 0);
+            const disponibles = detallesRaw
+                .filter((detalle) => getDetalleDisponible(detalle) > 0)
+                .map((detalle) => ({
+                    ...detalle,
+                    nota_ingreso_id: Number(detalle.nota_ingreso_id || nota.id),
+                    cantidad_inicial: getDetalleInicial(detalle)
+                }));
 
             if (disponibles.length === 0) {
                 showToast('La nota de ingreso no tiene productos con saldo disponible.', 'warning');
@@ -439,6 +453,7 @@ export const NotaSalidaForm = () => {
                         cant_caja: Number(detalle.cantidad_cajas || 0),
                         cant_por_caja: Number(detalle.cantidad_por_caja || 0),
                         cant_fraccion: Number(detalle.cantidad_fraccion || 0),
+                        cantidad_inicial: getDetalleInicial(detalle),
                         cant_total: disponible,
                         cantidad: disponible,
                         cantidad_disponible: disponible
@@ -473,7 +488,8 @@ export const NotaSalidaForm = () => {
             .filter((detalle) => getDetalleDisponible(detalle) > 0)
             .map((detalle) => ({
                 ...detalle,
-                nota_ingreso_id: Number(detalle.nota_ingreso_id || notaId)
+                nota_ingreso_id: Number(detalle.nota_ingreso_id || notaId),
+                cantidad_inicial: getDetalleInicial(detalle)
             }));
         setDetallesAEditar(disponibles);
         
@@ -558,6 +574,7 @@ export const NotaSalidaForm = () => {
                     cant_caja: Number(detalle.cantidad_cajas || 0),
                     cant_por_caja: Number(detalle.cantidad_por_caja || 0),
                     cant_fraccion: Number(detalle.cantidad_fraccion || 0),
+                    cantidad_inicial: getDetalleInicial(detalle),
                     cant_total: cantidadSalida,
                     cantidad: cantidadSalida,
                     cantidad_disponible: getDetalleDisponible(detalle)
@@ -617,6 +634,7 @@ export const NotaSalidaForm = () => {
             cant_caja: parseFloat(cajas || 0),
             cant_por_caja: parseFloat(unidadesCaja || 0),
             cant_fraccion: parseFloat(fraccion || 0),
+            cantidad_inicial: parseFloat(cantidadTotal || 0),
             cant_total: parseFloat(cantidadTotal || 0),
             cantidad: parseFloat(cantidadTotal || 0),
             cantidad_disponible: disponible
@@ -854,6 +872,7 @@ export const NotaSalidaForm = () => {
                                             <thead className="bg-purple-50">
                                                 <tr>
                                                     <th className="px-3 py-2 text-left font-semibold text-purple-800">Nota Ingreso</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">Añadido Inicial</th>
                                                     <th className="px-3 py-2 text-right font-semibold text-purple-800">Stock Disponible</th>
                                                     <th className="px-3 py-2 text-right font-semibold text-purple-800">A Descontar</th>
                                                     <th className="px-3 py-2 text-right font-semibold text-purple-800">Saldo</th>
@@ -861,12 +880,14 @@ export const NotaSalidaForm = () => {
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
                                                 {notasIngreso.map((nota) => {
+                                                    const inicial = getNotaStockInicial(nota);
                                                     const disponible = getNotaStockDisponible(nota);
                                                     const descontar = getNotaStockSeleccionado(nota.id, nota.detalles || []);
                                                     const saldo = Math.max(disponible - descontar, 0);
                                                     return (
                                                         <tr key={`resumen-${nota.id}`}>
                                                             <td className="px-3 py-2 font-medium text-slate-800">{nota.numero_ingreso || `NI-${nota.id}`}</td>
+                                                            <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(inicial)}</td>
                                                             <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(disponible)}</td>
                                                             <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(descontar)}</td>
                                                             <td className="px-3 py-2 text-right text-blue-700 font-semibold">{formatCantidad(saldo)}</td>
@@ -890,6 +911,7 @@ export const NotaSalidaForm = () => {
                                                     <th className="px-3 py-2 text-left font-semibold text-blue-800">Producto</th>
                                                     <th className="px-3 py-2 text-left font-semibold text-blue-800">Lote</th>
                                                     <th className="px-3 py-2 text-left font-semibold text-blue-800">UM</th>
+                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">Inicial</th>
                                                     <th className="px-3 py-2 text-right font-semibold text-blue-800">Disponible</th>
                                                     <th className="px-3 py-2 text-right font-semibold text-blue-800">A Descontar</th>
                                                     <th className="px-3 py-2 text-right font-semibold text-blue-800">Saldo</th>
@@ -902,6 +924,7 @@ export const NotaSalidaForm = () => {
                                                         <td className="px-3 py-2 text-slate-800">{item.producto}</td>
                                                         <td className="px-3 py-2 text-slate-700">{item.lote}</td>
                                                         <td className="px-3 py-2 text-slate-700">{item.um}</td>
+                                                        <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(item.inicial)}</td>
                                                         <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(item.disponible)}</td>
                                                         <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(item.descontar)}</td>
                                                         <td className={`px-3 py-2 text-right font-semibold ${item.saldo <= 0 ? 'text-red-700' : 'text-blue-700'}`}>{formatCantidad(item.saldo)}</td>
@@ -945,6 +968,8 @@ export const NotaSalidaForm = () => {
                                                     📦 {nota.detalles?.length || 0} producto(s) disponible(s)
                                                 </p>
                                                 <p className="text-xs mt-1 text-slate-600">
+                                                    Inicial: <span className="font-semibold text-slate-700">{formatCantidad(getNotaStockInicial(nota))}</span>
+                                                    {' '}| 
                                                     Stock disp.: <span className="font-semibold text-green-700">{formatCantidad(getNotaStockDisponible(nota))}</span>
                                                     {' '}| A descontar: <span className="font-semibold text-amber-700">{formatCantidad(getNotaStockSeleccionado(nota.id, nota.detalles || []))}</span>
                                                     {' '}| Saldo: <span className="font-semibold text-blue-700">{formatCantidad(Math.max(getNotaStockDisponible(nota) - getNotaStockSeleccionado(nota.id, nota.detalles || []), 0))}</span>
@@ -978,7 +1003,7 @@ export const NotaSalidaForm = () => {
                                                             const key = `${nota.id}-${detalle.id}`;
                                                             const isSelected = selectedProductosFromNota[key];
                                                             const disponible = getDetalleDisponible(detalle);
-                                                            const total = Number(detalle.cantidad_total || detalle.cantidad || 0);
+                                                            const total = getDetalleInicial(detalle);
                                                             return (
                                                                 <tr key={detalle.id} className={`${isSelected ? 'bg-purple-50 border-l-4 border-l-purple-600' : 'hover:bg-slate-50'}`}>
                                                                     <td className="px-3 py-2 text-center">

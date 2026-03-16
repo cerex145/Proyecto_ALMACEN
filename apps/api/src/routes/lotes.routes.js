@@ -358,6 +358,12 @@ async function lotesRoutes(fastify, options) {
                     producto_id: { type: 'integer' }
                 }
             },
+            querystring: {
+                type: 'object',
+                properties: {
+                    cliente_id: { type: 'integer', description: 'Filtrar por cliente de la nota de ingreso' }
+                }
+            },
             response: {
                 200: {
                     type: 'object',
@@ -370,11 +376,20 @@ async function lotesRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { producto_id } = request.params;
+        const { cliente_id } = request.query;
 
-        const lotes = await loteRepo.find({
-            where: { producto_id: Number(producto_id) },
-            order: { fecha_vencimiento: 'ASC' }
-        });
+        const queryBuilder = loteRepo.createQueryBuilder('lote')
+            .where('lote.producto_id = :producto_id', { producto_id: Number(producto_id) })
+            .orderBy('lote.fecha_vencimiento', 'ASC');
+
+        if (cliente_id) {
+            queryBuilder
+                .leftJoin('lote.notaIngreso', 'notaIngreso')
+                .leftJoin('clientes', 'cliente', 'cliente.razon_social = notaIngreso.proveedor')
+                .andWhere('cliente.id = :cliente_id', { cliente_id: Number(cliente_id) });
+        }
+
+        const lotes = await queryBuilder.getMany();
 
         return {
             success: true,

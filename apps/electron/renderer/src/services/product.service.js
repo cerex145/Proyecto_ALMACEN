@@ -79,8 +79,9 @@ export const productService = {
     },
 
     // Lotes
-    getLotesByProduct: async (productId) => {
-        const response = await api.get(`/lotes/producto/${productId}`);
+    getLotesByProduct: async (productId, clienteId = null) => {
+        const params = clienteId ? { cliente_id: clienteId } : {};
+        const response = await api.get(`/lotes/producto/${productId}`, { params });
         return response.data.data || [];
     },
 
