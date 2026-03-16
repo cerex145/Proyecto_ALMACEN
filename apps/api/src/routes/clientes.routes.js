@@ -7,6 +7,7 @@ const ClienteSchema = {
         codigo: { type: 'string' },
         razon_social: { type: 'string' },
         cuit: { type: 'string', nullable: true },
+            persona_contacto: { type: 'string', nullable: true },
         direccion: { type: 'string', nullable: true },
         distrito: { type: 'string', nullable: true },
         provincia: { type: 'string', nullable: true },
@@ -174,6 +175,7 @@ async function clienteRoutes(fastify, options) {
                     codigo: { type: 'string' },
                     razon_social: { type: 'string' },
                     cuit: { type: 'string' },
+                    persona_contacto: { type: 'string' },
                     direccion: { type: 'string' },
                     distrito: { type: 'string' },
                     provincia: { type: 'string' },
@@ -190,7 +192,7 @@ async function clienteRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { codigo, razon_social, cuit, direccion, distrito, provincia, departamento, categoria_riesgo, estado, telefono, email } = request.body;
+        const { codigo, razon_social, cuit, persona_contacto, direccion, distrito, provincia, departamento, categoria_riesgo, estado, telefono, email } = request.body;
 
         // Validaciones
         if (!codigo || !razon_social || !cuit) {
@@ -213,6 +215,7 @@ async function clienteRoutes(fastify, options) {
             codigo,
             razon_social,
             cuit,
+            persona_contacto: persona_contacto || null,
             direccion: direccion || null,
             distrito: distrito || null,
             provincia: provincia || null,
@@ -251,6 +254,7 @@ async function clienteRoutes(fastify, options) {
                     codigo: { type: 'string' },
                     razon_social: { type: 'string' },
                     cuit: { type: 'string' },
+                    persona_contacto: { type: 'string' },
                     direccion: { type: 'string' },
                     distrito: { type: 'string' },
                     provincia: { type: 'string' },
@@ -270,7 +274,7 @@ async function clienteRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { codigo, razon_social, cuit, direccion, distrito, provincia, departamento, categoria_riesgo, estado, telefono, email, activo } = request.body;
+        const { codigo, razon_social, cuit, persona_contacto, direccion, distrito, provincia, departamento, categoria_riesgo, estado, telefono, email, activo } = request.body;
 
         const cliente = await clienteRepo.findOneBy({ id: Number(id) });
         if (!cliente) {
@@ -299,6 +303,7 @@ async function clienteRoutes(fastify, options) {
 
         cliente.razon_social = razon_social;
         if (cuit !== undefined) cliente.cuit = cuit;
+            if (persona_contacto !== undefined) cliente.persona_contacto = persona_contacto || null;
         cliente.direccion = direccion || null;
         if (distrito !== undefined) cliente.distrito = distrito || null;
         if (provincia !== undefined) cliente.provincia = provincia || null;

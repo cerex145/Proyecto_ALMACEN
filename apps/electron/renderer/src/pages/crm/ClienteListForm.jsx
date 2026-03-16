@@ -67,6 +67,7 @@ export const ClienteListForm = () => {
                 codigo: formData.codigo,
                 razon_social: formData.razon_social,
                 cuit: formData.numero_ruc,
+                                persona_contacto: formData.persona_contacto,
                 direccion: formData.direccion,
                 distrito: formData.distrito,
                 provincia: formData.provincia,
