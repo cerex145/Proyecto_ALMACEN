@@ -77,9 +77,9 @@ module.exports = new EntitySchema({
             nullable: true
         },
         activo: {
-            type: 'boolean',
-            nullable: true,
-            default: true
+            type: 'smallint',
+            nullable: false,
+            default: 1
         },
         created_at: {
             type: 'timestamp',

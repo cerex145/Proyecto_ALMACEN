@@ -140,7 +140,7 @@ async function productoRoutes(fastify, options) {
         }
 
         if (activo !== undefined) {
-            queryBuilder.andWhere('producto.activo = :activo', { activo: activo === 'true' });
+            queryBuilder.andWhere('producto.activo = :activo', { activo: toActivoSmallint(activo) });
         }
 
         if (numero_documento) {
@@ -504,7 +504,7 @@ async function productoRoutes(fastify, options) {
             cantidad_fraccion: cantidad_fraccion || 0,
             cantidad_total: cantidad_total || 0,
             observaciones: observaciones || null,
-            activo: true
+            activo: toActivoSmallint(true)
         });
 
         await productoRepo.save(nuevoProducto);
@@ -624,7 +624,7 @@ async function productoRoutes(fastify, options) {
         }
 
         producto.descripcion = descripcion;
-        if (activo !== undefined) producto.activo = activo;
+        if (activo !== undefined) producto.activo = toActivoSmallint(activo);
         if (proveedor) producto.proveedor = proveedor;
         if (tipo_documento !== undefined) producto.tipo_documento = tipo_documento || null;
         if (numero_documento !== undefined) producto.numero_documento = numero_documento || null;
@@ -686,7 +686,7 @@ async function productoRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Producto no encontrado' });
         }
 
-        producto.activo = false;
+        producto.activo = toActivoSmallint(false);
         await productoRepo.save(producto);
 
         return { success: true, message: 'Producto desactivado exitosamente' };
@@ -862,7 +862,7 @@ async function productoRoutes(fastify, options) {
                 codigo: String(codigo),
                 descripcion: String(descripcion),
                 stock_actual: stock_actual ? Number(stock_actual) : 0,
-                activo: true
+                activo: toActivoSmallint(true)
             });
         });
 
@@ -963,7 +963,7 @@ async function productoRoutes(fastify, options) {
                     stock_actual: prod.cantidad || 0,
                     lote: prod.lote || null,
                     numero_documento: numero_documento,
-                    activo: true
+                    activo: toActivoSmallint(true)
                 });
                 await productoRepo.save(nuevoProducto);
                 insertados++;
