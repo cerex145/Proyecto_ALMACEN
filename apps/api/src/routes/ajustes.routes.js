@@ -1,6 +1,17 @@
 async function ajustesRoutes(fastify, options) {
     const ajusteRepo = fastify.db.getRepository('AjusteStock');
     const productoRepo = fastify.db.getRepository('Producto');
+    const loteRepo = fastify.db.getRepository('Lote');
+
+    const obtenerStockDisponible = async (entityManager, productoId) => {
+        const qb = entityManager
+            .createQueryBuilder('Lote', 'lote')
+            .select('COALESCE(SUM(lote.cantidad_disponible), 0)', 'stock')
+            .where('lote.producto_id = :productoId', { productoId: Number(productoId) });
+
+        const resultado = await qb.getRawOne();
+        return Number(resultado?.stock || 0);
+    };
 
     const AjusteSchema = {
         type: 'object',
@@ -224,7 +235,8 @@ async function ajustesRoutes(fastify, options) {
         }
 
         // Verificar stock suficiente para ajustes negativos
-        if (tipo === 'AJUSTE_NEGATIVO' && producto.stock_actual < cantidadNum) {
+        const stockDisponible = await obtenerStockDisponible(fastify.db, producto_id);
+        if (tipo === 'AJUSTE_NEGATIVO' && stockDisponible < cantidadNum) {
             return reply.status(400).send({
                 success: false,
                 error: 'Stock insuficiente para realizar el ajuste negativo'
@@ -240,19 +252,63 @@ async function ajustesRoutes(fastify, options) {
             observaciones: observaciones || null
         });
 
-        // Actualizar el stock del producto
-        if (tipo === 'AJUSTE_POSITIVO') {
-            producto.stock_actual = Number(producto.stock_actual) + cantidadNum;
-        } else {
-            producto.stock_actual = Number(producto.stock_actual) - cantidadNum;
-        }
-
         // Guardar en transacción
         let savedId;
         await fastify.db.transaction(async (transactionalEntityManager) => {
             const savedAjuste = await transactionalEntityManager.save('AjusteStock', nuevoAjuste);
             savedId = savedAjuste.id;
-            await transactionalEntityManager.save('Producto', producto);
+
+            if (tipo === 'AJUSTE_POSITIVO') {
+                const lotesProducto = await transactionalEntityManager.find('Lote', {
+                    where: { producto_id: Number(producto_id) },
+                    order: { created_at: 'DESC' },
+                    take: 1
+                });
+
+                const loteActual = lotesProducto?.[0] || null;
+
+                if (loteActual) {
+                    loteActual.cantidad_disponible = Number(loteActual.cantidad_disponible || 0) + cantidadNum;
+                    loteActual.cantidad_ingresada = Number(loteActual.cantidad_ingresada || 0) + cantidadNum;
+                    await transactionalEntityManager.save('Lote', loteActual);
+                } else {
+                    const loteAjuste = loteRepo.create({
+                        producto_id: Number(producto_id),
+                        numero_lote: `AJUSTE-${Date.now()}`,
+                        fecha_vencimiento: null,
+                        cantidad_ingresada: cantidadNum,
+                        cantidad_disponible: cantidadNum,
+                        nota_ingreso_id: null
+                    });
+                    await transactionalEntityManager.save('Lote', loteAjuste);
+                }
+            } else {
+                const lotesDisponibles = await transactionalEntityManager.find('Lote', {
+                    where: {
+                        producto_id: Number(producto_id)
+                    },
+                    order: {
+                        fecha_vencimiento: 'ASC',
+                        created_at: 'ASC'
+                    }
+                });
+
+                let pendiente = cantidadNum;
+                for (const lote of lotesDisponibles) {
+                    if (pendiente <= 0) break;
+                    const disponible = Number(lote.cantidad_disponible || 0);
+                    if (disponible <= 0) continue;
+
+                    const aDescontar = Math.min(disponible, pendiente);
+                    lote.cantidad_disponible = disponible - aDescontar;
+                    await transactionalEntityManager.save('Lote', lote);
+                    pendiente -= aDescontar;
+                }
+
+                if (pendiente > 0) {
+                    throw new Error('Stock insuficiente para realizar el ajuste negativo');
+                }
+            }
         });
 
         const ajusteGuardado = await ajusteRepo.createQueryBuilder('ajuste')

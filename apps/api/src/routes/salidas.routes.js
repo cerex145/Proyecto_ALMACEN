@@ -148,6 +148,16 @@ async function salidasRoutes(fastify, options) {
         return Number.parseFloat(normalizado) || 0;
     };
 
+    const obtenerStockDisponiblePorLotes = async (entityManager, productoId) => {
+        const resultado = await entityManager
+            .createQueryBuilder('Lote', 'lote')
+            .select('COALESCE(SUM(lote.cantidad_disponible), 0)', 'stock')
+            .where('lote.producto_id = :productoId', { productoId: Number(productoId) })
+            .getRawOne();
+
+        return Number(resultado?.stock || 0);
+    };
+
     const parsearFecha = (valor, mesAux = '', diaAux = '') => {
         if (valor instanceof Date) return valor;
         const texto = String(valor || '').trim();
@@ -596,7 +606,7 @@ async function salidasRoutes(fastify, options) {
                 }
             }
 
-            // Validar stock GLOBAL por producto (Primera barrera)
+            // Validar stock por lotes por producto (Primera barrera)
             const EPSILON = 0.001; // Margen para flotantes
             const totalPorProducto = new Map();
             for (const detalle of detalles) {
@@ -609,7 +619,7 @@ async function salidasRoutes(fastify, options) {
                 if (!producto) {
                     throw new Error(`Producto ${pid} no encontrado`);
                 }
-                const stock = Number(producto.stock_actual);
+                const stock = await obtenerStockDisponiblePorLotes(fastify.db, pid);
                 // Validación con epsilon
                 if (stock + EPSILON < totalCantidad) {
                     throw new Error(`Stock insuficiente para ${producto.descripcion}. Disponible: ${stock.toFixed(2)}, Solicitado: ${totalCantidad.toFixed(2)}`);
@@ -685,7 +695,7 @@ async function salidasRoutes(fastify, options) {
                             lote_numero: lote.numero_lote,
                             tipo_movimiento: 'SALIDA',
                             cantidad: cantidadSolicitada,
-                            saldo: Number(producto.stock_actual) - cantidadSolicitada, // Saldo proyectado tras esta operación (simplificado)
+                            saldo: Number(lote.cantidad_disponible),
                             documento_tipo: 'NOTA_SALIDA',
                             documento_numero: numeroSalida,
                             referencia_id: notaGuardada.id
@@ -743,7 +753,7 @@ async function salidasRoutes(fastify, options) {
                                 lote_numero: lote.numero_lote,
                                 tipo_movimiento: 'SALIDA',
                                 cantidad: aTomar,
-                                saldo: Number(producto.stock_actual) - (cantidadSolicitada - pendiente + aTomar), // Calculo approx
+                                saldo: Number(lote.cantidad_disponible),
                                 documento_tipo: 'NOTA_SALIDA',
                                 documento_numero: numeroSalida,
                                 referencia_id: notaGuardada.id
@@ -755,16 +765,10 @@ async function salidasRoutes(fastify, options) {
 
                         // Verificación final de integridad
                         if (pendiente > EPSILON) {
-                            throw new Error(`Inconsistencia: El stock global indicaba suficiente (${producto.stock_actual}), pero la suma de lotes disponibles no cubrió el pedido. Faltaron: ${pendiente.toFixed(2)}`);
+                            const stockDisponible = await obtenerStockDisponiblePorLotes(tx, pid);
+                            throw new Error(`Inconsistencia en lotes para ${producto.descripcion}. Disponible por lotes: ${stockDisponible.toFixed(2)}, faltaron: ${pendiente.toFixed(2)}`);
                         }
                     }
-
-                    // Actualizar Stock Global del Producto
-                    producto.stock_actual = Number(producto.stock_actual) - cantidadSolicitada;
-                    await tx.save('Producto', producto);
-
-                    // Actualizamos el saldo del último kardex para asegurar consistencia exacta si es necesario
-                    // (Opcional, pero recomendable si queremos precisión absoluta en el campo 'saldo' del kardex)
                 }
             });
 
@@ -1007,7 +1011,8 @@ async function salidasRoutes(fastify, options) {
                         continue;
                     }
 
-                    if (Number(producto.stock_actual) < Number(cantidad)) {
+                    const stockDisponible = await obtenerStockDisponiblePorLotes(fastify.db, producto.id);
+                    if (stockDisponible < Number(cantidad)) {
                         errores.push(`Fila ${fila.rowNumber}: Stock insuficiente de ${codigoProducto}`);
                         continue;
                     }
@@ -1058,14 +1063,56 @@ async function salidasRoutes(fastify, options) {
                     });
                     await notaSalidaDetalleRepo.save(detalle);
 
-                    producto.stock_actual = Number(producto.stock_actual) - Number(cantidad);
-                    await productoRepo.save(producto);
+                    let saldoMovimiento = 0;
+                    if (loteNumero) {
+                        const lote = await loteRepo.findOne({
+                            where: {
+                                producto_id: producto.id,
+                                numero_lote: loteNumero
+                            }
+                        });
+
+                        if (!lote || Number(lote.cantidad_disponible || 0) < Number(cantidad)) {
+                            throw new Error(`Stock insuficiente en lote ${loteNumero}`);
+                        }
+
+                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(cantidad);
+                        await loteRepo.save(lote);
+                        saldoMovimiento = Number(lote.cantidad_disponible);
+                    } else {
+                        const lotesDisponibles = await loteRepo.find({
+                            where: {
+                                producto_id: producto.id,
+                                cantidad_disponible: MoreThan(0.00)
+                            },
+                            order: {
+                                fecha_vencimiento: 'ASC',
+                                created_at: 'ASC'
+                            }
+                        });
+
+                        let pendiente = Number(cantidad);
+                        for (const lote of lotesDisponibles) {
+                            if (pendiente <= 0) break;
+                            const disponible = Number(lote.cantidad_disponible || 0);
+                            if (disponible <= 0) continue;
+                            const aTomar = Math.min(disponible, pendiente);
+                            lote.cantidad_disponible = disponible - aTomar;
+                            await loteRepo.save(lote);
+                            saldoMovimiento = Number(lote.cantidad_disponible);
+                            pendiente -= aTomar;
+                        }
+
+                        if (pendiente > 0) {
+                            throw new Error(`Stock insuficiente en lotes para ${codigoProducto}`);
+                        }
+                    }
 
                     const movimiento = kardexRepo.create({
                         producto_id: producto.id,
                         tipo_movimiento: 'SALIDA',
                         cantidad: Number(cantidad),
-                        saldo: producto.stock_actual,
+                        saldo: saldoMovimiento,
                         documento_tipo: 'NOTA_SALIDA',
                         documento_numero: numeroSalida,
                         referencia_id: notaGuardada.id
