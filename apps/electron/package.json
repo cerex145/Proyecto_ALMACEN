@@ -2,15 +2,41 @@
     "name": "@sistema-almacen/electron",
     "version": "1.0.0",
     "description": "Aplicación Electron para Sistema de Almacén",
+    "author": "CEREX",
     "main": "main/main.js",
     "scripts": {
         "dev": "electron .",
-        "build": "electron-builder"
-    },
-    "dependencies": {
-        "electron": "^28.0.0"
+        "build": "npm run build --workspace=@sistema-almacen/renderer && electron-builder --win portable -c.win.signAndEditExecutable=false",
+        "build:installer": "npm run build --workspace=@sistema-almacen/renderer && electron-builder --win nsis"
     },
     "devDependencies": {
+        "electron": "28.3.3",
         "electron-builder": "^24.9.1"
+    },
+    "build": {
+        "appId": "com.cerex.almacen",
+        "productName": "Sistema Almacen",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "main/**/*",
+            "renderer/dist/**/*",
+            "package.json"
+        ],
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
     }
 }

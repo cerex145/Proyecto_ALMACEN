@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
+
 const api = axios.create({
-    baseURL: 'http://127.0.0.1:3000/api',
+    baseURL: `${API_ORIGIN}/api`,
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json'

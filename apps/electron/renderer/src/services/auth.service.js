@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/api/usuarios';
+const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
+const API_URL = `${API_ORIGIN}/api/usuarios`;
 
 const login = async (usuario, password) => {
     try {
