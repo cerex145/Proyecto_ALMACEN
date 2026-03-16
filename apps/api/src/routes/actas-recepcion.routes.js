@@ -287,6 +287,7 @@ module.exports = async function (fastify, opts) {
                 });
             }
 
+            const AUXILIAR_RECEPCION = 'ROGER E. BLANCAS RAMOS';
             const JEFA_ALMACEN = 'JANETH T. NARVAEZ HUAMANI';
 
             // Determinar checkboxes según tipo_documento
@@ -603,13 +604,13 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'NOMBRE:', width: 50, style: 'labelSmall' },
-                                            { text: acta.responsable_recepcion || '', width: '*', style: 'firmaNombre' }
+                                            { text: acta.responsable_recepcion || AUXILIAR_RECEPCION, width: '*', style: 'firmaNombre' }
                                         ]
                                     },
                                     {
                                         columns: [
                                             { text: 'NOMBRE:', width: 50, style: 'labelSmall' },
-                                            { text: JEFA_ALMACEN, width: '*', style: 'firmaNombre' }
+                                            { text: acta.jefe_almacen || JEFA_ALMACEN, width: '*', style: 'firmaNombre' }
                                         ]
                                     }
                                 ],

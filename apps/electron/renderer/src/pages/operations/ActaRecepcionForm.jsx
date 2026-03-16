@@ -18,9 +18,8 @@ export const ActaRecepcionForm = () => {
             tipo_operacion: '',
             tipo_conteo: '',
             observaciones: '',
-            responsable_recepcion: '',
-            responsable_entrega: '',
-            jefe_almacen: '',
+            responsable_recepcion: 'ROGER E. BLANCAS RAMOS',
+            jefe_almacen: 'JANETH T. NARVAEZ HUAMANI',
             detalles: []
         }
     });
@@ -447,7 +446,6 @@ export const ActaRecepcionForm = () => {
                 tipo_conteo: normalizeNullable(data.tipo_conteo),
                 observaciones: normalizeNullable(data.observaciones),
                 responsable_recepcion: normalizeNullable(data.responsable_recepcion),
-                responsable_entrega: normalizeNullable(data.responsable_entrega),
                 jefe_almacen: normalizeNullable(data.jefe_almacen),
                 detalles: detallesNormalizados
             };
@@ -697,11 +695,7 @@ export const ActaRecepcionForm = () => {
                             <label className="label-premium">Responsable de Recepción (Auxiliar)</label>
                             <input {...register('responsable_recepcion')} className="input-premium" placeholder="Nombre del auxiliar de recepción" />
                         </div>
-                        <div className="md:col-span-1">
-                            <label className="label-premium">Responsable de Entrega</label>
-                            <input {...register('responsable_entrega')} className="input-premium" placeholder="Nombre del responsable" />
-                        </div>
-                        <div className="md:col-span-1">
+                        <div className="md:col-span-2">
                             <label className="label-premium">Jefe de Almacén</label>
                             <input {...register('jefe_almacen')} className="input-premium" placeholder="Nombre del jefe de almacén" />
                         </div>
