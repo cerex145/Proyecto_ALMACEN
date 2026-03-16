@@ -6,7 +6,18 @@ const ClienteSchema = {
         id: { type: 'integer' },
         codigo: { type: 'string' },
         razon_social: { type: 'string' },
-        activo: { type: 'integer' }
+        cuit: { type: 'string', nullable: true },
+        direccion: { type: 'string', nullable: true },
+        distrito: { type: 'string', nullable: true },
+        provincia: { type: 'string', nullable: true },
+        departamento: { type: 'string', nullable: true },
+        categoria_riesgo: { type: 'string', nullable: true },
+        estado: { type: 'string', nullable: true },
+        telefono: { type: 'string', nullable: true },
+        email: { type: 'string', nullable: true },
+        activo: { type: 'integer' },
+        created_at: { type: 'string', nullable: true },
+        updated_at: { type: 'string', nullable: true }
     }
 };
 
