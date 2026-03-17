@@ -51,12 +51,14 @@ export const NotaIngresoForm = () => {
 
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
-    const [precio, setPrecio] = useState('');
 
     // Estados para importación CSV
     const [mostrarModalImportacion, setMostrarModalImportacion] = useState(false);
     const [archivoCSV, setArchivoCSV] = useState(null);
     const [erroresImportacion, setErroresImportacion] = useState([]);
+    const [pendientesResolucionCSV, setPendientesResolucionCSV] = useState([]);
+    const [indicePendienteCSV, setIndicePendienteCSV] = useState(0);
+    const [mostrarModalResolucionCSV, setMostrarModalResolucionCSV] = useState(false);
 
     // Estados para selector masivo de productos
     const [filtroProductosMasivos, setFiltroProductosMasivos] = useState('');
@@ -345,8 +347,7 @@ export const NotaIngresoForm = () => {
                 um: um || existing.um,
                 fabricante: fabricante || existing.fabricante,
                 temperatura_min: Number(temperatura || existing.temperatura_min || 25),
-                temperatura_max: Number(temperatura || existing.temperatura_max || 25),
-                precio_unitario: Number.isFinite(Number(precio)) ? Number(precio) : existing.precio_unitario
+                temperatura_max: Number(temperatura || existing.temperatura_max || 25)
             });
         } else {
             append({
@@ -365,7 +366,6 @@ export const NotaIngresoForm = () => {
                 cantidad_por_caja: parseFloat(unidadesCaja || 0),
                 cantidad_fraccion: parseFloat(fraccion || 0),
                 cantidad_total: parseFloat(quantity || 0),
-                precio_unitario: parseFloat(precio || 0),
                 detalle_calculo: `Bultos: ${bultos || 0}, Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
             });
         }
@@ -384,7 +384,6 @@ export const NotaIngresoForm = () => {
         setTemperatura('25');
         setLote('');
         setVencimiento('');
-        setPrecio('');
         showSuccess('Producto agregado al detalle con éxito.');
     };
 
@@ -417,7 +416,6 @@ export const NotaIngresoForm = () => {
             cantidad_por_caja: Number(detalle.cantidad_por_caja || 0),
             cantidad_fraccion: Number(detalle.cantidad_fraccion || 0),
             cantidad_total: cantidadTotal,
-            precio_unitario: Number.isFinite(Number(precio)) ? Number(precio) : 0,
             detalle_calculo: `Bultos: ${detalle.cantidad_bultos || 0}, Cajas: ${detalle.cantidad_cajas || 0}, Und/Caja: ${detalle.cantidad_por_caja || 0}, Frac: ${detalle.cantidad_fraccion || 0}`
         };
 
@@ -597,7 +595,6 @@ export const NotaIngresoForm = () => {
         setSelectedLoteId('');
         setLote('');
         setVencimiento('');
-        setPrecio('');
         setCajas('');
         setUnidadesCaja('');
         setFraccion('');
@@ -652,17 +649,88 @@ export const NotaIngresoForm = () => {
         update(index, next);
     };
 
+    const parseCSVLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i += 1) {
+            const char = line[i];
+
+            if (char === '"') {
+                const next = line[i + 1];
+                if (inQuotes && next === '"') {
+                    current += '"';
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+
+        result.push(current.trim());
+        return result;
+    };
+
+    const parseNumber = (value, fallback = 0) => {
+        if (value === null || value === undefined || value === '') {
+            return fallback;
+        }
+        const normalized = String(value).replace(',', '.').trim();
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const normalizarTexto = (value) => String(value || '').trim().toLowerCase();
+
+    const construirDetalleDesdeCSV = (producto, row) => {
+        const temperatura = parseNumber(
+            row.temperatura || row.temperatura_min || row.temperatura_max || producto.temperatura || producto.temperatura_min_c || 25,
+            25
+        );
+        const cantidadTotal = parseNumber(row.cantidad_total, 0);
+
+        return {
+            producto_id: producto.id,
+            producto_nombre: producto.descripcion,
+            producto_codigo: producto.codigo,
+            lote_numero: row.lote,
+            fecha_vencimiento: row.fecha_vencimiento || null,
+            cantidad_bultos: parseNumber(row.cantidad_bultos, 0),
+            cantidad_cajas: parseNumber(row.cantidad_cajas, 0),
+            cantidad_por_caja: parseNumber(row.cantidad_por_caja, 0),
+            cantidad_fraccion: parseNumber(row.cantidad_fraccion, 0),
+            cantidad_total: cantidadTotal,
+            cantidad: cantidadTotal,
+            um: row.um || producto.um || producto.unidad || '',
+            fabricante: row.fabricante || producto.fabricante || '',
+            temperatura_min: temperatura,
+            temperatura_max: temperatura,
+            temperatura_min_c: temperatura,
+            temperatura_max_c: temperatura
+        };
+    };
+
     const handleImportarCSV = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
         setArchivoCSV(file);
+        setErroresImportacion([]);
         const reader = new FileReader();
 
         reader.onload = async (e) => {
             try {
-                const text = e.target.result;
-                const lines = text.split('\n').filter(line => line.trim());
+                const text = String(e.target.result || '').replace(/^\uFEFF/, '');
+                const lines = text
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter((line) => line.length > 0);
 
                 if (lines.length < 2) {
                     showError('El archivo CSV está vacío o no tiene datos.');
@@ -670,9 +738,10 @@ export const NotaIngresoForm = () => {
                 }
 
                 // Parsear encabezados
-                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                const headers = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
                 const errores = [];
                 const productosImportados = [];
+                const pendientes = [];
 
                 // Validar encabezados requeridos
                 const requeridos = ['codigo_producto', 'lote', 'cantidad_total'];
@@ -686,7 +755,7 @@ export const NotaIngresoForm = () => {
 
                 // Procesar cada fila
                 for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',').map(v => v.trim());
+                    const values = parseCSVLine(lines[i]);
                     const row = {};
 
                     headers.forEach((header, index) => {
@@ -694,41 +763,46 @@ export const NotaIngresoForm = () => {
                     });
 
                     try {
-                        // Buscar producto por código
-                        const productoEncontrado = products.find(p =>
-                            p.codigo.toLowerCase() === row.codigo_producto.toLowerCase()
+                        const codigoBuscado = normalizarTexto(row.codigo_producto);
+                        const loteBuscado = normalizarTexto(row.lote);
+                        const candidatosCodigo = products.filter(
+                            (p) => normalizarTexto(p.codigo) === codigoBuscado
                         );
 
-                        if (!productoEncontrado) {
+                        if (candidatosCodigo.length === 0) {
                             errores.push(`Fila ${i + 1}: Producto con código "${row.codigo_producto}" no encontrado`);
                             continue;
                         }
 
-                        // Construir objeto de detalle
-                        const detalle = {
-                            producto_id: productoEncontrado.id,
-                            producto_nombre: productoEncontrado.descripcion,
-                            producto_codigo: productoEncontrado.codigo,
-                            numero_lote: row.lote,
-                            fecha_vencimiento: row.fecha_vencimiento || '',
-                            cantidad_bultos: parseFloat(row.cantidad_bultos || 0),
-                            cantidad_cajas: parseFloat(row.cantidad_cajas || 0),
-                            cantidad_por_caja: parseFloat(row.cantidad_por_caja || 0),
-                            cantidad_fraccion: parseFloat(row.cantidad_fraccion || 0),
-                            cantidad_total: parseFloat(row.cantidad_total),
-                            precio_unitario: parseFloat(row.precio_unitario || 0),
-                            um: row.um || productoEncontrado.um || productoEncontrado.unidad || '',
-                            fabricante: row.fabricante || productoEncontrado.fabricante || '',
-                            temperatura_min_c: parseFloat(row.temperatura || row.temperatura_min || productoEncontrado.temperatura || productoEncontrado.temperatura_min_c || 25),
-                            temperatura_max_c: parseFloat(row.temperatura || row.temperatura_max || productoEncontrado.temperatura || productoEncontrado.temperatura_max_c || 25)
-                        };
+                        const candidatosPorLote = loteBuscado
+                            ? candidatosCodigo.filter((p) => normalizarTexto(p.lote) === loteBuscado)
+                            : candidatosCodigo;
+
+                        let productoSeleccionado = null;
+                        if (candidatosPorLote.length === 1) {
+                            productoSeleccionado = candidatosPorLote[0];
+                        } else if (candidatosCodigo.length === 1) {
+                            productoSeleccionado = candidatosCodigo[0];
+                        }
+
+                        const cantidadTotal = parseNumber(row.cantidad_total, 0);
 
                         // Validar cantidad_total
-                        if (isNaN(detalle.cantidad_total) || detalle.cantidad_total <= 0) {
+                        if (!Number.isFinite(cantidadTotal) || cantidadTotal <= 0) {
                             errores.push(`Fila ${i + 1}: Cantidad total inválida`);
                             continue;
                         }
 
+                        if (!productoSeleccionado) {
+                            pendientes.push({
+                                row,
+                                rowNumber: i + 1,
+                                opciones: candidatosPorLote.length > 1 ? candidatosPorLote : candidatosCodigo
+                            });
+                            continue;
+                        }
+
+                        const detalle = construirDetalleDesdeCSV(productoSeleccionado, row);
                         productosImportados.push(detalle);
                     } catch (error) {
                         errores.push(`Fila ${i + 1}: Error al procesar - ${error.message}`);
@@ -741,13 +815,22 @@ export const NotaIngresoForm = () => {
                     showSuccess(`${productosImportados.length} productos importados correctamente.`);
                 }
 
+                if (pendientes.length > 0) {
+                    setPendientesResolucionCSV(pendientes);
+                    setIndicePendienteCSV(0);
+                    setMostrarModalResolucionCSV(true);
+                    showError(`Hay ${pendientes.length} fila(s) con múltiples coincidencias de código. Seleccione la opción correcta para cada una.`);
+                }
+
                 // Mostrar errores si existen
                 if (errores.length > 0) {
                     setErroresImportacion(errores);
                     console.error('Errores de importación:', errores);
                 }
 
-                setMostrarModalImportacion(false);
+                if (pendientes.length === 0) {
+                    setMostrarModalImportacion(false);
+                }
                 event.target.value = ''; // Limpiar input file
             } catch (error) {
                 console.error('Error al procesar CSV:', error);
@@ -768,7 +851,6 @@ export const NotaIngresoForm = () => {
             'cantidad_por_caja',
             'cantidad_fraccion',
             'cantidad_total',
-            'precio_unitario',
             'um',
             'fabricante',
             'temperatura'
@@ -776,9 +858,9 @@ export const NotaIngresoForm = () => {
 
         // Usar códigos reales del sistema
         const ejemplos = [
-            ['MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', '25.50', 'UND', 'Laboratorio ABC', '25'],
-            ['MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', '15.75', 'UND', 'Farmacia XYZ', '25'],
-            ['INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', '42.00', 'UND', 'Insumos Med', '25']
+            ['MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
+            ['MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
+            ['INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
         ];
 
         const csvContent = headers.join(',') + '\n' + ejemplos.map(e => e.join(',')).join('\n');
@@ -792,6 +874,50 @@ export const NotaIngresoForm = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const resolverPendienteCSV = (productoSeleccionado) => {
+        const pendiente = pendientesResolucionCSV[indicePendienteCSV];
+        if (!pendiente || !productoSeleccionado) {
+            return;
+        }
+
+        const detalle = construirDetalleDesdeCSV(productoSeleccionado, pendiente.row);
+        append(detalle);
+
+        const siguiente = indicePendienteCSV + 1;
+        if (siguiente >= pendientesResolucionCSV.length) {
+            setMostrarModalResolucionCSV(false);
+            setPendientesResolucionCSV([]);
+            setIndicePendienteCSV(0);
+            setMostrarModalImportacion(false);
+            showSuccess('Se completó la resolución de productos ambiguos y se agregaron al detalle.');
+            return;
+        }
+
+        setIndicePendienteCSV(siguiente);
+    };
+
+    const omitirPendienteCSV = () => {
+        const pendiente = pendientesResolucionCSV[indicePendienteCSV];
+        if (pendiente) {
+            setErroresImportacion((prev) => [
+                ...prev,
+                `Fila ${pendiente.rowNumber}: omitida por selección manual del usuario (código ${pendiente.row.codigo_producto || 'N/A'})`
+            ]);
+        }
+
+        const siguiente = indicePendienteCSV + 1;
+        if (siguiente >= pendientesResolucionCSV.length) {
+            setMostrarModalResolucionCSV(false);
+            setPendientesResolucionCSV([]);
+            setIndicePendienteCSV(0);
+            setMostrarModalImportacion(false);
+            showSuccess('Resolución finalizada. Se importaron las filas válidas y se omitieron las no seleccionadas.');
+            return;
+        }
+
+        setIndicePendienteCSV(siguiente);
     };
 
     return (
@@ -969,6 +1095,16 @@ export const NotaIngresoForm = () => {
                                 className="bg-purple-600 hover:bg-purple-700"
                             >
                                 Seleccionar productos
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    setErroresImportacion([]);
+                                    setMostrarModalImportacion(true);
+                                }}
+                                variant="secondary"
+                            >
+                                Importar CSV
                             </Button>
                         </div>
                         <p className="text-xs text-purple-600 mt-2">
@@ -1332,7 +1468,7 @@ export const NotaIngresoForm = () => {
                                         Ver todas las columnas disponibles (13 en total)
                                     </summary>
                                     <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
-                                        <p className="font-mono">codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, precio_unitario, um, fabricante, temperatura</p>
+                                        <p className="font-mono">codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, um, fabricante, temperatura</p>
                                     </div>
                                 </details>
                             </div>
@@ -1350,7 +1486,7 @@ PROD001,LOTE-2024-001,505
 PROD002,LOTE-2024-002,500`}
                                     </pre>
                                 </div>
-                                <p className="text-xs text-green-800 mt-2">💡 Puedes agregar más columnas opcionales como: fecha_vencimiento, precio_unitario, cantidad_cajas, etc.</p>
+                                <p className="text-xs text-green-800 mt-2">💡 Puedes agregar más columnas opcionales como: fecha_vencimiento, cantidad_cajas, um, fabricante, etc.</p>
                             </div>
 
                             {/* Errores */}
@@ -1646,6 +1782,75 @@ PROD002,LOTE-2024-002,500`}
                             >
                                 Guardar y agregar
                             </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Resolución de Código Ambiguo en CSV */}
+            {mostrarModalResolucionCSV && pendientesResolucionCSV.length > 0 && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={() => {}}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full overflow-hidden">
+                        <div className="bg-amber-600 px-6 py-4 text-white flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-bold">Resolver producto por código (CSV)</h3>
+                                <p className="text-sm text-amber-100">
+                                    Fila {pendientesResolucionCSV[indicePendienteCSV]?.rowNumber} de {pendientesResolucionCSV.length} con múltiples coincidencias
+                                </p>
+                            </div>
+                            <span className="text-xs bg-white/20 px-3 py-1 rounded-full">
+                                {indicePendienteCSV + 1}/{pendientesResolucionCSV.length}
+                            </span>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+                                Código en CSV: <span className="font-mono font-bold">{pendientesResolucionCSV[indicePendienteCSV]?.row?.codigo_producto || '-'}</span>
+                                {' '}| Lote CSV: <span className="font-mono font-bold">{pendientesResolucionCSV[indicePendienteCSV]?.row?.lote || '-'}</span>
+                                {' '}| Cantidad: <span className="font-bold">{pendientesResolucionCSV[indicePendienteCSV]?.row?.cantidad_total || '-'}</span>
+                            </div>
+
+                            <div className="overflow-x-auto border rounded-lg">
+                                <table className="min-w-full text-sm">
+                                    <thead className="bg-slate-100">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left">Código</th>
+                                            <th className="px-4 py-3 text-left">Producto</th>
+                                            <th className="px-4 py-3 text-left">Lote</th>
+                                            <th className="px-4 py-3 text-left">UM</th>
+                                            <th className="px-4 py-3 text-left">Fabricante</th>
+                                            <th className="px-4 py-3 text-center">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(pendientesResolucionCSV[indicePendienteCSV]?.opciones || []).map((opcion) => (
+                                            <tr key={`${opcion.id}-${opcion.lote || ''}`} className="border-t hover:bg-amber-50/40">
+                                                <td className="px-4 py-3 font-mono text-xs">{opcion.codigo}</td>
+                                                <td className="px-4 py-3">{opcion.descripcion}</td>
+                                                <td className="px-4 py-3 font-mono text-xs">{opcion.lote || '-'}</td>
+                                                <td className="px-4 py-3">{opcion.um || opcion.unidad || '-'}</td>
+                                                <td className="px-4 py-3">{opcion.fabricante || '-'}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <Button
+                                                        type="button"
+                                                        variant="primary"
+                                                        onClick={() => resolverPendienteCSV(opcion)}
+                                                        className="bg-amber-600 hover:bg-amber-700"
+                                                    >
+                                                        Elegir este
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <Button type="button" variant="secondary" onClick={omitirPendienteCSV}>
+                                    Omitir fila
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>

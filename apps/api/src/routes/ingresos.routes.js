@@ -22,7 +22,6 @@ const NotaIngresoDetalleSchema = {
         producto_id: { type: 'integer' },
         lote_id: { type: 'integer', nullable: true },
         cantidad: { type: 'number' },
-        precio_unitario: { type: 'number' },
         lote_numero: { type: 'string', nullable: true },
         fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
         cantidad_disponible: { type: 'number', nullable: true },
@@ -335,7 +334,6 @@ async function ingresosRoutes(fastify, options) {
                             properties: {
                                 producto_id: { type: 'integer' },
                                 cantidad: { type: 'number', minimum: 0 },
-                                precio_unitario: { type: 'number', minimum: 0 },
                                 lote_numero: { type: 'string' },
                                 fecha_vencimiento: {
                                     anyOf: [
@@ -462,7 +460,6 @@ async function ingresosRoutes(fastify, options) {
                         temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || null,
                         temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || null,
                         cantidad: detalle.cantidad,
-                        precio_unitario: detalle.precio_unitario || 0,
                         cantidad_bultos: detalle.cantidad_bultos || 0,
                         cantidad_cajas: detalle.cantidad_cajas || 0,
                         cantidad_por_caja: detalle.cantidad_por_caja || 0,
@@ -635,7 +632,7 @@ async function ingresosRoutes(fastify, options) {
             worksheet.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return; // Skip header
 
-                const [fecha, proveedor, responsable, codigo_producto, lote, fecha_vencimiento, cantidad, precio] = row.values.slice(1);
+                const [fecha, proveedor, responsable, codigo_producto, lote, fecha_vencimiento, cantidad] = row.values.slice(1);
 
                 // Validaciones básicas
                 if (!fecha || !proveedor || !codigo_producto || !cantidad) {
@@ -650,8 +647,7 @@ async function ingresosRoutes(fastify, options) {
                     codigo_producto: String(codigo_producto),
                     lote_numero: String(lote),
                     fecha_vencimiento: fecha_vencimiento ? new Date(fecha_vencimiento) : null,
-                    cantidad: Number(cantidad),
-                    precio_unitario: precio ? Number(precio) : null
+                    cantidad: Number(cantidad)
                 });
             });
 
@@ -685,8 +681,7 @@ async function ingresosRoutes(fastify, options) {
                     producto_id: producto.id,
                     lote_numero: detalle.lote_numero,
                     fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad: detalle.cantidad,
-                    precio_unitario: detalle.precio_unitario
+                    cantidad: detalle.cantidad
                 });
                 await notaIngresoDetalleRepo.save(detalleNota);
 
@@ -794,8 +789,7 @@ async function ingresosRoutes(fastify, options) {
             { header: 'Código Producto', key: 'codigo_producto', width: 20 },
             { header: 'Número Lote', key: 'lote', width: 20 },
             { header: 'Fecha Vencimiento (YYYY-MM-DD)', key: 'fecha_vencimiento', width: 25 },
-            { header: 'Cantidad', key: 'cantidad', width: 15 },
-            { header: 'Precio Unitario', key: 'precio', width: 15 }
+            { header: 'Cantidad', key: 'cantidad', width: 15 }
         ];
 
         // Agregar fila de ejemplo
@@ -806,8 +800,7 @@ async function ingresosRoutes(fastify, options) {
             codigo_producto: 'PROD001',
             lote: 'LOTE-2026-001',
             fecha_vencimiento: '2027-01-30',
-            cantidad: '100',
-            precio: '10.50'
+            cantidad: '100'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
