@@ -113,7 +113,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                 lote: data.lote || null,
                 fabricante: data.fabricante || null,
                 procedencia: data.procedencia || null,
-                fecha_vencimiento: data.fecha_vencimiento || null,
                 unidad: data.unidad || 'UND',
                 unidad_otro: data.unidad === 'OTRO' ? (data.unidad_otro || null) : null,
                 um: data.um ? data.um : null,
@@ -270,10 +269,6 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Procedencia</label>
                                     <input {...register('procedencia')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de Vencimiento</label>
-                                    <input {...register('fecha_vencimiento')} type="date" className="w-full h-9 rounded border-gray-300 border px-2 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Unidad</label>

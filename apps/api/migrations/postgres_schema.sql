@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS productos (
   fabricante VARCHAR(200),
   categoria_ingreso VARCHAR(50),
   procedencia VARCHAR(200),
-  fecha_vencimiento DATE,
   unidad VARCHAR(20) NOT NULL DEFAULT 'UND',
   unidad_otro VARCHAR(50),
   um VARCHAR(20),

@@ -60,6 +60,9 @@ export const NotaIngresoForm = () => {
 
     // Estados para selector masivo de productos
     const [filtroProductosMasivos, setFiltroProductosMasivos] = useState('');
+    const [productosBusquedaModal, setProductosBusquedaModal] = useState([]);
+    const [buscandoProductos, setBuscandoProductos] = useState(false);
+    const [modoSeleccionProducto, setModoSeleccionProducto] = useState('masivo');
     const [productoDetalleModal, setProductoDetalleModal] = useState(null);
     const [mostrarModalDetalleProducto, setMostrarModalDetalleProducto] = useState(false);
     const [detalleProductoDraft, setDetalleProductoDraft] = useState({
@@ -95,6 +98,45 @@ export const NotaIngresoForm = () => {
     useEffect(() => {
         loadProducts();
     }, [selectedClient, showAllProducts]);
+
+    useEffect(() => {
+        if (!mostrarModalMasivo) {
+            setProductosBusquedaModal([]);
+            return;
+        }
+
+        const termino = filtroProductosMasivos.trim();
+        if (termino.length < 2) {
+            setProductosBusquedaModal([]);
+            return;
+        }
+
+        const timeout = setTimeout(async () => {
+            try {
+                setBuscandoProductos(true);
+                const filtros = {
+                    busqueda: termino,
+                    page: 1,
+                    limit: 100
+                };
+
+                if (!showAllProducts && selectedClient) {
+                    filtros.cliente_id = Number(selectedClient);
+                }
+
+                const response = await productService.getProducts(filtros);
+                setProductosBusquedaModal(Array.isArray(response) ? response : []);
+            } catch (error) {
+                console.error('Error buscando productos:', error);
+                setProductosBusquedaModal([]);
+                showError('No se pudo buscar productos. Intente nuevamente.');
+            } finally {
+                setBuscandoProductos(false);
+            }
+        }, 300);
+
+        return () => clearTimeout(timeout);
+    }, [mostrarModalMasivo, filtroProductosMasivos, showAllProducts, selectedClient]);
 
     useEffect(() => {
         if (!selectedClient) {
@@ -191,7 +233,9 @@ export const NotaIngresoForm = () => {
 
     const loadProducts = async () => {
         try {
-            const filters = showAllProducts ? {} : { cliente_id: Number(selectedClient) };
+            const filters = showAllProducts
+                ? { page: 1, limit: 5000 }
+                : { cliente_id: Number(selectedClient), page: 1, limit: 5000 };
             const productsResponse = await productService.getProducts(filters);
             console.log('Productos cargados:', productsResponse);
             setProducts(Array.isArray(productsResponse) ? productsResponse : []);
@@ -230,7 +274,7 @@ export const NotaIngresoForm = () => {
         const loteInfo = lotesDisponibles.find(l => String(l.id) === String(value));
         if (loteInfo) {
             setLote(loteInfo.numero_lote || '');
-            setVencimiento(loteInfo.fecha_vencimiento || loteInfo.producto?.fecha_vencimiento || '');
+            setVencimiento(loteInfo.fecha_vencimiento || '');
             const productoDetalle = loteInfo.producto || products.find(p => p.id === Number(selectedProduct));
             if (productoDetalle) {
                 setUm(productoDetalle.um || '');
@@ -268,20 +312,17 @@ export const NotaIngresoForm = () => {
             return;
         }
 
-        if (!vencimiento) {
-            showError('Ingrese o seleccione una fecha de vencimiento válida.');
-            return;
-        }
-
         if (Number(quantity) <= 0) {
             showError('La cantidad debe ser mayor a 0.');
             return;
         }
 
-        const fechaVenc = new Date(vencimiento);
-        if (Number.isNaN(fechaVenc.getTime())) {
-            showError('La fecha de vencimiento no es válida.');
-            return;
+        if (vencimiento) {
+            const fechaVenc = new Date(vencimiento);
+            if (Number.isNaN(fechaVenc.getTime())) {
+                showError('La fecha de vencimiento no es válida.');
+                return;
+            }
         }
 
         const product = products.find(p => p.id === parseInt(selectedProduct));
@@ -314,7 +355,7 @@ export const NotaIngresoForm = () => {
                 producto_nombre: product.descripcion,
                 cantidad: parseFloat(quantity),
                 lote_numero: loteFinal,
-                fecha_vencimiento: vencimiento,
+                fecha_vencimiento: vencimiento || null,
                 um: um || '',
                 fabricante: fabricante || '',
                 temperatura_min: Number(temperatura || 25),
@@ -452,12 +493,31 @@ export const NotaIngresoForm = () => {
         showSuccess('Producto guardado con éxito.');
     };
 
-    const productosMasivosFiltrados = products.filter((producto) => {
-        const termino = filtroProductosMasivos.trim().toLowerCase();
-        if (!termino) return true;
-        return String(producto.codigo || '').toLowerCase().includes(termino)
-            || String(producto.descripcion || '').toLowerCase().includes(termino);
-    });
+    const productosSeleccionablesModal = filtroProductosMasivos.trim().length >= 2
+        ? productosBusquedaModal
+        : [];
+
+    const productoSeleccionado = products.find((p) => String(p.id) === String(selectedProduct));
+
+    const abrirModalBusquedaProductos = (modo = 'masivo') => {
+        setModoSeleccionProducto(modo);
+        setFiltroProductosMasivos('');
+        setProductosBusquedaModal([]);
+        setMostrarModalMasivo(true);
+    };
+
+    const seleccionarProductoDesdeModal = (producto) => {
+        setProducts((prev) => {
+            const existe = prev.some((p) => Number(p.id) === Number(producto.id));
+            if (existe) {
+                return prev;
+            }
+            return [...prev, producto];
+        });
+        setSelectedProduct(String(producto.id));
+        setMostrarModalMasivo(false);
+        showSuccess(`Producto seleccionado: ${producto.codigo} - ${producto.descripcion}`);
+    };
 
     const handleToggleDetalle = (id) => {
         setSelectedDetalleIds((prev) => ({
@@ -805,16 +865,22 @@ export const NotaIngresoForm = () => {
                         </div>
                         <div>
                             <label className="label-premium">Producto</label>
-                            <select
-                                value={selectedProduct}
-                                onChange={(e) => setSelectedProduct(e.target.value)}
-                                className="input-premium"
-                            >
-                                <option value="">Seleccione producto...</option>
-                                {products.map(p => (
-                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
-                                ))}
-                            </select>
+                            <div className="space-y-2">
+                                <input
+                                    value={productoSeleccionado ? `${productoSeleccionado.codigo} - ${productoSeleccionado.descripcion}` : ''}
+                                    readOnly
+                                    className="input-premium"
+                                    placeholder="Buscar y seleccionar producto"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={() => abrirModalBusquedaProductos('individual')}
+                                    className="w-full"
+                                >
+                                    Buscar producto
+                                </Button>
+                            </div>
                         </div>
                         <div>
                             <label className="label-premium">Lote existente</label>
@@ -898,7 +964,7 @@ export const NotaIngresoForm = () => {
                         <div className="flex gap-3 items-center">
                             <Button
                                 type="button"
-                                onClick={() => setMostrarModalMasivo(true)}
+                                onClick={() => abrirModalBusquedaProductos('masivo')}
                                 variant="primary"
                                 className="bg-purple-600 hover:bg-purple-700"
                             >
@@ -1026,8 +1092,8 @@ export const NotaIngresoForm = () => {
                 </Card>
 
                 {/* Tabla de Items */}
-                <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-                    <table className="w-full text-sm text-left">
+                <div className="rounded-xl border border-slate-200 overflow-x-auto overflow-y-hidden bg-white shadow-sm">
+                    <table className="min-w-max w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
                             <tr>
                                 <th className="px-6 py-4 text-center">Sel</th>
@@ -1341,7 +1407,7 @@ PROD002,LOTE-2024-002,500`}
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Selección de Productos ({productosMasivosFiltrados.length})
+                                Selección de Productos ({productosSeleccionablesModal.length})
                             </h3>
                             <button
                                 onClick={() => setMostrarModalMasivo(false)}
@@ -1363,7 +1429,7 @@ PROD002,LOTE-2024-002,500`}
                                     value={filtroProductosMasivos}
                                     onChange={(e) => setFiltroProductosMasivos(e.target.value)}
                                     className="input-premium md:w-80"
-                                    placeholder="Filtrar por código o nombre"
+                                    placeholder="Buscar por código o nombre (mínimo 2 caracteres)"
                                 />
                             </div>
 
@@ -1382,7 +1448,7 @@ PROD002,LOTE-2024-002,500`}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {productosMasivosFiltrados.map((producto) => (
+                                        {productosSeleccionablesModal.map((producto) => (
                                             <tr
                                                 key={producto.id}
                                                 className="border-b hover:bg-purple-50 transition-colors"
@@ -1399,15 +1465,42 @@ PROD002,LOTE-2024-002,500`}
                                                 <td className="px-4 py-3 text-center">
                                                     <Button
                                                         type="button"
-                                                        onClick={() => abrirModalDetalleProducto(producto)}
+                                                        onClick={() => {
+                                                            if (modoSeleccionProducto === 'individual') {
+                                                                seleccionarProductoDesdeModal(producto);
+                                                                return;
+                                                            }
+                                                            abrirModalDetalleProducto(producto);
+                                                        }}
                                                         variant="primary"
                                                         className="bg-purple-600 hover:bg-purple-700 text-xs"
                                                     >
-                                                        Configurar
+                                                        {modoSeleccionProducto === 'individual' ? 'Seleccionar' : 'Configurar'}
                                                     </Button>
                                                 </td>
                                             </tr>
                                         ))}
+                                        {!buscandoProductos && filtroProductosMasivos.trim().length < 2 && (
+                                            <tr>
+                                                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                                                    Escriba al menos 2 caracteres para buscar productos.
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {buscandoProductos && (
+                                            <tr>
+                                                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                                                    Buscando productos...
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {!buscandoProductos && filtroProductosMasivos.trim().length >= 2 && productosSeleccionablesModal.length === 0 && (
+                                            <tr>
+                                                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                                                    No se encontraron productos para la búsqueda ingresada.
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>

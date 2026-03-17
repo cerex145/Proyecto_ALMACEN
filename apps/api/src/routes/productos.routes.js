@@ -17,7 +17,6 @@ const ProductoSchema = {
         fabricante: { type: 'string', nullable: true },
         categoria_ingreso: { type: 'string', nullable: true },
         procedencia: { type: 'string', nullable: true },
-        fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
         unidad: { type: 'string', nullable: true },
         unidad_otro: { type: 'string', nullable: true },
         um: { type: 'string', enum: ['', 'AMP', 'FRS', 'BLT', 'TUB', 'SOB', 'CJ', 'KG', 'G', 'UND'], nullable: true },
@@ -258,7 +257,6 @@ async function productoRoutes(fastify, options) {
             { header: 'Proveedor', key: 'proveedor_ruc', width: 15 },
             { header: 'Razón Social', key: 'proveedor', width: 35 },
             { header: 'Fecha Ingreso', key: 'fecha_ingreso', width: 20 },
-            { header: 'Fecha Vencimiento', key: 'fecha_vencimiento', width: 20 },
             { header: 'T. Documento', key: 'tipo_documento', width: 15 },
             { header: 'N° de Documento', key: 'numero_documento', width: 20 },
             { header: 'Unidad', key: 'unidad', width: 15 },
@@ -391,7 +389,6 @@ async function productoRoutes(fastify, options) {
                     fabricante: { type: 'string', nullable: true },
                     categoria_ingreso: nullableEnumSchema(categoriaIngresoValues),
                     procedencia: { type: 'string', nullable: true },
-                    fecha_vencimiento: nullableDateSchema(),
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
                     um: nullableEnumSchema(umValues),
@@ -418,7 +415,6 @@ async function productoRoutes(fastify, options) {
             fabricante,
             categoria_ingreso,
             procedencia,
-            fecha_vencimiento,
             unidad,
             unidad_otro,
             um,
@@ -465,7 +461,6 @@ async function productoRoutes(fastify, options) {
             fabricante: fabricante || null,
             categoria_ingreso: categoria_ingreso || null,
             procedencia,
-            fecha_vencimiento: fecha_vencimiento || null,
             unidad: unidad || 'UND',
             unidad_otro: unidad_otro || null,
             um: um !== undefined ? um : null,
@@ -511,7 +506,6 @@ async function productoRoutes(fastify, options) {
                     fabricante: { type: 'string', nullable: true },
                     categoria_ingreso: nullableEnumSchema(categoriaIngresoValues),
                     procedencia: { type: 'string', nullable: true },
-                    fecha_vencimiento: nullableDateSchema(),
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
                     um: nullableEnumSchema(umValues),
@@ -541,7 +535,6 @@ async function productoRoutes(fastify, options) {
             fabricante,
             categoria_ingreso,
             procedencia,
-            fecha_vencimiento,
             unidad,
             unidad_otro,
             um,
@@ -586,7 +579,6 @@ async function productoRoutes(fastify, options) {
         if (fabricante !== undefined) producto.fabricante = fabricante || null;
         if (categoria_ingreso !== undefined) producto.categoria_ingreso = categoria_ingreso || null;
         if (procedencia) producto.procedencia = procedencia;
-        if (fecha_vencimiento !== undefined) producto.fecha_vencimiento = fecha_vencimiento || null;
         if (unidad !== undefined) producto.unidad = unidad || 'UND';
         if (unidad_otro !== undefined) producto.unidad_otro = unidad_otro || null;
         if (um !== undefined) producto.um = um || null;
@@ -669,14 +661,13 @@ async function productoRoutes(fastify, options) {
             'proveedor_ruc',       // E - col 5
             'proveedor',           // F - col 6 (Razón Social)
             'fecha_ingreso',       // G - col 7
-            'fecha_vencimiento',   // H - col 8
-            'tipo_documento',      // I - col 9
-            'numero_documento',    // J - col 10
-            'unidad',              // K - col 11
-            'um',                  // L - col 12
-            'fabricante',          // M - col 13
-            'procedencia',         // N - col 14
-            'observaciones'        // O - col 15
+            'tipo_documento',      // H - col 8
+            'numero_documento',    // I - col 9
+            'unidad',              // J - col 10
+            'um',                  // K - col 11
+            'fabricante',          // L - col 12
+            'procedencia',         // M - col 13
+            'observaciones'        // N - col 14
         ];
         const NUMERICAS = [];
 
