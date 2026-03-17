@@ -62,14 +62,14 @@ export const HistorialSalidasFuncional = () => {
             setSalidas([]);
 
             const rows = [];
-            filas.forEach((fila) => {
+            filas.forEach((fila, index) => {
                 const fechaObj = new Date(fila.fecha);
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
                 const fmt = (v) => (v == null || v === '') ? '-' : parseFloat(v).toFixed(2);
                 rows.push({
-                    key: `${fila.nota_id}-${fila.detalle_id}`,
+                    key: `${fila.nota_id}-${fila.detalle_id}-${index}`,
                     notaId: fila.nota_id,
                     numeroSalida: fila.numero_salida || '-',
                     codigo: fila.producto_codigo || '-',

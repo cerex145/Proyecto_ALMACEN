@@ -746,7 +746,7 @@ export const NotaSalidaForm = () => {
 
                 const delimiter = lines[0].includes(';') ? ';' : ',';
                 const headers = parseCSVLine(lines[0], delimiter).map((h) => normalizeText(h));
-                const required = ['codigo_producto', 'lote', 'cantidad'];
+                const required = ['codigo_producto'];
                 const faltantes = required.filter((r) => !headers.includes(r));
 
                 if (faltantes.length > 0) {
@@ -833,11 +833,16 @@ export const NotaSalidaForm = () => {
 
                     const codigo = normalizeText(row.codigo_producto);
                     const loteCsv = String(row.lote || '').trim();
-                    const cantidad = parseNumber(row.cantidad, 0);
+                    const cantidadRaw = parseNumber(row.cantidad ?? row.cant_total ?? row.cantidad_total, 0);
+                    const cantidad = cantidadRaw > 0 ? cantidadRaw : 1;
 
-                    if (!codigo || !loteCsv || cantidad <= 0) {
-                        errores.push(`Fila ${i + 1}: código/lote/cantidad inválidos.`);
+                    if (!codigo) {
+                        errores.push(`Fila ${i + 1}: código de producto inválido.`);
                         continue;
+                    }
+
+                    if (cantidadRaw <= 0) {
+                        errores.push(`Fila ${i + 1}: cantidad vacía/inválida, se usó 1.`);
                     }
 
                     const producto = products.find((p) => normalizeText(p.codigo) === codigo);
@@ -860,35 +865,53 @@ export const NotaSalidaForm = () => {
                         continue;
                     }
 
-                    let lote = lotesActivos.find((l) => normalizeText(l.numero_lote) === normalizeText(loteCsv));
-                    if (!lote) {
-                        lote = lotesActivos[0];
-                        errores.push(`Fila ${i + 1}: lote ${loteCsv} no encontrado, se usó ${lote.numero_lote}.`);
+                    const stockTotalProducto = lotesActivos.reduce((acc, l) => acc + Number(l.cantidad_disponible || 0), 0);
+                    if (stockTotalProducto <= 0) {
+                        errores.push(`Fila ${i + 1}: sin stock disponible para ${row.codigo_producto}.`);
+                        continue;
                     }
 
-                    const disponible = Number(lote.cantidad_disponible || 0);
-                    if (cantidad > disponible) {
-                        errores.push(`Fila ${i + 1}: cantidad ${cantidad} supera disponible ${disponible} en lote ${lote.numero_lote}.`);
-                        continue;
+                    let cantidadAUsar = Number(cantidad);
+                    if (cantidadAUsar > stockTotalProducto) {
+                        errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera stock total ${stockTotalProducto}, se ajustó a ${stockTotalProducto}.`);
+                        cantidadAUsar = stockTotalProducto;
+                    }
+
+                    let lote = null;
+                    if (loteCsv) {
+                        lote = lotesActivos.find((l) => normalizeText(l.numero_lote) === normalizeText(loteCsv)) || null;
+                        if (!lote) {
+                            errores.push(`Fila ${i + 1}: lote ${loteCsv} no encontrado, se usará FIFO automático.`);
+                        }
+                    } else {
+                        errores.push(`Fila ${i + 1}: lote vacío, se usará FIFO automático.`);
+                    }
+
+                    if (lote) {
+                        const disponibleLote = Number(lote.cantidad_disponible || 0);
+                        if (cantidadAUsar > disponibleLote) {
+                            errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera disponible ${disponibleLote} del lote ${lote.numero_lote}, se usará FIFO automático.`);
+                            lote = null;
+                        }
                     }
 
                     const detalle = {
                         producto_id: Number(producto.id),
-                        nota_ingreso_id: getNotaIngresoIdByProductoLote(Number(producto.id), lote.numero_lote),
+                        nota_ingreso_id: lote ? getNotaIngresoIdByProductoLote(Number(producto.id), lote.numero_lote) : null,
                         producto_codigo: producto.codigo || '',
                         producto_nombre: producto.descripcion || '',
-                        lote_id: lote.id ? Number(lote.id) : null,
-                        lote_numero: lote.numero_lote || loteCsv,
-                        fecha_vencimiento: normalizeDateInput(lote.fecha_vencimiento || producto.fecha_vencimiento),
+                        lote_id: lote?.id ? Number(lote.id) : null,
+                        lote_numero: lote?.numero_lote || null,
+                        fecha_vencimiento: normalizeDateInput(lote?.fecha_vencimiento || producto.fecha_vencimiento) || null,
                         um: row.um || producto.um || producto.unidad || '-',
                         cant_bulto: parseNumber(row.cant_bulto ?? row.cantidad_bultos, 0),
                         cant_caja: parseNumber(row.cant_caja ?? row.cantidad_cajas, 0),
                         cant_por_caja: parseNumber(row.cant_x_caja ?? row.cantidad_por_caja, 0),
                         cant_fraccion: parseNumber(row.cant_fraccion ?? row.cantidad_fraccion, 0),
-                        cantidad_inicial: Number(lote.cantidad_ingresada || cantidad),
-                        cant_total: Number(cantidad),
-                        cantidad: Number(cantidad),
-                        cantidad_disponible: disponible
+                        cantidad_inicial: Number(lote?.cantidad_ingresada || cantidadAUsar),
+                        cant_total: Number(cantidadAUsar),
+                        cantidad: Number(cantidadAUsar),
+                        cantidad_disponible: lote ? Number(lote.cantidad_disponible || 0) : Number(stockTotalProducto)
                     };
 
                     upsertDetalleSalida(detalle);
@@ -896,10 +919,16 @@ export const NotaSalidaForm = () => {
                 }
 
                 setErroresImportacionCSV(errores);
+                const totalFilas = Math.max(lines.length - 1, 0);
+                const omitidos = Math.max(totalFilas - importados, 0);
 
                 if (importados > 0) {
-                    showToast(`Se importaron ${importados} fila(s) desde CSV.`, 'success');
-                    setMostrarModalImportacionCSV(false);
+                    if (omitidos > 0) {
+                        showToast(`Importación parcial: ${importados} fila(s) cargadas y ${omitidos} omitida(s). Revisa observaciones.`, 'warning');
+                    } else {
+                        showToast(`Se importaron ${importados} fila(s) desde CSV.`, 'success');
+                        setMostrarModalImportacionCSV(false);
+                    }
                 } else {
                     showToast('No se pudieron importar filas del CSV.', 'error');
                 }
@@ -1742,7 +1771,6 @@ export const NotaSalidaForm = () => {
                                 accept=".csv,text/csv"
                                 className="hidden"
                                 onChange={handleImportarSalidaCSV}
-                                disabled={!selectedClient}
                             />
 
                             <Button
@@ -1750,7 +1778,6 @@ export const NotaSalidaForm = () => {
                                 variant="secondary"
                                 className="w-full"
                                 onClick={() => inputCsvSalidaRef.current?.click()}
-                                disabled={!selectedClient}
                             >
                                 Seleccionar archivo CSV
                             </Button>
