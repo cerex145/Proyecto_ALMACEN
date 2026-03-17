@@ -530,7 +530,7 @@ async function salidasRoutes(fastify, options) {
             description: 'Crear una nueva nota de salida con sus detalles',
             body: {
                 type: 'object',
-                required: ['fecha', 'detalles'],
+                required: ['detalles'],
                 properties: {
                     cliente_id: { type: 'integer' },
                     fecha: { type: 'string', format: 'date' },
@@ -585,12 +585,11 @@ async function salidasRoutes(fastify, options) {
         if (!cliente_id) {
             return reply.status(400).send({ success: false, error: 'Campo obligatorio: cliente_id' });
         }
-        if (!fecha) {
-            return reply.status(400).send({ success: false, error: 'Campo obligatorio: fecha' });
-        }
         if (!detalles || !Array.isArray(detalles) || detalles.length === 0) {
             return reply.status(400).send({ success: false, error: 'Detalles debe ser un array con al menos un item' });
         }
+
+        const fechaFinal = fecha || new Date().toISOString().split('T')[0];
 
         try {
             // Verificar cliente
@@ -632,7 +631,7 @@ async function salidasRoutes(fastify, options) {
             const nota = notaSalidaRepo.create({
                 numero_salida: numeroSalida,
                 cliente_id: Number(cliente_id),
-                fecha,
+                fecha: fechaFinal,
                 responsable_id,
                 tipo_documento: tipo_documento || null,
                 numero_documento: numero_documento || null,

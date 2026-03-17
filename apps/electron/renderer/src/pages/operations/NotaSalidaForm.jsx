@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
@@ -10,7 +10,7 @@ import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '.
 
 export const NotaSalidaForm = () => {
     const OTHER_LOTE_OPTION = 'OTRO';
-    const { register, control, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm({
+    const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             cliente_id: '',
             fecha: new Date().toISOString().split('T')[0],
@@ -58,6 +58,11 @@ export const NotaSalidaForm = () => {
     const [numeroDocBusqueda, setNumeroDocBusqueda] = useState('');
     const [buscandoDoc, setBuscandoDoc] = useState(false);
 
+    // Carga masiva por CSV
+    const [mostrarModalImportacionCSV, setMostrarModalImportacionCSV] = useState(false);
+    const [erroresImportacionCSV, setErroresImportacionCSV] = useState([]);
+    const inputCsvSalidaRef = useRef(null);
+
     // Estados para modal de edición de cantidades
     const [mostrarModalEdicionCantidades, setMostrarModalEdicionCantidades] = useState(false);
     const [detallesAEditar, setDetallesAEditar] = useState([]);
@@ -86,6 +91,76 @@ export const NotaSalidaForm = () => {
             return '';
         }
         return parsed.toISOString().split('T')[0];
+    };
+
+    const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+    const parseNumber = (value, fallback = 0) => {
+        if (value === null || value === undefined || value === '') {
+            return fallback;
+        }
+        const normalized = String(value).replace(',', '.').trim();
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const normalizeRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
+
+    const parseCSVLine = (line, delimiter = ',') => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i += 1) {
+            const char = line[i];
+            if (char === '"') {
+                const next = line[i + 1];
+                if (inQuotes && next === '"') {
+                    current += '"';
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === delimiter && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+
+        result.push(current.trim());
+        return result;
+    };
+
+    const upsertDetalleSalida = (detalle) => {
+        const detallesActuales = getValues('detalles') || [];
+        const existingIndex = detallesActuales.findIndex(
+            (f) => Number(f.producto_id) === Number(detalle.producto_id)
+                && String(f.lote_numero || '') === String(detalle.lote_numero || '')
+                && Number(f.nota_ingreso_id || 0) === Number(detalle.nota_ingreso_id || 0)
+        );
+
+        if (existingIndex >= 0) {
+            const existing = detallesActuales[existingIndex];
+            const disponibleBase = Number(existing.cantidad_disponible || detalle.cantidad_disponible || 0);
+            const cantidadNueva = Number(existing.cantidad || 0) + Number(detalle.cantidad || 0);
+            const cantidadFinal = Math.min(cantidadNueva, disponibleBase > 0 ? disponibleBase : cantidadNueva);
+
+            update(existingIndex, {
+                ...existing,
+                cant_bulto: Number(existing.cant_bulto || 0) + Number(detalle.cant_bulto || 0),
+                cant_caja: Number(existing.cant_caja || 0) + Number(detalle.cant_caja || 0),
+                cant_por_caja: Number(existing.cant_por_caja || 0) + Number(detalle.cant_por_caja || 0),
+                cant_fraccion: Number(existing.cant_fraccion || 0) + Number(detalle.cant_fraccion || 0),
+                cantidad: cantidadFinal,
+                cant_total: cantidadFinal,
+                fecha_vencimiento: normalizeDateInput(detalle.fecha_vencimiento) || normalizeDateInput(existing.fecha_vencimiento)
+            });
+            return;
+        }
+
+        append(detalle);
     };
 
     const getDetalleInicial = (detalle) => {
@@ -652,6 +727,246 @@ export const NotaSalidaForm = () => {
         setCantidadTotal(0);
     };
 
+    const handleImportarSalidaCSV = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setErroresImportacionCSV([]);
+        const reader = new FileReader();
+
+        reader.onload = async (e) => {
+            try {
+                const text = String(e.target?.result || '').replace(/^\uFEFF/, '');
+                const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
+                if (lines.length < 2) {
+                    showToast('El CSV está vacío o sin filas de datos.', 'warning');
+                    return;
+                }
+
+                const delimiter = lines[0].includes(';') ? ';' : ',';
+                const headers = parseCSVLine(lines[0], delimiter).map((h) => normalizeText(h));
+                const required = ['codigo_producto', 'lote', 'cantidad'];
+                const faltantes = required.filter((r) => !headers.includes(r));
+
+                if (faltantes.length > 0) {
+                    const msg = `Faltan columnas: ${faltantes.join(', ')}`;
+                    setErroresImportacionCSV([msg]);
+                    showToast(msg, 'error');
+                    return;
+                }
+
+                let clienteTrabajo = selectedClient;
+                if (!clienteTrabajo) {
+                    if (!headers.includes('ruc_cliente')) {
+                        const msg = 'Si no seleccionas cliente manualmente, el CSV debe incluir columna ruc_cliente.';
+                        setErroresImportacionCSV([msg]);
+                        showToast(msg, 'error');
+                        return;
+                    }
+
+                    let rucDetectado = '';
+                    for (let i = 1; i < lines.length; i += 1) {
+                        const values = parseCSVLine(lines[i], delimiter);
+                        const row = {};
+                        headers.forEach((header, index) => {
+                            row[header] = values[index] || '';
+                        });
+                        const ruc = normalizeRuc(row.ruc_cliente);
+                        if (ruc) {
+                            rucDetectado = ruc;
+                            break;
+                        }
+                    }
+
+                    if (!rucDetectado) {
+                        const msg = 'No se pudo identificar ruc_cliente en el CSV.';
+                        setErroresImportacionCSV([msg]);
+                        showToast(msg, 'error');
+                        return;
+                    }
+
+                    const clientePorRuc = clients.find((client) => {
+                        const rucCliente = normalizeRuc(client.cuit || client.ruc || client.ruc_cliente || '');
+                        return rucCliente === rucDetectado;
+                    });
+
+                    if (!clientePorRuc) {
+                        const msg = `No existe cliente con RUC ${rucDetectado} en el sistema.`;
+                        setErroresImportacionCSV([msg]);
+                        showToast(msg, 'error');
+                        return;
+                    }
+
+                    clienteTrabajo = String(clientePorRuc.id);
+                    setSelectedClient(String(clientePorRuc.id));
+                    setClienteRuc(clientePorRuc.cuit || clientePorRuc.ruc || rucDetectado);
+                    setClienteCodigo(clientePorRuc.codigo || '');
+                    setValue('cliente_id', String(clientePorRuc.id), { shouldValidate: true });
+                }
+
+                const fechaHeader = headers.includes('fecha') ? 'fecha' : '';
+                const motivoHeader = headers.includes('motivo_salida') ? 'motivo_salida' : '';
+                if (fechaHeader) {
+                    const values = parseCSVLine(lines[1], delimiter);
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    const fechaCsv = normalizeDateInput(row.fecha);
+                    if (fechaCsv) {
+                        setValue('fecha', fechaCsv);
+                    }
+                }
+                if (motivoHeader) {
+                    const values = parseCSVLine(lines[1], delimiter);
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    if (String(row.motivo_salida || '').trim()) {
+                        setValue('motivo_salida', String(row.motivo_salida || '').trim());
+                    }
+                }
+
+                const lotesCache = new Map();
+                const errores = [];
+                let importados = 0;
+
+                for (let i = 1; i < lines.length; i += 1) {
+                    const values = parseCSVLine(lines[i], delimiter);
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+
+                    const codigo = normalizeText(row.codigo_producto);
+                    const loteCsv = String(row.lote || '').trim();
+                    const cantidad = parseNumber(row.cantidad, 0);
+
+                    if (!codigo || !loteCsv || cantidad <= 0) {
+                        errores.push(`Fila ${i + 1}: código/lote/cantidad inválidos.`);
+                        continue;
+                    }
+
+                    const producto = products.find((p) => normalizeText(p.codigo) === codigo);
+                    if (!producto) {
+                        errores.push(`Fila ${i + 1}: producto no encontrado (${row.codigo_producto}).`);
+                        continue;
+                    }
+
+                    if (!lotesCache.has(producto.id)) {
+                        const lotes = await productService.getLotesByProduct(producto.id, clienteTrabajo);
+                        const activos = Array.isArray(lotes)
+                            ? lotes.filter((l) => Number(l.cantidad_disponible) > 0)
+                            : [];
+                        lotesCache.set(producto.id, activos);
+                    }
+
+                    const lotesActivos = lotesCache.get(producto.id) || [];
+                    if (lotesActivos.length === 0) {
+                        errores.push(`Fila ${i + 1}: sin lotes disponibles para ${row.codigo_producto}.`);
+                        continue;
+                    }
+
+                    let lote = lotesActivos.find((l) => normalizeText(l.numero_lote) === normalizeText(loteCsv));
+                    if (!lote) {
+                        lote = lotesActivos[0];
+                        errores.push(`Fila ${i + 1}: lote ${loteCsv} no encontrado, se usó ${lote.numero_lote}.`);
+                    }
+
+                    const disponible = Number(lote.cantidad_disponible || 0);
+                    if (cantidad > disponible) {
+                        errores.push(`Fila ${i + 1}: cantidad ${cantidad} supera disponible ${disponible} en lote ${lote.numero_lote}.`);
+                        continue;
+                    }
+
+                    const detalle = {
+                        producto_id: Number(producto.id),
+                        nota_ingreso_id: getNotaIngresoIdByProductoLote(Number(producto.id), lote.numero_lote),
+                        producto_codigo: producto.codigo || '',
+                        producto_nombre: producto.descripcion || '',
+                        lote_id: lote.id ? Number(lote.id) : null,
+                        lote_numero: lote.numero_lote || loteCsv,
+                        fecha_vencimiento: normalizeDateInput(row.fecha_vencimiento || lote.fecha_vencimiento),
+                        um: row.um || producto.um || producto.unidad || '-',
+                        cant_bulto: parseNumber(row.cant_bulto ?? row.cantidad_bultos, 0),
+                        cant_caja: parseNumber(row.cant_caja ?? row.cantidad_cajas, 0),
+                        cant_por_caja: parseNumber(row.cant_x_caja ?? row.cantidad_por_caja, 0),
+                        cant_fraccion: parseNumber(row.cant_fraccion ?? row.cantidad_fraccion, 0),
+                        cantidad_inicial: Number(lote.cantidad_ingresada || cantidad),
+                        cant_total: Number(cantidad),
+                        cantidad: Number(cantidad),
+                        cantidad_disponible: disponible
+                    };
+
+                    upsertDetalleSalida(detalle);
+                    importados += 1;
+                }
+
+                setErroresImportacionCSV(errores);
+
+                if (importados > 0) {
+                    showToast(`Se importaron ${importados} fila(s) desde CSV.`, 'success');
+                    setMostrarModalImportacionCSV(false);
+                } else {
+                    showToast('No se pudieron importar filas del CSV.', 'error');
+                }
+            } catch (error) {
+                console.error('Error importando CSV de salida:', error);
+                showToast(`Error al procesar CSV: ${error.message}`, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
+    const descargarPlantillaSalidaCSV = () => {
+        const headers = [
+            'ruc_cliente',
+            'fecha',
+            'motivo_salida',
+            'codigo_producto',
+            'lote',
+            'cantidad',
+            'fecha_vencimiento',
+            'um',
+            'cant_bulto',
+            'cant_caja',
+            'cant_x_caja',
+            'cant_fraccion'
+        ];
+
+        const ejemplo = [
+            '20600124871',
+            '2026-03-17',
+            'Despacho comercial',
+            'MED-001',
+            'LOTE-2026-001',
+            '25',
+            '2027-12-31',
+            'UND',
+            '1',
+            '2',
+            '10',
+            '5'
+        ];
+
+        const csvContent = `${headers.join(',')}\n${ejemplo.join(',')}\n`;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.setAttribute('download', 'plantilla_nota_salida.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const handleToggleDetalle = (id) => {
         setSelectedDetalleIds((prev) => ({
             ...prev,
@@ -755,7 +1070,7 @@ export const NotaSalidaForm = () => {
 
             const payload = {
                 cliente_id: data.cliente_id,
-                fecha: data.fecha,
+                fecha: data.fecha || new Date().toISOString().split('T')[0],
                 responsable_id: data.responsable_id,
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
@@ -812,7 +1127,7 @@ export const NotaSalidaForm = () => {
         <div className="max-w-4xl mx-auto space-y-6">
             {/* Toast */}
             {toastMsg && (
-                <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-medium transition-all
+                <div className={`fixed top-4 right-4 z-80 px-5 py-3 rounded-lg shadow-lg text-white text-sm font-medium transition-all
                     ${toastType === 'success' ? 'bg-emerald-600' : toastType === 'error' ? 'bg-red-600' : toastType === 'info' ? 'bg-blue-600' : 'bg-amber-500'}`}>
                     {toastMsg}
                 </div>
@@ -1088,7 +1403,7 @@ export const NotaSalidaForm = () => {
                         <div>
                             <label className="label-premium">Fecha</label>
                             <input
-                                {...register('fecha', { required: 'Requerido' })}
+                                {...register('fecha')}
                                 type="date"
                                 className="input-premium"
                             />
@@ -1368,6 +1683,13 @@ export const NotaSalidaForm = () => {
                 <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-200">
                     <Button
                         type="button"
+                        variant="secondary"
+                        onClick={() => setMostrarModalImportacionCSV(true)}
+                    >
+                        📥 Carga por CSV
+                    </Button>
+                    <Button
+                        type="button"
                         onClick={handleRemoveSelected}
                         className="bg-red-600 hover:bg-red-700 text-white font-bold"
                         disabled={fields.length === 0}
@@ -1399,6 +1721,71 @@ export const NotaSalidaForm = () => {
                     </Button>
                 </div>
             </form>
+
+            {mostrarModalImportacionCSV && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setMostrarModalImportacionCSV(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-blue-600 px-6 py-4 text-white flex items-center justify-between rounded-t-xl">
+                            <h3 className="text-lg font-bold">Carga masiva de salida por CSV</h3>
+                            <button type="button" className="text-white" onClick={() => setMostrarModalImportacionCSV(false)}>✕</button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-600">
+                                Columnas requeridas: <span className="font-mono">codigo_producto, lote, cantidad</span>. Opcionales: <span className="font-mono">ruc_cliente, fecha, motivo_salida, fecha_vencimiento, um, cant_bulto, cant_caja, cant_x_caja, cant_fraccion</span>.
+                            </p>
+
+                            {!selectedClient && (
+                                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                    Puedes dejar cliente vacío si el CSV incluye <span className="font-mono">ruc_cliente</span>; se seleccionará automáticamente.
+                                </div>
+                            )}
+
+                            <div className="flex justify-end">
+                                <Button type="button" variant="secondary" onClick={descargarPlantillaSalidaCSV}>
+                                    Descargar plantilla CSV
+                                </Button>
+                            </div>
+
+                            <input
+                                ref={inputCsvSalidaRef}
+                                type="file"
+                                accept=".csv,text/csv"
+                                className="hidden"
+                                onChange={handleImportarSalidaCSV}
+                                disabled={!selectedClient}
+                            />
+
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="w-full"
+                                onClick={() => inputCsvSalidaRef.current?.click()}
+                                disabled={!selectedClient}
+                            >
+                                Seleccionar archivo CSV
+                            </Button>
+
+                            {erroresImportacionCSV.length > 0 && (
+                                <div className="max-h-48 overflow-auto rounded-lg border border-amber-300 bg-amber-50 p-3">
+                                    <p className="text-sm font-semibold text-amber-800 mb-2">Observaciones de importación</p>
+                                    <ul className="text-xs text-amber-900 space-y-1">
+                                        {erroresImportacionCSV.map((error, index) => (
+                                            <li key={`${error}-${index}`}>• {error}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end">
+                                <Button type="button" variant="secondary" onClick={() => setMostrarModalImportacionCSV(false)}>
+                                    Cerrar
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal de Edición de Cantidades */}
             {mostrarModalEdicionCantidades && (
