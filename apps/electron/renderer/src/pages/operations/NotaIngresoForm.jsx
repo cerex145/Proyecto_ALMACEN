@@ -550,6 +550,7 @@ export const NotaIngresoForm = () => {
             }
             const payload = {
                 fecha: data.fecha,
+                ruc_cliente: clienteRuc,
                 proveedor: proveedorNombre || clienteRuc || String(selectedClient),
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
@@ -687,6 +688,17 @@ export const NotaIngresoForm = () => {
     };
 
     const normalizarTexto = (value) => String(value || '').trim().toLowerCase();
+    const normalizarRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
+
+    const buscarClientePorRuc = (ruc) => {
+        const normalized = normalizarRuc(ruc);
+        if (!normalized) return null;
+
+        return clients.find((client) => {
+            const candidato = normalizarRuc(client.cuit || client.ruc || client.ruc_cliente || '');
+            return candidato === normalized;
+        }) || null;
+    };
 
     const construirDetalleDesdeCSV = (producto, row) => {
         const temperatura = parseNumber(
@@ -744,7 +756,7 @@ export const NotaIngresoForm = () => {
                 const pendientes = [];
 
                 // Validar encabezados requeridos
-                const requeridos = ['codigo_producto', 'lote', 'cantidad_total'];
+                const requeridos = ['ruc_cliente', 'codigo_producto', 'lote', 'cantidad_total'];
                 const faltantes = requeridos.filter(r => !headers.includes(r));
 
                 if (faltantes.length > 0) {
@@ -752,6 +764,8 @@ export const NotaIngresoForm = () => {
                     setErroresImportacion([`Columnas faltantes: ${faltantes.join(', ')}`]);
                     return;
                 }
+
+                let rucDetectado = '';
 
                 // Procesar cada fila
                 for (let i = 1; i < lines.length; i++) {
@@ -761,6 +775,19 @@ export const NotaIngresoForm = () => {
                     headers.forEach((header, index) => {
                         row[header] = values[index] || '';
                     });
+
+                    const rucFila = String(row.ruc_cliente || '').trim();
+                    if (!rucFila) {
+                        errores.push(`Fila ${i + 1}: Falta ruc_cliente`);
+                        continue;
+                    }
+
+                    if (!rucDetectado) {
+                        rucDetectado = rucFila;
+                    } else if (normalizarRuc(rucDetectado) !== normalizarRuc(rucFila)) {
+                        errores.push(`Fila ${i + 1}: El ruc_cliente no coincide con el resto del archivo (${rucFila})`);
+                        continue;
+                    }
 
                     try {
                         const codigoBuscado = normalizarTexto(row.codigo_producto);
@@ -809,6 +836,25 @@ export const NotaIngresoForm = () => {
                     }
                 }
 
+                if (!rucDetectado) {
+                    showError('No se pudo identificar ruc_cliente en el CSV.');
+                    setErroresImportacion((prev) => [...prev, 'No se encontró ruc_cliente válido en las filas.']);
+                    event.target.value = '';
+                    return;
+                }
+
+                const clienteDetectado = buscarClientePorRuc(rucDetectado);
+                if (!clienteDetectado) {
+                    showError(`No existe un cliente con RUC ${rucDetectado} en el sistema.`);
+                    setErroresImportacion((prev) => [...prev, `RUC no encontrado en clientes: ${rucDetectado}`]);
+                    event.target.value = '';
+                    return;
+                }
+
+                setSelectedClient(String(clienteDetectado.id));
+                setClienteRuc(clienteDetectado.cuit || clienteDetectado.ruc || rucDetectado);
+                setProveedorNombre(clienteDetectado.razon_social || '');
+
                 // Agregar productos importados al formulario
                 if (productosImportados.length > 0) {
                     productosImportados.forEach(producto => append(producto));
@@ -843,6 +889,7 @@ export const NotaIngresoForm = () => {
 
     const descargarPlantillaCSV = () => {
         const headers = [
+            'ruc_cliente',
             'codigo_producto',
             'lote',
             'fecha_vencimiento',
@@ -858,9 +905,9 @@ export const NotaIngresoForm = () => {
 
         // Usar códigos reales del sistema
         const ejemplos = [
-            ['MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
-            ['MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
-            ['INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
+            ['20123456789', 'MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
+            ['20123456789', 'MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
+            ['20123456789', 'INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
         ];
 
         const csvContent = headers.join(',') + '\n' + ejemplos.map(e => e.join(',')).join('\n');
@@ -1448,6 +1495,11 @@ export const NotaIngresoForm = () => {
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                        <p className="font-mono font-bold text-sm text-slate-800">ruc_cliente</p>
+                                        <p className="text-xs text-slate-600 mt-1">RUC del cliente (una sola nota por archivo)</p>
+                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">20123456789</span></p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
                                         <p className="font-mono font-bold text-sm text-slate-800">codigo_producto</p>
                                         <p className="text-xs text-slate-600 mt-1">Código del producto en el sistema</p>
                                         <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">PROD001</span></p>
@@ -1468,7 +1520,7 @@ export const NotaIngresoForm = () => {
                                         Ver todas las columnas disponibles (13 en total)
                                     </summary>
                                     <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
-                                        <p className="font-mono">codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, um, fabricante, temperatura</p>
+                                        <p className="font-mono">ruc_cliente, codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, um, fabricante, temperatura</p>
                                     </div>
                                 </details>
                             </div>
@@ -1481,9 +1533,9 @@ export const NotaIngresoForm = () => {
                                 </h3>
                                 <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
                                     <pre className="text-xs font-mono text-green-400">
-                                        {`codigo_producto,lote,cantidad_total
-PROD001,LOTE-2024-001,505
-PROD002,LOTE-2024-002,500`}
+                                        {`ruc_cliente,codigo_producto,lote,cantidad_total
+20123456789,PROD001,LOTE-2024-001,505
+20123456789,PROD002,LOTE-2024-002,500`}
                                     </pre>
                                 </div>
                                 <p className="text-xs text-green-800 mt-2">💡 Puedes agregar más columnas opcionales como: fecha_vencimiento, cantidad_cajas, um, fabricante, etc.</p>
@@ -1516,18 +1568,17 @@ PROD002,LOTE-2024-002,500`}
                                         accept=".csv"
                                         onChange={handleImportarCSV}
                                         className="hidden"
-                                        disabled={!selectedClient}
                                     />
                                     <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${selectedClient
                                         ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
-                                        : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+                                        : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
                                         }`}>
                                         📂 Seleccionar Archivo
                                     </div>
                                 </label>
                             </div>
                             {!selectedClient && (
-                                <p className="text-sm text-orange-600 text-center">⚠️ Primero selecciona un cliente para poder importar productos</p>
+                                <p className="text-sm text-slate-600 text-center">ℹ️ El cliente se seleccionará automáticamente usando la columna ruc_cliente del CSV</p>
                             )}
                         </div>
                     </div>

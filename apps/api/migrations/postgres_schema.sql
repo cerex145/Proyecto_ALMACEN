@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS notas_ingreso (
   id SERIAL PRIMARY KEY,
   numero_ingreso VARCHAR(50) NOT NULL UNIQUE,
   fecha DATE NOT NULL,
+  cliente_id INT REFERENCES clientes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
   proveedor VARCHAR(200) NOT NULL,
   tipo_documento VARCHAR(100),
   numero_documento VARCHAR(100),

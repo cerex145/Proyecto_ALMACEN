@@ -8,6 +8,7 @@ const NotaIngresoSchema = {
         id: { type: 'integer' },
         numero_ingreso: { type: 'string' },
         fecha: { type: 'string', format: 'date' },
+        cliente_id: { type: 'integer', nullable: true },
         proveedor: { type: 'string' },
         estado: { type: 'string' },
         observaciones: { type: 'string', nullable: true }
@@ -78,6 +79,8 @@ async function ingresosRoutes(fastify, options) {
     const loteRepo = fastify.db.getRepository('Lote');
     const kardexRepo = fastify.db.getRepository('Kardex');
 
+    const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
+
     // Generar número único de nota de ingreso
     const generarNumeroIngreso = async () => {
         const ultimaNote = await notaIngresoRepo
@@ -100,6 +103,7 @@ async function ingresosRoutes(fastify, options) {
                 properties: {
                     fecha_desde: { type: 'string', format: 'date' },
                     fecha_hasta: { type: 'string', format: 'date' },
+                    cliente_id: { type: 'integer' },
                     proveedor: { type: 'string' },
                     tipo_documento: { type: 'string' },
                     numero_documento: { type: 'string' },
@@ -123,6 +127,7 @@ async function ingresosRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             busqueda = '',
+            cliente_id,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -152,6 +157,10 @@ async function ingresosRoutes(fastify, options) {
             } else {
                 queryBuilder.where('nota.proveedor = :proveedor', { proveedor });
             }
+        }
+
+        if (cliente_id) {
+            queryBuilder.andWhere('nota.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
         }
 
         if (numero_documento) {
@@ -318,9 +327,11 @@ async function ingresosRoutes(fastify, options) {
             description: 'Crear una nueva nota de ingreso con sus detalles',
             body: {
                 type: 'object',
-                required: ['fecha', 'proveedor', 'detalles'],
+                required: ['fecha', 'ruc_cliente', 'detalles'],
                 properties: {
                     fecha: { type: 'string', format: 'date' },
+                    ruc_cliente: { type: 'string' },
+                    cliente_id: { type: 'integer' },
                     proveedor: { type: 'string' },
                     tipo_documento: { type: 'string' },
                     numero_documento: { type: 'string' },
@@ -372,6 +383,8 @@ async function ingresosRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             fecha,
+            ruc_cliente,
+            cliente_id,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -381,14 +394,27 @@ async function ingresosRoutes(fastify, options) {
         } = request.body;
 
         // Validaciones
-        if (!fecha || !proveedor || !detalles || detalles.length === 0) {
+        if (!fecha || !ruc_cliente || !detalles || detalles.length === 0) {
             return reply.status(400).send({
                 success: false,
-                error: 'Fecha, proveedor y detalles son obligatorios'
+                error: 'Fecha, ruc_cliente y detalles son obligatorios'
             });
         }
 
         try {
+            const rucNormalizado = normalizarRuc(ruc_cliente);
+            const cliente = await clienteRepo
+                .createQueryBuilder('cliente')
+                .where("REPLACE(REPLACE(REPLACE(COALESCE(cliente.cuit, ''), '-', ''), '.', ''), ' ', '') = :ruc", { ruc: rucNormalizado })
+                .getOne();
+
+            if (!cliente) {
+                return reply.status(400).send({
+                    success: false,
+                    error: 'Cliente no encontrado por RUC'
+                });
+            }
+
             const numeroIngreso = await generarNumeroIngreso();
 
             // Validar detalles
@@ -423,7 +449,8 @@ async function ingresosRoutes(fastify, options) {
             const nota = notaIngresoRepo.create({
                 numero_ingreso: numeroIngreso,
                 fecha,
-                proveedor,
+                cliente_id: Number(cliente.id),
+                proveedor: cliente.razon_social || proveedor || null,
                 tipo_documento: tipo_documento || null,
                 numero_documento: numero_documento || null,
                 responsable_id,
@@ -629,20 +656,31 @@ async function ingresosRoutes(fastify, options) {
             let detallesActuales = [];
             let notaActual = null;
 
+            const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
+            const clientes = await clienteRepo.find();
+
             worksheet.eachRow((row, rowNumber) => {
                 if (rowNumber === 1) return; // Skip header
 
-                const [fecha, proveedor, responsable, codigo_producto, lote, fecha_vencimiento, cantidad] = row.values.slice(1);
+                const [fecha, ruc_cliente, responsable, codigo_producto, lote, fecha_vencimiento, cantidad] = row.values.slice(1);
 
                 // Validaciones básicas
-                if (!fecha || !proveedor || !codigo_producto || !cantidad) {
+                if (!fecha || !ruc_cliente || !codigo_producto || !cantidad) {
                     errores.push(`Fila ${rowNumber}: Faltan datos obligatorios`);
+                    return;
+                }
+
+                const rucNormalizado = normalizarRuc(ruc_cliente);
+                const cliente = clientes.find((c) => normalizarRuc(c.cuit) === rucNormalizado);
+                if (!cliente) {
+                    errores.push(`Fila ${rowNumber}: Cliente con RUC ${ruc_cliente} no encontrado`);
                     return;
                 }
 
                 detallesActuales.push({
                     fecha: new Date(fecha),
-                    proveedor,
+                    cliente_id: Number(cliente.id),
+                    proveedor: cliente.razon_social,
                     responsable_id: responsable ? Number(responsable) : 1,
                     codigo_producto: String(codigo_producto),
                     lote_numero: String(lote),
@@ -668,6 +706,7 @@ async function ingresosRoutes(fastify, options) {
                 const nota = notaIngresoRepo.create({
                     numero_ingreso: numeroIngreso,
                     fecha: detalle.fecha,
+                    cliente_id: detalle.cliente_id,
                     proveedor: detalle.proveedor,
                     responsable_id: detalle.responsable_id,
                     estado: 'REGISTRADA'
@@ -784,7 +823,7 @@ async function ingresosRoutes(fastify, options) {
 
         worksheet.columns = [
             { header: 'Fecha (YYYY-MM-DD)', key: 'fecha', width: 20 },
-            { header: 'Proveedor', key: 'proveedor', width: 30 },
+            { header: 'RUC Cliente', key: 'ruc_cliente', width: 20 },
             { header: 'Responsable (ID)', key: 'responsable', width: 15 },
             { header: 'Código Producto', key: 'codigo_producto', width: 20 },
             { header: 'Número Lote', key: 'lote', width: 20 },
@@ -795,7 +834,7 @@ async function ingresosRoutes(fastify, options) {
         // Agregar fila de ejemplo
         worksheet.addRow({
             fecha: '2026-01-30',
-            proveedor: 'Proveedor Ejemplo',
+            ruc_cliente: '20123456789',
             responsable: '1',
             codigo_producto: 'PROD001',
             lote: 'LOTE-2026-001',

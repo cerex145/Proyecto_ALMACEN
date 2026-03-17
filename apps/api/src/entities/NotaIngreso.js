@@ -19,9 +19,27 @@ module.exports = new EntitySchema({
             type: 'date',
             nullable: false
         },
+        cliente_id: {
+            type: 'int',
+            nullable: true
+        },
         proveedor: {
             type: 'varchar',
             length: 200,
+            nullable: true
+        },
+        tipo_documento: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        numero_documento: {
+            type: 'varchar',
+            length: 100,
+            nullable: true
+        },
+        responsable_id: {
+            type: 'int',
             nullable: true
         },
         estado: {
@@ -43,6 +61,12 @@ module.exports = new EntitySchema({
         }
     },
     relations: {
+        cliente: {
+            type: 'many-to-one',
+            target: 'Cliente',
+            nullable: true,
+            joinColumn: { name: 'cliente_id' }
+        },
         detalles: {
             type: 'one-to-many',
             target: 'NotaIngresoDetalle',
