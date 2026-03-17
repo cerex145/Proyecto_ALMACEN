@@ -29,7 +29,9 @@ export const operationService = {
 
     // Salidas
     createSalida: async (data) => {
-        const response = await api.post('/salidas', data);
+        const response = await api.post('/salidas', data, {
+            timeout: 120000
+        });
         return response.data.data || response.data;
     }
 };

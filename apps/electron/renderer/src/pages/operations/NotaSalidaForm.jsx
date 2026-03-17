@@ -444,7 +444,7 @@ export const NotaSalidaForm = () => {
                         producto_nombre: detalle.producto?.descripcion || '',
                         lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
                         lote_numero: detalle.lote_numero || '',
-                        fecha_vencimiento: detalle.fecha_vencimiento || '',
+                        fecha_vencimiento: normalizeDateInput(detalle.fecha_vencimiento),
                         um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
                         fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
                         temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
@@ -565,7 +565,7 @@ export const NotaSalidaForm = () => {
                     producto_nombre: detalle.producto?.descripcion || '',
                     lote_id: detalle.lote_id ? Number(detalle.lote_id) : null,
                     lote_numero: detalle.lote_numero || '',
-                    fecha_vencimiento: detalle.fecha_vencimiento || '',
+                    fecha_vencimiento: normalizeDateInput(detalle.fecha_vencimiento),
                     um: detalle.um || detalle.producto?.um || detalle.producto?.unidad || '',
                     fabricante: detalle.fabricante || detalle.producto?.fabricante || '',
                     temperatura_min: detalle.temperatura_min_c || detalle.producto?.temperatura_min_c || '',
@@ -737,6 +737,22 @@ export const NotaSalidaForm = () => {
                 }
             }
 
+            const detallesSanitizados = (data.detalles || []).map((det) => ({
+                producto_id: Number(det.producto_id),
+                lote_id: det.lote_id ? Number(det.lote_id) : null,
+                cantidad: Number(det.cantidad),
+                precio_unitario: det.precio_unitario ? Number(det.precio_unitario) : null,
+                cant_bulto: Number(det.cant_bulto || 0),
+                cant_caja: Number(det.cant_caja || 0),
+                cant_x_caja: Number(det.cant_por_caja || det.cant_x_caja || 0),
+                cant_fraccion: Number(det.cant_fraccion || 0)
+            })).filter((det) => Number.isFinite(det.producto_id) && Number(det.producto_id) > 0 && Number(det.cantidad) > 0);
+
+            if (detallesSanitizados.length === 0) {
+                showToast('No hay detalles válidos para guardar.', 'error');
+                return;
+            }
+
             const payload = {
                 cliente_id: data.cliente_id,
                 fecha: data.fecha,
@@ -745,12 +761,7 @@ export const NotaSalidaForm = () => {
                 numero_documento: data.numero_documento || null,
                 fecha_ingreso: data.fecha_ingreso || null,
                 motivo_salida: data.motivo_salida || null,
-                detalles: data.detalles.map(det => ({
-                    producto_id: Number(det.producto_id),
-                    lote_id: det.lote_id ? Number(det.lote_id) : null,
-                    cantidad: Number(det.cantidad),
-                    precio_unitario: det.precio_unitario ? Number(det.precio_unitario) : null
-                }))
+                detalles: detallesSanitizados
             };
 
             console.log('📤 Enviando payload:', JSON.stringify(payload, null, 2));
@@ -760,6 +771,10 @@ export const NotaSalidaForm = () => {
             resetAllStates();
         } catch (error) {
             console.error(error);
+            if (error?.code === 'ECONNABORTED') {
+                showToast('La operación tardó demasiado. Intente nuevamente o reduzca la cantidad de ítems.', 'error');
+                return;
+            }
             const mensaje = error?.response?.data?.error || error?.message || 'Verifique los datos.';
             showToast(`Error al registrar salida: ${mensaje}`, 'error');
         }
