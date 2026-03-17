@@ -888,7 +888,7 @@ export const NotaSalidaForm = () => {
                         producto_nombre: producto.descripcion || '',
                         lote_id: lote.id ? Number(lote.id) : null,
                         lote_numero: lote.numero_lote || loteCsv,
-                        fecha_vencimiento: normalizeDateInput(row.fecha_vencimiento || lote.fecha_vencimiento),
+                        fecha_vencimiento: normalizeDateInput(lote.fecha_vencimiento || producto.fecha_vencimiento),
                         um: row.um || producto.um || producto.unidad || '-',
                         cant_bulto: parseNumber(row.cant_bulto ?? row.cantidad_bultos, 0),
                         cant_caja: parseNumber(row.cant_caja ?? row.cantidad_cajas, 0),
@@ -931,7 +931,6 @@ export const NotaSalidaForm = () => {
             'codigo_producto',
             'lote',
             'cantidad',
-            'fecha_vencimiento',
             'um',
             'cant_bulto',
             'cant_caja',
@@ -946,7 +945,6 @@ export const NotaSalidaForm = () => {
             'MED-001',
             'LOTE-2026-001',
             '25',
-            '2027-12-31',
             'UND',
             '1',
             '2',
@@ -1732,7 +1730,7 @@ export const NotaSalidaForm = () => {
 
                         <div className="p-6 space-y-4">
                             <p className="text-sm text-slate-600">
-                                Columnas requeridas: <span className="font-mono">codigo_producto, lote, cantidad</span>. Opcionales: <span className="font-mono">ruc_cliente, fecha, motivo_salida, fecha_vencimiento, um, cant_bulto, cant_caja, cant_x_caja, cant_fraccion</span>.
+                                Columnas requeridas: <span className="font-mono">codigo_producto, lote, cantidad</span>. Opcionales: <span className="font-mono">ruc_cliente, fecha, motivo_salida, um, cant_bulto, cant_caja, cant_x_caja, cant_fraccion</span>.
                             </p>
 
                             {!selectedClient && (
