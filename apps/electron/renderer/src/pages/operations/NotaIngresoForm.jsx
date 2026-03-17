@@ -165,7 +165,7 @@ export const NotaIngresoForm = () => {
         setFabricante(product?.fabricante || '');
         setTemperatura(String(product?.temperatura ?? product?.temperatura_min_c ?? 25));
         setLote(product?.lote || '');
-        setVencimiento(product?.fecha_vencimiento || '');
+        setVencimiento(normalizarFechaInput(product?.fecha_vencimiento));
         setBultos(product?.cantidad_bultos ?? '');
         setCajas(product?.cantidad_cajas ?? '');
         setUnidadesCaja(product?.cantidad_por_caja ?? '');
@@ -276,7 +276,7 @@ export const NotaIngresoForm = () => {
         const loteInfo = lotesDisponibles.find(l => String(l.id) === String(value));
         if (loteInfo) {
             setLote(loteInfo.numero_lote || '');
-            setVencimiento(loteInfo.fecha_vencimiento || '');
+            setVencimiento(normalizarFechaInput(loteInfo.fecha_vencimiento));
             const productoDetalle = loteInfo.producto || products.find(p => p.id === Number(selectedProduct));
             if (productoDetalle) {
                 setUm(productoDetalle.um || '');
@@ -406,7 +406,7 @@ export const NotaIngresoForm = () => {
             producto_nombre: producto.descripcion || '',
             cantidad: cantidadTotal,
             lote_numero: loteFinal,
-            fecha_vencimiento: detalle.fecha_vencimiento || null,
+            fecha_vencimiento: normalizarFechaInput(detalle.fecha_vencimiento) || null,
             um: detalle.um || producto.um || producto.unidad || '',
             fabricante: detalle.fabricante || producto.fabricante || '',
             temperatura_min: Number(detalle.temperatura || 25),
@@ -446,7 +446,7 @@ export const NotaIngresoForm = () => {
         setProductoDetalleModal(producto);
         setDetalleProductoDraft({
             lote_numero: producto.lote || '',
-            fecha_vencimiento: producto.fecha_vencimiento || '',
+            fecha_vencimiento: normalizarFechaInput(producto.fecha_vencimiento),
             um: producto.um || producto.unidad || '',
             fabricante: producto.fabricante || '',
             temperatura: String(producto.temperatura ?? producto.temperatura_min_c ?? 25),
@@ -548,6 +548,24 @@ export const NotaIngresoForm = () => {
                 showError('Seleccione un cliente antes de guardar.');
                 return;
             }
+
+            const detallesSanitizados = (data.detalles || []).map((d) => ({
+                ...d,
+                lote_numero: String(d.lote_numero || '').trim(),
+                fecha_vencimiento: normalizarFechaInput(d.fecha_vencimiento) || null,
+                cantidad: Number(d.cantidad_total || d.cantidad || 0),
+                cantidad_total: Number(d.cantidad_total || d.cantidad || 0),
+                cantidad_bultos: Number(d.cantidad_bultos || 0),
+                cantidad_cajas: Number(d.cantidad_cajas || 0),
+                cantidad_por_caja: Number(d.cantidad_por_caja || 0),
+                cantidad_fraccion: Number(d.cantidad_fraccion || 0)
+            })).filter((d) => d.producto_id && d.lote_numero && Number(d.cantidad) > 0);
+
+            if (detallesSanitizados.length === 0) {
+                showError('No hay detalles válidos para guardar. Verifica lote y cantidad mayor a 0.');
+                return;
+            }
+
             const payload = {
                 fecha: data.fecha,
                 ruc_cliente: clienteRuc,
@@ -555,7 +573,7 @@ export const NotaIngresoForm = () => {
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
                 responsable_id: data.responsable_id,
-                detalles: data.detalles,
+                detalles: detallesSanitizados,
                 observaciones: data.numero_ingreso ? `Documento: ${data.numero_ingreso}` : undefined
             };
             const created = await operationService.createIngreso(payload);
@@ -691,6 +709,40 @@ export const NotaIngresoForm = () => {
         return Number.isFinite(parsed) ? parsed : fallback;
     };
 
+    const normalizarFechaInput = (value) => {
+        if (!value) return '';
+
+        const raw = String(value).trim();
+        if (!raw) return '';
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            return raw;
+        }
+
+        const matchDMY = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+        if (matchDMY) {
+            const first = Number(matchDMY[1]);
+            const second = Number(matchDMY[2]);
+            const year = Number(matchDMY[3]);
+            const month = first > 12 ? second : first;
+            const day = first > 12 ? first : second;
+
+            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
+        }
+
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) {
+            return '';
+        }
+
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     const normalizarTexto = (value) => String(value || '').trim().toLowerCase();
     const normalizarRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
 
@@ -716,7 +768,7 @@ export const NotaIngresoForm = () => {
             producto_nombre: producto.descripcion,
             producto_codigo: producto.codigo,
             lote_numero: row.lote,
-            fecha_vencimiento: row.fecha_vencimiento || null,
+            fecha_vencimiento: normalizarFechaInput(row.fecha_vencimiento) || null,
             cantidad_bultos: parseNumber(row.cantidad_bultos, 0),
             cantidad_cajas: parseNumber(row.cantidad_cajas, 0),
             cantidad_por_caja: parseNumber(row.cantidad_por_caja, 0),
