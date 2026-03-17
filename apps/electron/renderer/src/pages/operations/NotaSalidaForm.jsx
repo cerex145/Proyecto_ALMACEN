@@ -108,6 +108,16 @@ export const NotaSalidaForm = () => {
 
     const normalizeRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
 
+    const dedupeById = (items = []) => {
+        const seen = new Set();
+        return (Array.isArray(items) ? items : []).filter((item) => {
+            const id = Number(item?.id || 0);
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+    };
+
     const parseCSVLine = (line, delimiter = ',') => {
         const result = [];
         let current = '';
@@ -334,11 +344,18 @@ export const NotaSalidaForm = () => {
                 const activos = Array.isArray(lotes)
                     ? lotes.filter(l => Number(l.cantidad_disponible) > 0)
                     : [];
-                setLotesDisponibles(activos);
-                const firstNumero = activos[0]?.numero_lote || '';
+                const vistosLotes = new Set();
+                const activosUnicos = activos.filter((lote) => {
+                    const key = `${lote?.id || ''}__${String(lote?.numero_lote || '')}`;
+                    if (vistosLotes.has(key)) return false;
+                    vistosLotes.add(key);
+                    return true;
+                });
+                setLotesDisponibles(activosUnicos);
+                const firstNumero = activosUnicos[0]?.numero_lote || '';
                 setSelectedLoteOption(firstNumero);
                 setLoteManual('');
-                setFechaVencimiento(normalizeDateInput(activos[0]?.fecha_vencimiento));
+                setFechaVencimiento(normalizeDateInput(activosUnicos[0]?.fecha_vencimiento));
             } catch (error) {
                 console.error('Error cargando lotes:', error);
                 setLotesDisponibles([]);
@@ -356,7 +373,7 @@ export const NotaSalidaForm = () => {
         try {
             const clientsResponse = await clientesService.listar();
             const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
-            setClients(clientsArray);
+            setClients(dedupeById(clientsArray));
         } catch (error) {
             console.error('Error loading clients:', error);
             showToast('Error al cargar lista de Clientes.', 'error');
@@ -379,10 +396,11 @@ export const NotaSalidaForm = () => {
                 page += 1;
             } while (page <= totalPages);
 
-            setProducts(acumulado);
+            const unicos = dedupeById(acumulado);
+            setProducts(unicos);
 
             if (!clienteId) {
-                setAllProducts(acumulado);
+                setAllProducts(unicos);
             }
         } catch (error) {
             console.error('Error loading products:', error);
@@ -1124,6 +1142,58 @@ export const NotaSalidaForm = () => {
                 }
             }
 
+            const acumuladoPorClave = new Map();
+            for (let i = 0; i < data.detalles.length; i++) {
+                const det = data.detalles[i];
+                const clave = `${Number(det.producto_id || 0)}__${det.lote_id ? Number(det.lote_id) : 'FIFO'}`;
+                const cantidad = Number(det.cantidad || 0);
+                const disponible = Number(det.cantidad_disponible ?? Number.POSITIVE_INFINITY);
+                const actual = acumuladoPorClave.get(clave) || { cantidad: 0, disponible };
+                actual.cantidad += cantidad;
+                if (Number.isFinite(disponible)) {
+                    actual.disponible = Math.min(Number(actual.disponible), disponible);
+                }
+                acumuladoPorClave.set(clave, actual);
+            }
+
+            for (const [clave, info] of acumuladoPorClave.entries()) {
+                if (Number.isFinite(info.disponible) && Number(info.cantidad) > Number(info.disponible)) {
+                    showToast(`Cantidad acumulada supera disponible para ${clave}. Ajusta cantidades.`, 'error');
+                    return;
+                }
+            }
+
+            const totalPorProducto = new Map();
+            for (const det of (data.detalles || [])) {
+                const pid = Number(det.producto_id || 0);
+                if (!pid) continue;
+                totalPorProducto.set(pid, (totalPorProducto.get(pid) || 0) + Number(det.cantidad || 0));
+            }
+
+            const chequeosStock = await Promise.all(
+                Array.from(totalPorProducto.entries()).map(async ([pid, solicitado]) => {
+                    const lotes = await productService.getLotesByProduct(pid);
+                    const disponible = (Array.isArray(lotes) ? lotes : [])
+                        .reduce((acc, lote) => acc + Number(lote.cantidad_disponible || 0), 0);
+                    return { pid, solicitado: Number(solicitado || 0), disponible: Number(disponible || 0) };
+                })
+            );
+
+            const sinStock = chequeosStock.filter((c) => c.solicitado > c.disponible + 0.001);
+            if (sinStock.length > 0) {
+                const mapaProductos = new Map([...(products || []), ...(allProducts || [])].map((p) => [Number(p.id), p]));
+                const detalleError = sinStock
+                    .slice(0, 3)
+                    .map((c) => {
+                        const p = mapaProductos.get(Number(c.pid));
+                        const nombre = p?.descripcion || p?.codigo || `Producto ${c.pid}`;
+                        return `${nombre} (disp: ${c.disponible.toFixed(2)}, sol: ${c.solicitado.toFixed(2)})`;
+                    })
+                    .join(' | ');
+                showToast(`Stock insuficiente: ${detalleError}`, 'error');
+                return;
+            }
+
             const detallesSanitizados = (data.detalles || []).map((det) => ({
                 producto_id: Number(det.producto_id),
                 lote_id: det.lote_id ? Number(det.lote_id) : null,
@@ -1158,11 +1228,16 @@ export const NotaSalidaForm = () => {
             resetAllStates();
         } catch (error) {
             console.error(error);
+            console.error('Detalle de error API salida:', error?.response?.data);
             if (error?.code === 'ECONNABORTED') {
                 showToast('La operación tardó demasiado. Intente nuevamente o reduzca la cantidad de ítems.', 'error');
                 return;
             }
-            const mensaje = error?.response?.data?.error || error?.message || 'Verifique los datos.';
+            const mensaje = error?.response?.data?.error
+                || error?.response?.data?.message
+                || error?.response?.data?.detalle
+                || error?.message
+                || 'Verifique los datos.';
             showToast(`Error al registrar salida: ${mensaje}`, 'error');
         }
     };
@@ -1230,8 +1305,8 @@ export const NotaSalidaForm = () => {
                                 className="input-premium"
                             >
                                 <option value="">Seleccione cliente...</option>
-                                {clients.map(client => (
-                                    <option key={client.id} value={client.id}>
+                                {clients.map((client, index) => (
+                                    <option key={`${client.id}-${index}`} value={client.id}>
                                         {client.codigo} - {client.razon_social}
                                     </option>
                                 ))}
@@ -1524,8 +1599,8 @@ export const NotaSalidaForm = () => {
                                 className="input-premium"
                             >
                                 <option value="">Seleccione producto...</option>
-                                {products.map(p => (
-                                    <option key={p.id} value={p.id}>{p.codigo} - {p.descripcion}</option>
+                                {products.map((p, index) => (
+                                    <option key={`${p.id}-${index}`} value={p.id}>{p.codigo} - {p.descripcion}</option>
                                 ))}
                             </select>
                         </div>
@@ -1548,8 +1623,8 @@ export const NotaSalidaForm = () => {
                                 disabled={!selectedProduct}
                             >
                                 <option value="">Seleccione lote...</option>
-                                {lotesDisponibles.map(lote => (
-                                    <option key={lote.id} value={lote.numero_lote}>
+                                {lotesDisponibles.map((lote, index) => (
+                                    <option key={`${lote.id || lote.numero_lote}-${index}`} value={lote.numero_lote}>
                                         {lote.numero_lote}
                                     </option>
                                 ))}
