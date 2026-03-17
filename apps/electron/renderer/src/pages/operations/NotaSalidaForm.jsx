@@ -31,6 +31,7 @@ export const NotaSalidaForm = () => {
     const [selectedDetalleIds, setSelectedDetalleIds] = useState({});
 
     const [products, setProducts] = useState([]);
+    const [allProducts, setAllProducts] = useState([]);
     const [clients, setClients] = useState([]);
     const [selectedClient, setSelectedClient] = useState('');
     const [clienteRuc, setClienteRuc] = useState('');
@@ -94,6 +95,7 @@ export const NotaSalidaForm = () => {
     };
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
+    const normalizeProductCode = (value) => normalizeText(value).replace(/[^a-z0-9]/g, '');
 
     const parseNumber = (value, fallback = 0) => {
         if (value === null || value === undefined || value === '') {
@@ -363,9 +365,25 @@ export const NotaSalidaForm = () => {
 
     const loadProducts = async (clienteId = null) => {
         try {
-            const params = clienteId ? { cliente_id: clienteId } : {};
-            const productsResponse = await productService.getProducts(params);
-            setProducts(Array.isArray(productsResponse) ? productsResponse : []);
+            const params = clienteId ? { cliente_id: Number(clienteId) } : {};
+            const limit = 500;
+            let page = 1;
+            let totalPages = 1;
+            const acumulado = [];
+
+            do {
+                const response = await productService.getProductsPaginated({ ...params, page, limit });
+                const dataPagina = Array.isArray(response?.data) ? response.data : [];
+                acumulado.push(...dataPagina);
+                totalPages = Number(response?.pagination?.totalPages || 1);
+                page += 1;
+            } while (page <= totalPages);
+
+            setProducts(acumulado);
+
+            if (!clienteId) {
+                setAllProducts(acumulado);
+            }
         } catch (error) {
             console.error('Error loading products:', error);
             showToast('Error al cargar lista de Productos.', 'error');
@@ -831,7 +849,9 @@ export const NotaSalidaForm = () => {
                         row[header] = values[index] || '';
                     });
 
-                    const codigo = normalizeText(row.codigo_producto);
+                    const codigoOriginal = String(row.codigo_producto || '').trim();
+                    const codigo = normalizeText(codigoOriginal);
+                    const codigoCanonico = normalizeProductCode(codigoOriginal);
                     const loteCsv = String(row.lote || '').trim();
                     const cantidadRaw = parseNumber(row.cantidad ?? row.cant_total ?? row.cantidad_total, 0);
                     const cantidad = cantidadRaw > 0 ? cantidadRaw : 1;
@@ -845,18 +865,52 @@ export const NotaSalidaForm = () => {
                         errores.push(`Fila ${i + 1}: cantidad vacía/inválida, se usó 1.`);
                     }
 
-                    const producto = products.find((p) => normalizeText(p.codigo) === codigo);
+                    const productosBusqueda = [
+                        ...(Array.isArray(products) ? products : []),
+                        ...(Array.isArray(allProducts) ? allProducts : [])
+                    ];
+
+                    const producto = productosBusqueda.find((p) => normalizeText(p.codigo) === codigo)
+                        || productosBusqueda.find((p) => normalizeProductCode(p.codigo || '') === codigoCanonico)
+                        || productosBusqueda.find((p) => {
+                            const codigoProducto = normalizeText(p.codigo || '');
+                            const codigoProductoCanonico = normalizeProductCode(p.codigo || '');
+                            const nombreProducto = normalizeText(p.descripcion || p.nombre || '');
+                            return (codigoProducto && (codigoProducto.includes(codigo) || codigo.includes(codigoProducto)))
+                                || (codigoProductoCanonico && codigoCanonico && (
+                                    codigoProductoCanonico.includes(codigoCanonico)
+                                    || codigoCanonico.includes(codigoProductoCanonico)
+                                ))
+                                || (nombreProducto && nombreProducto.includes(codigo));
+                        });
                     if (!producto) {
                         errores.push(`Fila ${i + 1}: producto no encontrado (${row.codigo_producto}).`);
                         continue;
                     }
 
                     if (!lotesCache.has(producto.id)) {
-                        const lotes = await productService.getLotesByProduct(producto.id, clienteTrabajo);
-                        const activos = Array.isArray(lotes)
-                            ? lotes.filter((l) => Number(l.cantidad_disponible) > 0)
+                        const lotesCliente = await productService.getLotesByProduct(producto.id, clienteTrabajo);
+                        let activos = Array.isArray(lotesCliente)
+                            ? lotesCliente.filter((l) => Number(l.cantidad_disponible) > 0)
                             : [];
-                        lotesCache.set(producto.id, activos);
+
+                        if (activos.length === 0) {
+                            const lotesGenerales = await productService.getLotesByProduct(producto.id);
+                            const activosGenerales = Array.isArray(lotesGenerales)
+                                ? lotesGenerales.filter((l) => Number(l.cantidad_disponible) > 0)
+                                : [];
+
+                            if (activosGenerales.length > 0) {
+                                errores.push(`Fila ${i + 1}: sin lotes para cliente, se usará stock general.`);
+                            }
+
+                            activos = activosGenerales;
+                        }
+
+                        const activosFinales = Array.isArray(activos)
+                            ? activos.filter((l) => Number(l.cantidad_disponible) > 0)
+                            : [];
+                        lotesCache.set(producto.id, activosFinales);
                     }
 
                     const lotesActivos = lotesCache.get(producto.id) || [];
