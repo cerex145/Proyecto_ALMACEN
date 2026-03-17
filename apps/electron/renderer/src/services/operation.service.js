@@ -4,7 +4,9 @@ export const operationService = {
     // Ingresos (Notas de Ingreso)
     createIngreso: async (data) => {
         // data: { proveedor_id, responsable_id, observaciones, detalles: [{ producto_id, cantidad }] }
-        const response = await api.post('/ingresos', data);
+        const response = await api.post('/ingresos', data, {
+            timeout: 120000
+        });
         return response.data.data || response.data;
     },
 

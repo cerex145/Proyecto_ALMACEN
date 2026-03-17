@@ -565,6 +565,10 @@ export const NotaIngresoForm = () => {
             setQuantity(0);
         } catch (error) {
             console.error(error);
+            if (error?.code === 'ECONNABORTED') {
+                showError('La carga tardó demasiado y superó el tiempo de espera. Intenta con menos filas por archivo o aumenta el timeout del frontend.');
+                return;
+            }
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Verifique los datos.';
             showError(`Error al registrar ingreso. ${mensaje}`);
         }
@@ -728,6 +732,36 @@ export const NotaIngresoForm = () => {
         };
     };
 
+    const agregarDetalleImportado = (detalle) => {
+        const loteFinal = String(detalle.lote_numero || '').trim();
+        const detallesActuales = getValues('detalles') || [];
+        const existingIndex = detallesActuales.findIndex(
+            (field) => Number(field.producto_id) === Number(detalle.producto_id)
+                && String(field.lote_numero || '').trim() === loteFinal
+        );
+
+        if (existingIndex >= 0) {
+            const existing = detallesActuales[existingIndex];
+            update(existingIndex, {
+                ...existing,
+                cantidad: Number(existing.cantidad || 0) + Number(detalle.cantidad || 0),
+                cantidad_total: Number(existing.cantidad_total || 0) + Number(detalle.cantidad_total || 0),
+                cantidad_bultos: Number(existing.cantidad_bultos || 0) + Number(detalle.cantidad_bultos || 0),
+                cantidad_cajas: Number(existing.cantidad_cajas || 0) + Number(detalle.cantidad_cajas || 0),
+                cantidad_por_caja: Number(existing.cantidad_por_caja || 0) + Number(detalle.cantidad_por_caja || 0),
+                cantidad_fraccion: Number(existing.cantidad_fraccion || 0) + Number(detalle.cantidad_fraccion || 0),
+                um: detalle.um || existing.um,
+                fabricante: detalle.fabricante || existing.fabricante,
+                fecha_vencimiento: detalle.fecha_vencimiento || existing.fecha_vencimiento,
+                temperatura_min: Number(detalle.temperatura_min ?? existing.temperatura_min ?? 25),
+                temperatura_max: Number(detalle.temperatura_max ?? existing.temperatura_max ?? 25)
+            });
+            return;
+        }
+
+        append(detalle);
+    };
+
     const handleImportarCSV = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -857,7 +891,7 @@ export const NotaIngresoForm = () => {
 
                 // Agregar productos importados al formulario
                 if (productosImportados.length > 0) {
-                    productosImportados.forEach(producto => append(producto));
+                    productosImportados.forEach((producto) => agregarDetalleImportado(producto));
                     showSuccess(`${productosImportados.length} productos importados correctamente.`);
                 }
 
@@ -930,7 +964,7 @@ export const NotaIngresoForm = () => {
         }
 
         const detalle = construirDetalleDesdeCSV(productoSeleccionado, pendiente.row);
-        append(detalle);
+        agregarDetalleImportado(detalle);
 
         const siguiente = indicePendienteCSV + 1;
         if (siguiente >= pendientesResolucionCSV.length) {
@@ -943,6 +977,44 @@ export const NotaIngresoForm = () => {
         }
 
         setIndicePendienteCSV(siguiente);
+    };
+
+    const resolverTodosConPrimeraOpcionCSV = () => {
+        const pendientes = pendientesResolucionCSV.slice(indicePendienteCSV);
+        if (pendientes.length === 0) {
+            return;
+        }
+
+        let importados = 0;
+        let omitidos = 0;
+
+        pendientes.forEach((pendiente) => {
+            const primeraOpcion = (pendiente.opciones || [])[0];
+            if (!primeraOpcion) {
+                omitidos += 1;
+                setErroresImportacion((prev) => [
+                    ...prev,
+                    `Fila ${pendiente.rowNumber}: sin opciones para selección automática (código ${pendiente.row.codigo_producto || 'N/A'})`
+                ]);
+                return;
+            }
+
+            const detalle = construirDetalleDesdeCSV(primeraOpcion, pendiente.row);
+            agregarDetalleImportado(detalle);
+            importados += 1;
+        });
+
+        setMostrarModalResolucionCSV(false);
+        setPendientesResolucionCSV([]);
+        setIndicePendienteCSV(0);
+        setMostrarModalImportacion(false);
+
+        if (omitidos > 0) {
+            showSuccess(`Se importaron ${importados} fila(s) con la primera opción automática. ${omitidos} fila(s) quedaron omitidas.`);
+            return;
+        }
+
+        showSuccess(`Se importaron ${importados} fila(s) usando la primera opción automática.`);
     };
 
     const omitirPendienteCSV = () => {
@@ -1898,6 +1970,9 @@ export const NotaIngresoForm = () => {
                             </div>
 
                             <div className="flex justify-end gap-3 pt-2">
+                                <Button type="button" variant="primary" onClick={resolverTodosConPrimeraOpcionCSV} className="bg-emerald-600 hover:bg-emerald-700">
+                                    Primera opción para todos
+                                </Button>
                                 <Button type="button" variant="secondary" onClick={omitirPendienteCSV}>
                                     Omitir fila
                                 </Button>
