@@ -805,19 +805,10 @@ export const NotaSalidaForm = () => {
                     setValue('cliente_id', String(clientePorRuc.id), { shouldValidate: true });
                 }
 
-                const fechaHeader = headers.includes('fecha') ? 'fecha' : '';
+                const fechaActual = new Date().toISOString().split('T')[0];
+                setValue('fecha', fechaActual);
+
                 const motivoHeader = headers.includes('motivo_salida') ? 'motivo_salida' : '';
-                if (fechaHeader) {
-                    const values = parseCSVLine(lines[1], delimiter);
-                    const row = {};
-                    headers.forEach((header, index) => {
-                        row[header] = values[index] || '';
-                    });
-                    const fechaCsv = normalizeDateInput(row.fecha);
-                    if (fechaCsv) {
-                        setValue('fecha', fechaCsv);
-                    }
-                }
                 if (motivoHeader) {
                     const values = parseCSVLine(lines[1], delimiter);
                     const row = {};
