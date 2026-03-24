@@ -707,6 +707,63 @@ export const NotaIngresoForm = () => {
         return result;
     };
 
+    const parseCSVDocument = (content) => {
+        const raw = String(content || '').replace(/^\uFEFF/, '');
+        const firstLine = raw.split(/\r?\n/, 1)[0] || '';
+        const delimiter = detectarDelimitadorCSV(firstLine);
+
+        const rows = [];
+        let row = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < raw.length; i += 1) {
+            const char = raw[i];
+            const next = raw[i + 1];
+
+            if (char === '"') {
+                if (inQuotes && next === '"') {
+                    current += '"';
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (char === delimiter && !inQuotes) {
+                row.push(current.trim());
+                current = '';
+                continue;
+            }
+
+            if ((char === '\n' || char === '\r') && !inQuotes) {
+                if (char === '\r' && next === '\n') {
+                    i += 1;
+                }
+
+                row.push(current.trim());
+                current = '';
+
+                if (row.some((cell) => String(cell || '').trim() !== '')) {
+                    rows.push(row);
+                }
+
+                row = [];
+                continue;
+            }
+
+            current += char;
+        }
+
+        row.push(current.trim());
+        if (row.some((cell) => String(cell || '').trim() !== '')) {
+            rows.push(row);
+        }
+
+        return { delimiter, rows };
+    };
+
     const parseNumber = (value, fallback = 0) => {
         if (value === null || value === undefined || value === '') {
             return fallback;
@@ -753,6 +810,7 @@ export const NotaIngresoForm = () => {
     const normalizarTexto = (value) => String(value || '').trim().toLowerCase();
     const normalizarCodigoProducto = (value) => normalizarTexto(value).replace(/\s+/g, ' ');
     const normalizarRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
+    const esRucValido = (value) => normalizarRuc(value).length === 11;
 
     const obtenerCodigosProducto = (producto) => {
         const codigos = [
@@ -871,19 +929,15 @@ export const NotaIngresoForm = () => {
         reader.onload = async (e) => {
             try {
                 const text = String(e.target.result || '').replace(/^\uFEFF/, '');
-                const lines = text
-                    .split(/\r?\n/)
-                    .map((line) => line.trim())
-                    .filter((line) => line.length > 0);
+                const { delimiter, rows } = parseCSVDocument(text);
 
-                if (lines.length < 2) {
+                if (rows.length < 2) {
                     showError('El archivo CSV está vacío o no tiene datos.');
                     return;
                 }
 
                 // Parsear encabezados
-                const delimiter = detectarDelimitadorCSV(lines[0]);
-                const headers = parseCSVLine(lines[0], delimiter).map((h) => h.trim().toLowerCase());
+                const headers = rows[0].map((h) => String(h || '').trim().toLowerCase());
                 const errores = [];
                 const productosImportados = [];
                 const pendientes = [];
@@ -901,8 +955,20 @@ export const NotaIngresoForm = () => {
                 let rucDetectado = '';
 
                 // Procesar cada fila
-                for (let i = 1; i < lines.length; i++) {
-                    let values = parseCSVLine(lines[i], delimiter);
+                for (let i = 1; i < rows.length; i++) {
+                    let values = Array.isArray(rows[i]) ? [...rows[i]] : [];
+
+                    // Algunas exportaciones mezclan delimitador por fila.
+                    const altDelimiter = delimiter === ',' ? ';' : ',';
+                    const rawLine = values.join(delimiter);
+                    if ((values.length <= 1 || values.length < headers.length) && rawLine.includes(altDelimiter)) {
+                        const altValues = parseCSVLine(rawLine, altDelimiter);
+                        if (altValues.length > values.length) {
+                            values = altValues;
+                        }
+                    }
+
+                    values = values.map((value) => String(value || '').trim());
 
                     // Si falta ruc_cliente en filas posteriores, se asume el detectado.
                     if (rucDetectado && values.length === headers.length - 1) {
@@ -915,8 +981,25 @@ export const NotaIngresoForm = () => {
                         row[header] = values[index] || '';
                     });
 
-                    const rucFila = String(row.ruc_cliente || '').trim();
-                    if (!rucFila) {
+                    let rucFila = String(row.ruc_cliente || '').trim();
+
+                    if ((!rucFila || !esRucValido(rucFila)) && rucDetectado && esRucValido(rucDetectado)) {
+                        row.ruc_cliente = rucDetectado;
+                        rucFila = rucDetectado;
+                    }
+
+                    if ((!rucFila || !esRucValido(rucFila)) && !rucDetectado && clients.length === 1) {
+                        const clienteUnico = clients[0] || {};
+                        const rucClienteUnico = String(
+                            clienteUnico.cuit || clienteUnico.ruc || clienteUnico.ruc_cliente || ''
+                        ).trim();
+                        if (esRucValido(rucClienteUnico)) {
+                            row.ruc_cliente = rucClienteUnico;
+                            rucFila = rucClienteUnico;
+                        }
+                    }
+
+                    if (!rucFila || !esRucValido(rucFila)) {
                         errores.push(`Fila ${i + 1}: Falta ruc_cliente`);
                         continue;
                     }
@@ -951,7 +1034,26 @@ export const NotaIngresoForm = () => {
                             productoSeleccionado = candidatosCodigo[0];
                         }
 
-                        const cantidadTotal = parseNumber(row.cantidad_total, 0);
+                        let cantidadTotal = parseNumber(row.cantidad_total, NaN);
+                        if (!Number.isFinite(cantidadTotal) || cantidadTotal <= 0) {
+                            const posiblesCantidades = [
+                                row.cantidad,
+                                row.cant_total,
+                                row.cantidad_ingreso,
+                                row.cant_total_ingreso,
+                                row['cant.total_ingreso'],
+                                values[values.length - 1]
+                            ];
+
+                            for (const posible of posiblesCantidades) {
+                                const parsed = parseNumber(posible, NaN);
+                                if (Number.isFinite(parsed) && parsed > 0) {
+                                    cantidadTotal = parsed;
+                                    row.cantidad_total = String(posible);
+                                    break;
+                                }
+                            }
+                        }
 
                         // Validar cantidad_total
                         if (!Number.isFinite(cantidadTotal) || cantidadTotal <= 0) {
