@@ -672,7 +672,14 @@ export const NotaIngresoForm = () => {
         update(index, next);
     };
 
-    const parseCSVLine = (line) => {
+    const detectarDelimitadorCSV = (line) => {
+        const raw = String(line || '');
+        const comas = (raw.match(/,/g) || []).length;
+        const puntosComa = (raw.match(/;/g) || []).length;
+        return puntosComa > comas ? ';' : ',';
+    };
+
+    const parseCSVLine = (line, delimiter = ',') => {
         const result = [];
         let current = '';
         let inQuotes = false;
@@ -688,7 +695,7 @@ export const NotaIngresoForm = () => {
                 } else {
                     inQuotes = !inQuotes;
                 }
-            } else if (char === ',' && !inQuotes) {
+            } else if (char === delimiter && !inQuotes) {
                 result.push(current.trim());
                 current = '';
             } else {
@@ -744,7 +751,46 @@ export const NotaIngresoForm = () => {
     };
 
     const normalizarTexto = (value) => String(value || '').trim().toLowerCase();
+    const normalizarCodigoProducto = (value) => normalizarTexto(value).replace(/\s+/g, ' ');
     const normalizarRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
+
+    const obtenerCodigosProducto = (producto) => {
+        const codigos = [
+            producto?.codigo,
+            producto?.codigo_producto,
+            producto?.producto_codigo,
+            producto?.sku,
+            producto?.codigo_interno
+        ]
+            .map((v) => String(v || '').trim())
+            .filter(Boolean);
+
+        // Permite que "AFE.PD2205027VE" encuentre "AFE.PD2205027VE R-100"
+        const codigosBase = codigos
+            .map((codigo) => codigo.split(/\s+/)[0])
+            .filter(Boolean);
+
+        return [...new Set([...codigos, ...codigosBase])];
+    };
+
+    const coincideCodigoProducto = (producto, codigoBuscadoRaw) => {
+        const codigoBuscado = normalizarCodigoProducto(codigoBuscadoRaw);
+        if (!codigoBuscado) return false;
+
+        return obtenerCodigosProducto(producto).some((codigo) => {
+            const normalizado = normalizarCodigoProducto(codigo);
+            return normalizado === codigoBuscado
+                || normalizado.startsWith(`${codigoBuscado} `)
+                || codigoBuscado.startsWith(`${normalizado} `);
+        });
+    };
+
+    const obtenerLoteProducto = (producto) => String(
+        producto?.lote
+        || producto?.numero_lote
+        || producto?.lote_numero
+        || ''
+    );
 
     const buscarClientePorRuc = (ruc) => {
         const normalized = normalizarRuc(ruc);
@@ -836,7 +882,8 @@ export const NotaIngresoForm = () => {
                 }
 
                 // Parsear encabezados
-                const headers = parseCSVLine(lines[0]).map((h) => h.trim().toLowerCase());
+                const delimiter = detectarDelimitadorCSV(lines[0]);
+                const headers = parseCSVLine(lines[0], delimiter).map((h) => h.trim().toLowerCase());
                 const errores = [];
                 const productosImportados = [];
                 const pendientes = [];
@@ -855,7 +902,13 @@ export const NotaIngresoForm = () => {
 
                 // Procesar cada fila
                 for (let i = 1; i < lines.length; i++) {
-                    const values = parseCSVLine(lines[i]);
+                    let values = parseCSVLine(lines[i], delimiter);
+
+                    // Si falta ruc_cliente en filas posteriores, se asume el detectado.
+                    if (rucDetectado && values.length === headers.length - 1) {
+                        values = [rucDetectado, ...values];
+                    }
+
                     const row = {};
 
                     headers.forEach((header, index) => {
@@ -876,10 +929,10 @@ export const NotaIngresoForm = () => {
                     }
 
                     try {
-                        const codigoBuscado = normalizarTexto(row.codigo_producto);
+                        const codigoBuscado = normalizarCodigoProducto(row.codigo_producto);
                         const loteBuscado = normalizarTexto(row.lote);
                         const candidatosCodigo = products.filter(
-                            (p) => normalizarTexto(p.codigo) === codigoBuscado
+                            (p) => coincideCodigoProducto(p, codigoBuscado)
                         );
 
                         if (candidatosCodigo.length === 0) {
@@ -888,7 +941,7 @@ export const NotaIngresoForm = () => {
                         }
 
                         const candidatosPorLote = loteBuscado
-                            ? candidatosCodigo.filter((p) => normalizarTexto(p.lote) === loteBuscado)
+                            ? candidatosCodigo.filter((p) => normalizarTexto(obtenerLoteProducto(p)) === loteBuscado)
                             : candidatosCodigo;
 
                         let productoSeleccionado = null;
