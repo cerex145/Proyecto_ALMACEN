@@ -96,6 +96,8 @@ export const NotaSalidaForm = () => {
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
     const normalizeProductCode = (value) => normalizeText(value).replace(/[^a-z0-9]/g, '');
+    const normalizeLote = (value) => normalizeText(value).replace(/\s+/g, ' ');
+    const normalizeLoteCanonico = (value) => normalizeText(value).replace(/[^a-z0-9]/g, '');
 
     const parseNumber = (value, fallback = 0) => {
         if (value === null || value === undefined || value === '') {
@@ -143,6 +145,71 @@ export const NotaSalidaForm = () => {
 
         result.push(current.trim());
         return result;
+    };
+
+    const detectarDelimitadorCSV = (line) => {
+        const raw = String(line || '');
+        const tabs = (raw.match(/\t/g) || []).length;
+        const semicolons = (raw.match(/;/g) || []).length;
+        const commas = (raw.match(/,/g) || []).length;
+        if (tabs > semicolons && tabs > commas) return '\t';
+        return semicolons > commas ? ';' : ',';
+    };
+
+    const parseCSVDocument = (content) => {
+        const raw = String(content || '').replace(/^\uFEFF/, '');
+        const firstLine = raw.split(/\r?\n/, 1)[0] || '';
+        const delimiter = detectarDelimitadorCSV(firstLine);
+
+        const rows = [];
+        let row = [];
+        let current = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < raw.length; i += 1) {
+            const char = raw[i];
+            const next = raw[i + 1];
+
+            if (char === '"') {
+                if (inQuotes && next === '"') {
+                    current += '"';
+                    i += 1;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (char === delimiter && !inQuotes) {
+                row.push(current.trim());
+                current = '';
+                continue;
+            }
+
+            if ((char === '\n' || char === '\r') && !inQuotes) {
+                if (char === '\r' && next === '\n') {
+                    i += 1;
+                }
+
+                row.push(current.trim());
+                current = '';
+
+                if (row.some((cell) => String(cell || '').trim() !== '')) {
+                    rows.push(row);
+                }
+                row = [];
+                continue;
+            }
+
+            current += char;
+        }
+
+        row.push(current.trim());
+        if (row.some((cell) => String(cell || '').trim() !== '')) {
+            rows.push(row);
+        }
+
+        return { delimiter, rows };
     };
 
     const upsertDetalleSalida = (detalle) => {
@@ -773,15 +840,14 @@ export const NotaSalidaForm = () => {
         reader.onload = async (e) => {
             try {
                 const text = String(e.target?.result || '').replace(/^\uFEFF/, '');
-                const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+                const { delimiter, rows } = parseCSVDocument(text);
 
-                if (lines.length < 2) {
+                if (rows.length < 2) {
                     showToast('El CSV está vacío o sin filas de datos.', 'warning');
                     return;
                 }
 
-                const delimiter = lines[0].includes(';') ? ';' : ',';
-                const headers = parseCSVLine(lines[0], delimiter).map((h) => normalizeText(h));
+                const headers = rows[0].map((h) => normalizeText(h));
                 const required = ['codigo_producto'];
                 const faltantes = required.filter((r) => !headers.includes(r));
 
@@ -802,8 +868,8 @@ export const NotaSalidaForm = () => {
                     }
 
                     let rucDetectado = '';
-                    for (let i = 1; i < lines.length; i += 1) {
-                        const values = parseCSVLine(lines[i], delimiter);
+                    for (let i = 1; i < rows.length; i += 1) {
+                        const values = Array.isArray(rows[i]) ? rows[i] : [];
                         const row = {};
                         headers.forEach((header, index) => {
                             row[header] = values[index] || '';
@@ -846,7 +912,7 @@ export const NotaSalidaForm = () => {
 
                 const motivoHeader = headers.includes('motivo_salida') ? 'motivo_salida' : '';
                 if (motivoHeader) {
-                    const values = parseCSVLine(lines[1], delimiter);
+                    const values = Array.isArray(rows[1]) ? rows[1] : [];
                     const row = {};
                     headers.forEach((header, index) => {
                         row[header] = values[index] || '';
@@ -860,8 +926,8 @@ export const NotaSalidaForm = () => {
                 const errores = [];
                 let importados = 0;
 
-                for (let i = 1; i < lines.length; i += 1) {
-                    const values = parseCSVLine(lines[i], delimiter);
+                for (let i = 1; i < rows.length; i += 1) {
+                    const values = Array.isArray(rows[i]) ? rows[i] : [];
                     const row = {};
                     headers.forEach((header, index) => {
                         row[header] = values[index] || '';
@@ -951,7 +1017,24 @@ export const NotaSalidaForm = () => {
 
                     let lote = null;
                     if (loteCsv) {
-                        lote = lotesActivos.find((l) => normalizeText(l.numero_lote) === normalizeText(loteCsv)) || null;
+                        const loteCsvNormalizado = normalizeLote(loteCsv);
+                        const loteCsvCanonico = normalizeLoteCanonico(loteCsv);
+
+                        lote = lotesActivos.find((l) => {
+                            const numeroLote = String(l.numero_lote || '');
+                            const loteNormalizado = normalizeLote(numeroLote);
+                            const loteCanonico = normalizeLoteCanonico(numeroLote);
+
+                            return loteNormalizado === loteCsvNormalizado
+                                || loteCanonico === loteCsvCanonico
+                                || loteNormalizado.includes(loteCsvNormalizado)
+                                || loteCsvNormalizado.includes(loteNormalizado)
+                                || (loteCanonico && loteCsvCanonico && (
+                                    loteCanonico.includes(loteCsvCanonico)
+                                    || loteCsvCanonico.includes(loteCanonico)
+                                ));
+                        }) || null;
+
                         if (!lote) {
                             errores.push(`Fila ${i + 1}: lote ${loteCsv} no encontrado, se usará FIFO automático.`);
                         }
@@ -991,7 +1074,7 @@ export const NotaSalidaForm = () => {
                 }
 
                 setErroresImportacionCSV(errores);
-                const totalFilas = Math.max(lines.length - 1, 0);
+                const totalFilas = Math.max(rows.length - 1, 0);
                 const omitidos = Math.max(totalFilas - importados, 0);
 
                 if (importados > 0) {
@@ -1115,6 +1198,12 @@ export const NotaSalidaForm = () => {
 
     const onSubmit = async (data) => {
         try {
+            const clienteIdFinal = Number(selectedClient || data.cliente_id || 0);
+            if (!clienteIdFinal || Number.isNaN(clienteIdFinal)) {
+                showToast('Seleccione un cliente antes de guardar la nota de salida.', 'error');
+                return;
+            }
+
             // Validación robusta de detalles
             if (!data.detalles || data.detalles.length === 0) {
                 showToast('Debe agregar al menos un producto a la nota.', 'error');
@@ -1211,9 +1300,9 @@ export const NotaSalidaForm = () => {
             }
 
             const payload = {
-                cliente_id: data.cliente_id,
+                cliente_id: clienteIdFinal,
                 fecha: data.fecha || new Date().toISOString().split('T')[0],
-                responsable_id: data.responsable_id,
+                responsable_id: Number(data.responsable_id || 1),
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
                 fecha_ingreso: data.fecha_ingreso || null,
@@ -1240,6 +1329,14 @@ export const NotaSalidaForm = () => {
                 || 'Verifique los datos.';
             showToast(`Error al registrar salida: ${mensaje}`, 'error');
         }
+    };
+
+    const onInvalidSubmit = (formErrors) => {
+        if (formErrors?.cliente_id) {
+            showToast('Debe seleccionar un cliente para guardar la nota de salida.', 'error');
+            return;
+        }
+        showToast('Hay campos obligatorios pendientes. Revise el formulario.', 'error');
     };
 
     const handleExportPdf = async () => {
@@ -1286,7 +1383,7 @@ export const NotaSalidaForm = () => {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-8">
                 <Card className="p-6">
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Nota de Salida Individual</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
