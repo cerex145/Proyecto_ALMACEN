@@ -79,6 +79,8 @@ async function ingresosRoutes(fastify, options) {
     const clienteRepo = fastify.db.getRepository('Cliente');
     const loteRepo = fastify.db.getRepository('Lote');
     const kardexRepo = fastify.db.getRepository('Kardex');
+    let numeroGuiaColumnChecked = false;
+    let numeroGuiaColumnType = null;
 
     const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
 
@@ -94,8 +96,41 @@ async function ingresosRoutes(fastify, options) {
         return String(numero).padStart(8, '0');
     };
 
+    // Asegura compatibilidad: si numero_guia sigue en tipo integer, la convierte a varchar.
+    const ensureNumeroGuiaAsVarchar = async () => {
+        if (numeroGuiaColumnChecked) return;
+        numeroGuiaColumnChecked = true;
+
+        const columnInfo = await fastify.db.query(`
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'notas_ingreso'
+              AND column_name = 'numero_guia'
+            LIMIT 1
+        `);
+
+        const dataType = columnInfo?.[0]?.data_type;
+        numeroGuiaColumnType = dataType || null;
+
+        if (['smallint', 'integer', 'bigint'].includes(dataType)) {
+            await fastify.db.query(`
+                ALTER TABLE notas_ingreso
+                ALTER COLUMN numero_guia TYPE VARCHAR(20)
+                USING ('guia-' || LPAD(numero_guia::text, 7, '0'))
+            `);
+            numeroGuiaColumnType = 'character varying';
+        }
+    };
+
     // Genera el siguiente numero_guia con formato guia-0000001
     const generarNumeroGuia = async () => {
+        try {
+            await ensureNumeroGuiaAsVarchar();
+        } catch (error) {
+            fastify.log.warn(`No se pudo convertir notas_ingreso.numero_guia a VARCHAR automáticamente: ${error.message}`);
+        }
+
         const result = await notaIngresoRepo
             .createQueryBuilder('nota')
             .select(
@@ -104,6 +139,12 @@ async function ingresosRoutes(fastify, options) {
             )
             .getRawOne();
         const siguienteNumero = (Number(result?.max) || 0) + 1;
+
+        if (['smallint', 'integer', 'bigint'].includes(numeroGuiaColumnType)) {
+            // Fallback para entornos sin permisos de ALTER TABLE.
+            return siguienteNumero;
+        }
+
         return `guia-${String(siguienteNumero).padStart(7, '0')}`;
     };
 
