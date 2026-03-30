@@ -25,6 +25,15 @@ module.exports = new EntitySchema({
             length: 200,
             nullable: true
         },
+        proveedor_ruc: {
+            type: 'varchar',
+            length: 20,
+            nullable: true
+        },
+        cliente_id: {
+            type: 'int',
+            nullable: true
+        },
         fabricante: {
             type: 'varchar',
             length: 200,
@@ -91,6 +100,13 @@ module.exports = new EntitySchema({
         }
     },
     relations: {
+        cliente: {
+            type: 'many-to-one',
+            target: 'Cliente',
+            joinColumn: { name: 'cliente_id' },
+            nullable: true,
+            onDelete: 'SET NULL'
+        },
         kardex: {
             type: 'one-to-many',
             target: 'Kardex',

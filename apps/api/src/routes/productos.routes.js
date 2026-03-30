@@ -167,16 +167,18 @@ async function productoRoutes(fastify, options) {
 
         if (cliente_id) {
             // Filtrado robusto por cliente:
-            // 1) Normaliza proveedor/razon_social para evitar fallos por puntos, espacios o formato.
-            // 2) Como respaldo usa relación por lotes->nota_ingreso, priorizando ni.cliente_id cuando exista.
+            // 1) Prioriza vínculo directo por producto.cliente_id.
+            // 2) Normaliza proveedor/razon_social para evitar fallos por puntos, espacios o formato.
+            // 3) Como respaldo usa relación por lotes->nota_ingreso.
             queryBuilder.andWhere(new Brackets(qb => {
-                qb.where(
+                qb.where('producto.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
+
+                qb.orWhere(
                     `regexp_replace(upper(coalesce(producto.proveedor, '')), '[^A-Z0-9]', '', 'g') = (
                         SELECT regexp_replace(upper(coalesce(c.razon_social, '')), '[^A-Z0-9]', '', 'g')
                         FROM clientes c
                         WHERE c.id = :cliente_id
-                    )`,
-                    { cliente_id: Number(cliente_id) }
+                    )`
                 );
 
                 qb.orWhere(qbInner => {
@@ -457,6 +459,7 @@ async function productoRoutes(fastify, options) {
 
         let proveedorFinal = proveedor || null;
         let proveedorRucFinal = proveedor_ruc || null;
+        let clienteIdFinal = null;
 
         if (cliente_id !== undefined && cliente_id !== null && cliente_id !== '') {
             const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
@@ -467,6 +470,7 @@ async function productoRoutes(fastify, options) {
                 });
             }
 
+            clienteIdFinal = Number(cliente_id);
             proveedorFinal = cliente.razon_social || proveedorFinal;
             proveedorRucFinal = cliente.cuit || proveedorRucFinal;
         }
@@ -474,6 +478,7 @@ async function productoRoutes(fastify, options) {
         const nuevoProducto = productoRepo.create({
             codigo,
             descripcion,
+            cliente_id: clienteIdFinal,
             proveedor: proveedorFinal,
             tipo_documento: tipo_documento || null,
             numero_documento: numero_documento || null,
@@ -592,22 +597,27 @@ async function productoRoutes(fastify, options) {
             producto.codigo = codigo;
         }
 
-        if (cliente_id !== undefined && cliente_id !== null && cliente_id !== '') {
-            const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
-            if (!cliente) {
-                return reply.status(400).send({
-                    success: false,
-                    error: 'Cliente no encontrado'
-                });
-            }
+        if (cliente_id !== undefined) {
+            if (cliente_id === null || cliente_id === '') {
+                producto.cliente_id = null;
+            } else {
+                const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
+                if (!cliente) {
+                    return reply.status(400).send({
+                        success: false,
+                        error: 'Cliente no encontrado'
+                    });
+                }
 
-            producto.proveedor = cliente.razon_social || null;
-            producto.proveedor_ruc = cliente.cuit || null;
+                producto.cliente_id = Number(cliente_id);
+                producto.proveedor = cliente.razon_social || null;
+                producto.proveedor_ruc = cliente.cuit || null;
+            }
         }
 
         producto.descripcion = descripcion;
         if (activo !== undefined) producto.activo = toActivoSmallint(activo);
-        if (proveedor) producto.proveedor = proveedor;
+        if (proveedor !== undefined && cliente_id === undefined) producto.proveedor = proveedor;
         if (tipo_documento !== undefined) producto.tipo_documento = tipo_documento || null;
         if (numero_documento !== undefined) producto.numero_documento = numero_documento || null;
         if (registro_sanitario !== undefined) producto.registro_sanitario = registro_sanitario || null;
