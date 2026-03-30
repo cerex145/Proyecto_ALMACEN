@@ -194,7 +194,7 @@ export const NotaSalidaForm = () => {
             ));
     };
 
-    const getLotesActivosForProducto = async ({ productoId, clienteTrabajo, lotesCache, errores, filaNumero }) => {
+    const getLotesActivosForProducto = async ({ productoId, clienteTrabajo, lotesCache }) => {
         if (!lotesCache.has(productoId)) {
             const lotesCliente = await productService.getLotesByProduct(productoId, clienteTrabajo);
             let activos = Array.isArray(lotesCliente)
@@ -206,10 +206,6 @@ export const NotaSalidaForm = () => {
                 const activosGenerales = Array.isArray(lotesGenerales)
                     ? lotesGenerales.filter((l) => Number(l.cantidad_disponible) > 0)
                     : [];
-
-                if (activosGenerales.length > 0) {
-                    errores.push(`Fila ${filaNumero}: sin lotes para cliente, se usará stock general.`);
-                }
 
                 activos = activosGenerales;
             }
@@ -1026,6 +1022,7 @@ export const NotaSalidaForm = () => {
                 }
 
                 const lotesCache = new Map();
+                const stockRestantePorProducto = new Map();
                 const errores = [];
                 let importados = 0;
 
@@ -1073,9 +1070,7 @@ export const NotaSalidaForm = () => {
                     let lotesActivos = await getLotesActivosForProducto({
                         productoId: Number(productoSeleccionado.id),
                         clienteTrabajo,
-                        lotesCache,
-                        errores,
-                        filaNumero: i + 1
+                        lotesCache
                     });
                     if (lotesActivos.length === 0) {
                         errores.push(`Fila ${i + 1}: sin lotes disponibles para ${row.codigo_producto}.`);
@@ -1083,15 +1078,21 @@ export const NotaSalidaForm = () => {
                     }
 
                     const stockTotalProducto = lotesActivos.reduce((acc, l) => acc + Number(l.cantidad_disponible || 0), 0);
-                    if (stockTotalProducto <= 0) {
+                    const productoIdSeleccionado = Number(productoSeleccionado.id);
+                    if (!stockRestantePorProducto.has(productoIdSeleccionado)) {
+                        stockRestantePorProducto.set(productoIdSeleccionado, stockTotalProducto);
+                    }
+
+                    const stockRestanteActual = Number(stockRestantePorProducto.get(productoIdSeleccionado) || 0);
+                    if (stockRestanteActual <= 0) {
                         errores.push(`Fila ${i + 1}: sin stock disponible para ${row.codigo_producto}.`);
                         continue;
                     }
 
                     let cantidadAUsar = Number(cantidad);
-                    if (cantidadAUsar > stockTotalProducto) {
-                        errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera stock total ${stockTotalProducto}, se ajustó a ${stockTotalProducto}.`);
-                        cantidadAUsar = stockTotalProducto;
+                    if (cantidadAUsar > stockRestanteActual) {
+                        errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera stock total restante ${stockRestanteActual}, se ajustó a ${stockRestanteActual}.`);
+                        cantidadAUsar = stockRestanteActual;
                     }
 
                     let lote = null;
@@ -1108,9 +1109,7 @@ export const NotaSalidaForm = () => {
                                 const lotesCandidato = await getLotesActivosForProducto({
                                     productoId: Number(candidato.id),
                                     clienteTrabajo,
-                                    lotesCache,
-                                    errores,
-                                    filaNumero: i + 1
+                                    lotesCache
                                 });
 
                                 const loteCandidato = lotesCandidato.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
@@ -1122,21 +1121,18 @@ export const NotaSalidaForm = () => {
                                 }
                             }
                         }
-
-                        if (!lote) {
-                            errores.push(`Fila ${i + 1}: lote ${loteCsv} no encontrado, se usará FIFO automático.`);
-                        }
-                    } else {
-                        errores.push(`Fila ${i + 1}: lote vacío, se usará FIFO automático.`);
                     }
 
                     if (lote) {
                         const disponibleLote = Number(lote.cantidad_disponible || 0);
                         if (cantidadAUsar > disponibleLote) {
-                            errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera disponible ${disponibleLote} del lote ${lote.numero_lote}, se usará FIFO automático.`);
                             lote = null;
                         }
                     }
+
+                    const disponibleBase = lote
+                        ? Number(lote.cantidad_disponible || 0)
+                        : Number(stockRestantePorProducto.get(productoIdSeleccionado) || 0);
 
                     const detalle = {
                         producto_id: Number(productoSeleccionado.id),
@@ -1154,10 +1150,14 @@ export const NotaSalidaForm = () => {
                         cantidad_inicial: Number(lote?.cantidad_ingresada || cantidadAUsar),
                         cant_total: Number(cantidadAUsar),
                         cantidad: Number(cantidadAUsar),
-                        cantidad_disponible: lote ? Number(lote.cantidad_disponible || 0) : Number(stockTotalProducto)
+                        cantidad_disponible: disponibleBase
                     };
 
                     upsertDetalleSalida(detalle);
+                    stockRestantePorProducto.set(
+                        productoIdSeleccionado,
+                        Math.max(Number(stockRestantePorProducto.get(productoIdSeleccionado) || 0) - Number(cantidadAUsar), 0)
+                    );
                     importados += 1;
                 }
 
