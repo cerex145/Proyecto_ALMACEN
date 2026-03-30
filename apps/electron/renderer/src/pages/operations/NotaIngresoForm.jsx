@@ -724,6 +724,69 @@ export const NotaIngresoForm = () => {
         }) || null;
     };
 
+    const deduplicarOpcionesCSV = (opciones = []) => {
+        const unicosPorId = new Map();
+        opciones.forEach((opcion) => {
+            const id = Number(opcion?.id);
+            if (Number.isFinite(id) && !unicosPorId.has(id)) {
+                unicosPorId.set(id, opcion);
+            }
+        });
+        return Array.from(unicosPorId.values());
+    };
+
+    const seleccionarOpcionDeterministicaCSV = (opciones = []) => {
+        if (!opciones.length) return null;
+        return [...opciones].sort((a, b) => Number(a.id || 0) - Number(b.id || 0))[0] || null;
+    };
+
+    const resolverProductoCSV = ({ row, candidatosCodigo = [], candidatosPorLote = [] }) => {
+        const base = candidatosPorLote.length > 0 ? candidatosPorLote : candidatosCodigo;
+        const opcionesUnicas = deduplicarOpcionesCSV(base);
+
+        if (opcionesUnicas.length === 0) {
+            return { producto: null, opciones: [] };
+        }
+
+        if (opcionesUnicas.length === 1) {
+            return { producto: opcionesUnicas[0], opciones: opcionesUnicas };
+        }
+
+        const nombreCsv = normalizarTexto(row?.nombre || row?.producto_nombre || '');
+        if (nombreCsv) {
+            const porNombre = opcionesUnicas.filter((p) => {
+                const nombreProducto = normalizarTexto(p?.descripcion || p?.nombre || '');
+                return nombreProducto === nombreCsv
+                    || nombreProducto.includes(nombreCsv)
+                    || nombreCsv.includes(nombreProducto);
+            });
+
+            if (porNombre.length === 1) {
+                return { producto: porNombre[0], opciones: porNombre };
+            }
+
+            if (porNombre.length > 1) {
+                const elegida = seleccionarOpcionDeterministicaCSV(porNombre);
+                return { producto: elegida, opciones: porNombre };
+            }
+        }
+
+        // Si todas las opciones son equivalentes a nivel funcional (mismo código/lote/fabricante), tomar una automáticamente.
+        const firmaSet = new Set(opcionesUnicas.map((p) => [
+            normalizarCodigoProducto(p?.codigo || ''),
+            normalizarTexto(obtenerLoteProducto(p) || ''),
+            normalizarTexto(p?.fabricante || ''),
+            normalizarTexto(p?.um || p?.unidad || '')
+        ].join('|')));
+
+        if (firmaSet.size === 1) {
+            const elegida = seleccionarOpcionDeterministicaCSV(opcionesUnicas);
+            return { producto: elegida, opciones: opcionesUnicas };
+        }
+
+        return { producto: null, opciones: opcionesUnicas };
+    };
+
     const construirDetalleDesdeCSV = (producto, row) => {
         const temperatura = parseNumber(
             row.temperatura || row.temperatura_min || row.temperatura_max || producto.temperatura || producto.temperatura_min_c || 25,
@@ -883,9 +946,9 @@ export const NotaIngresoForm = () => {
                     try {
                         const codigoBuscado = normalizarCodigoProducto(row.codigo_producto);
                         const loteBuscado = normalizarTexto(row.lote);
-                        const candidatosCodigo = products.filter(
+                        const candidatosCodigo = deduplicarOpcionesCSV(products.filter(
                             (p) => coincideCodigoProducto(p, codigoBuscado)
-                        );
+                        ));
 
                         if (candidatosCodigo.length === 0) {
                             errores.push(`Fila ${i + 1}: Producto con código "${row.codigo_producto}" no encontrado`);
@@ -896,12 +959,11 @@ export const NotaIngresoForm = () => {
                             ? candidatosCodigo.filter((p) => normalizarTexto(obtenerLoteProducto(p)) === loteBuscado)
                             : candidatosCodigo;
 
-                        let productoSeleccionado = null;
-                        if (candidatosPorLote.length === 1) {
-                            productoSeleccionado = candidatosPorLote[0];
-                        } else if (candidatosCodigo.length === 1) {
-                            productoSeleccionado = candidatosCodigo[0];
-                        }
+                        const { producto: productoSeleccionado, opciones: opcionesResolucion } = resolverProductoCSV({
+                            row,
+                            candidatosCodigo,
+                            candidatosPorLote
+                        });
 
                         let cantidadTotal = parseNumber(row.cantidad_total, NaN);
                         if (!Number.isFinite(cantidadTotal) || cantidadTotal <= 0) {
@@ -934,7 +996,7 @@ export const NotaIngresoForm = () => {
                             pendientes.push({
                                 row,
                                 rowNumber: i + 1,
-                                opciones: candidatosPorLote.length > 1 ? candidatosPorLote : candidatosCodigo
+                                opciones: opcionesResolucion.length > 0 ? opcionesResolucion : candidatosCodigo
                             });
                             continue;
                         }
