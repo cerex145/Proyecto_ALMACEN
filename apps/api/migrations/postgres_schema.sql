@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 CREATE TABLE IF NOT EXISTS notas_ingreso (
   id SERIAL PRIMARY KEY,
   numero_ingreso VARCHAR(50) NOT NULL UNIQUE,
-  numero_guia INT,
+  numero_guia VARCHAR(20),
   fecha DATE NOT NULL,
   cliente_id INT REFERENCES clientes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
   proveedor VARCHAR(200) NOT NULL,

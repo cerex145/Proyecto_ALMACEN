@@ -7,7 +7,7 @@ const NotaIngresoSchema = {
     properties: {
         id: { type: 'integer' },
         numero_ingreso: { type: 'string' },
-        numero_guia: { type: 'integer', nullable: true },
+        numero_guia: { type: 'string', nullable: true },
         fecha: { type: 'string', format: 'date' },
         cliente_id: { type: 'integer', nullable: true },
         proveedor: { type: 'string' },
@@ -94,13 +94,15 @@ async function ingresosRoutes(fastify, options) {
         return String(numero).padStart(8, '0');
     };
 
-    // Genera el siguiente numero_guia (1, 2, 3, ...) — un número por nota de ingreso
+    // Genera el siguiente numero_guia con formato guia-0000001
     const generarNumeroGuia = async () => {
         const result = await notaIngresoRepo
             .createQueryBuilder('nota')
-            .select('MAX(nota.numero_guia)', 'max')
+            .select("MAX(CAST(SUBSTRING(nota.numero_guia FROM '[0-9]+$') AS INTEGER))", 'max')
+            .where("nota.numero_guia LIKE 'guia-%'")
             .getRawOne();
-        return (Number(result?.max) || 0) + 1;
+        const siguienteNumero = (Number(result?.max) || 0) + 1;
+        return `guia-${String(siguienteNumero).padStart(7, '0')}`;
     };
 
 

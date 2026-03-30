@@ -138,7 +138,7 @@ async function buildApp(fastify, options) {
             await ensureCol('nota_salida_detalles', 'cant_x_caja', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
             await ensureCol('nota_salida_detalles', 'cant_fraccion', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
             await ensureCol('nota_salida_detalles', 'cantidad_total', { type: 'decimal', precision: 10, scale: 2, isNullable: true, default: '0' });
-            await ensureCol('notas_ingreso', 'numero_guia', { type: 'int', isNullable: true });
+            await ensureCol('notas_ingreso', 'numero_guia', { type: 'varchar', length: '20', isNullable: true });
 
 
             // Reparar cantidad_total = cantidad para detalles de ingreso sin total
