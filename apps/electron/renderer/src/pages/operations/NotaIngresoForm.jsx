@@ -6,9 +6,23 @@ import { clientesService } from '../../services/clientes.service';
 import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
+import {
+    buildDetalleCalculo,
+    coincideCodigoProducto,
+    esRucValido,
+    getProductFilters,
+    normalizarCodigoProducto,
+    normalizarFechaInput,
+    normalizarRuc,
+    normalizarTexto,
+    obtenerLoteProducto,
+    parseCSVDocument,
+    parseCSVLine,
+    parseNumber
+} from './notaIngreso.utils';
 
 export const NotaIngresoForm = () => {
-    const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
+    const { register, control, handleSubmit, reset, setValue, getValues, formState: { isSubmitting } } = useForm({
         defaultValues: {
             fecha: new Date().toISOString().split('T')[0],
             numero_ingreso: '',
@@ -54,7 +68,6 @@ export const NotaIngresoForm = () => {
 
     // Estados para importación CSV
     const [mostrarModalImportacion, setMostrarModalImportacion] = useState(false);
-    const [archivoCSV, setArchivoCSV] = useState(null);
     const [erroresImportacion, setErroresImportacion] = useState([]);
     const [pendientesResolucionCSV, setPendientesResolucionCSV] = useState([]);
     const [indicePendienteCSV, setIndicePendienteCSV] = useState(0);
@@ -171,7 +184,7 @@ export const NotaIngresoForm = () => {
         setUnidadesCaja(product?.cantidad_por_caja ?? '');
         setFraccion(product?.cantidad_fraccion ?? '');
         setQuantityManual(false);
-        setQuantity(Number(product?.cantidad_total ?? 0));
+        setQuantity(0);
         const currentTipo = getValues('tipo_documento');
         const currentNumero = getValues('numero_documento');
         if (!currentTipo && product?.tipo_documento) {
@@ -235,9 +248,11 @@ export const NotaIngresoForm = () => {
 
     const loadProducts = async () => {
         try {
-            const filters = showAllProducts
-                ? { page: 1, limit: 5000 }
-                : { cliente_id: Number(selectedClient), page: 1, limit: 5000 };
+            const filters = getProductFilters({ showAllProducts, selectedClient });
+            if (!filters) {
+                setProducts([]);
+                return;
+            }
             const productsResponse = await productService.getProducts(filters);
             console.log('Productos cargados:', productsResponse);
             setProducts(Array.isArray(productsResponse) ? productsResponse : []);
@@ -295,15 +310,8 @@ export const NotaIngresoForm = () => {
                     setValue('numero_documento', productoDetalle.numero_documento);
                 }
             }
-            const cantidadProducto = Number(productoDetalle?.cantidad_total ?? 0);
-            const cantidadLote = Number(loteInfo.cantidad_disponible ?? loteInfo.cantidad_ingresada ?? 0);
-            const cantidadBase = Number.isFinite(cantidadProducto) && cantidadProducto > 0
-                ? cantidadProducto
-                : cantidadLote;
-            if (Number.isFinite(cantidadBase) && cantidadBase >= 0) {
-                setQuantity(cantidadBase);
-                setQuantityManual(false);
-            }
+            setQuantity(0);
+            setQuantityManual(false);
         }
     };
 
@@ -328,6 +336,10 @@ export const NotaIngresoForm = () => {
         }
 
         const product = products.find(p => p.id === parseInt(selectedProduct));
+        if (!product) {
+            showError('El producto seleccionado ya no está disponible. Vuelva a seleccionarlo.');
+            return;
+        }
 
         const existingIndex = fields.findIndex(
             field => Number(field.producto_id) === Number(selectedProduct) && field.lote_numero === loteFinal
@@ -366,7 +378,12 @@ export const NotaIngresoForm = () => {
                 cantidad_por_caja: parseFloat(unidadesCaja || 0),
                 cantidad_fraccion: parseFloat(fraccion || 0),
                 cantidad_total: parseFloat(quantity || 0),
-                detalle_calculo: `Bultos: ${bultos || 0}, Cajas: ${cajas || 0}, Und/Caja: ${unidadesCaja || 0}, Frac: ${fraccion || 0}`
+                detalle_calculo: buildDetalleCalculo({
+                    cantidad_bultos: bultos,
+                    cantidad_cajas: cajas,
+                    cantidad_por_caja: unidadesCaja,
+                    cantidad_fraccion: fraccion
+                })
             });
         }
 
@@ -416,7 +433,7 @@ export const NotaIngresoForm = () => {
             cantidad_por_caja: Number(detalle.cantidad_por_caja || 0),
             cantidad_fraccion: Number(detalle.cantidad_fraccion || 0),
             cantidad_total: cantidadTotal,
-            detalle_calculo: `Bultos: ${detalle.cantidad_bultos || 0}, Cajas: ${detalle.cantidad_cajas || 0}, Und/Caja: ${detalle.cantidad_por_caja || 0}, Frac: ${detalle.cantidad_fraccion || 0}`
+            detalle_calculo: buildDetalleCalculo(detalle)
         };
 
         if (existingIndex >= 0) {
@@ -454,7 +471,7 @@ export const NotaIngresoForm = () => {
             cantidad_cajas: Number(producto.cantidad_cajas || 0),
             cantidad_por_caja: Number(producto.cantidad_por_caja || 0),
             cantidad_fraccion: Number(producto.cantidad_fraccion || 0),
-            cantidad_total: Number(producto.cantidad_total || 0)
+            cantidad_total: 0
         });
         setMostrarModalDetalleProducto(true);
     };
@@ -580,7 +597,19 @@ export const NotaIngresoForm = () => {
             setLastIngresoId(created?.id || null);
             showSuccess('Nota de ingreso registrada con éxito.');
             reset();
+            setSelectedProduct('');
+            setSelectedLoteId('');
+            setLote('');
+            setVencimiento('');
+            setBultos('');
+            setCajas('');
+            setUnidadesCaja('');
+            setFraccion('');
+            setUm('');
+            setFabricante('');
+            setTemperatura('25');
             setQuantity(0);
+            setQuantityManual(false);
         } catch (error) {
             console.error(error);
             if (error?.code === 'ECONNABORTED') {
@@ -672,184 +701,6 @@ export const NotaIngresoForm = () => {
         update(index, next);
     };
 
-    const detectarDelimitadorCSV = (line) => {
-        const raw = String(line || '');
-        const comas = (raw.match(/,/g) || []).length;
-        const puntosComa = (raw.match(/;/g) || []).length;
-        return puntosComa > comas ? ';' : ',';
-    };
-
-    const parseCSVLine = (line, delimiter = ',') => {
-        const result = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (let i = 0; i < line.length; i += 1) {
-            const char = line[i];
-
-            if (char === '"') {
-                const next = line[i + 1];
-                if (inQuotes && next === '"') {
-                    current += '"';
-                    i += 1;
-                } else {
-                    inQuotes = !inQuotes;
-                }
-            } else if (char === delimiter && !inQuotes) {
-                result.push(current.trim());
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-
-        result.push(current.trim());
-        return result;
-    };
-
-    const parseCSVDocument = (content) => {
-        const raw = String(content || '').replace(/^\uFEFF/, '');
-        const firstLine = raw.split(/\r?\n/, 1)[0] || '';
-        const delimiter = detectarDelimitadorCSV(firstLine);
-
-        const rows = [];
-        let row = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (let i = 0; i < raw.length; i += 1) {
-            const char = raw[i];
-            const next = raw[i + 1];
-
-            if (char === '"') {
-                if (inQuotes && next === '"') {
-                    current += '"';
-                    i += 1;
-                } else {
-                    inQuotes = !inQuotes;
-                }
-                continue;
-            }
-
-            if (char === delimiter && !inQuotes) {
-                row.push(current.trim());
-                current = '';
-                continue;
-            }
-
-            if ((char === '\n' || char === '\r') && !inQuotes) {
-                if (char === '\r' && next === '\n') {
-                    i += 1;
-                }
-
-                row.push(current.trim());
-                current = '';
-
-                if (row.some((cell) => String(cell || '').trim() !== '')) {
-                    rows.push(row);
-                }
-
-                row = [];
-                continue;
-            }
-
-            current += char;
-        }
-
-        row.push(current.trim());
-        if (row.some((cell) => String(cell || '').trim() !== '')) {
-            rows.push(row);
-        }
-
-        return { delimiter, rows };
-    };
-
-    const parseNumber = (value, fallback = 0) => {
-        if (value === null || value === undefined || value === '') {
-            return fallback;
-        }
-        const normalized = String(value).replace(',', '.').trim();
-        const parsed = Number(normalized);
-        return Number.isFinite(parsed) ? parsed : fallback;
-    };
-
-    const normalizarFechaInput = (value) => {
-        if (!value) return '';
-
-        const raw = String(value).trim();
-        if (!raw) return '';
-
-        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-            return raw;
-        }
-
-        const matchDMY = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-        if (matchDMY) {
-            const first = Number(matchDMY[1]);
-            const second = Number(matchDMY[2]);
-            const year = Number(matchDMY[3]);
-            const month = first > 12 ? second : first;
-            const day = first > 12 ? first : second;
-
-            if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            }
-        }
-
-        const parsed = new Date(raw);
-        if (Number.isNaN(parsed.getTime())) {
-            return '';
-        }
-
-        const year = parsed.getFullYear();
-        const month = String(parsed.getMonth() + 1).padStart(2, '0');
-        const day = String(parsed.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
-    const normalizarTexto = (value) => String(value || '').trim().toLowerCase();
-    const normalizarCodigoProducto = (value) => normalizarTexto(value).replace(/\s+/g, ' ');
-    const normalizarRuc = (value) => String(value || '').replace(/[^0-9]/g, '').trim();
-    const esRucValido = (value) => normalizarRuc(value).length === 11;
-
-    const obtenerCodigosProducto = (producto) => {
-        const codigos = [
-            producto?.codigo,
-            producto?.codigo_producto,
-            producto?.producto_codigo,
-            producto?.sku,
-            producto?.codigo_interno
-        ]
-            .map((v) => String(v || '').trim())
-            .filter(Boolean);
-
-        // Permite que "AFE.PD2205027VE" encuentre "AFE.PD2205027VE R-100"
-        const codigosBase = codigos
-            .map((codigo) => codigo.split(/\s+/)[0])
-            .filter(Boolean);
-
-        return [...new Set([...codigos, ...codigosBase])];
-    };
-
-    const coincideCodigoProducto = (producto, codigoBuscadoRaw) => {
-        const codigoBuscado = normalizarCodigoProducto(codigoBuscadoRaw);
-        if (!codigoBuscado) return false;
-
-        return obtenerCodigosProducto(producto).some((codigo) => {
-            const normalizado = normalizarCodigoProducto(codigo);
-            return normalizado === codigoBuscado
-                || normalizado.startsWith(`${codigoBuscado} `)
-                || codigoBuscado.startsWith(`${normalizado} `);
-        });
-    };
-
-    const obtenerLoteProducto = (producto) => String(
-        producto?.lote
-        || producto?.numero_lote
-        || producto?.lote_numero
-        || ''
-    );
-
     const buscarClientePorRuc = (ruc) => {
         const normalized = normalizarRuc(ruc);
         if (!normalized) return null;
@@ -884,7 +735,13 @@ export const NotaIngresoForm = () => {
             temperatura_min: temperatura,
             temperatura_max: temperatura,
             temperatura_min_c: temperatura,
-            temperatura_max_c: temperatura
+            temperatura_max_c: temperatura,
+            detalle_calculo: buildDetalleCalculo({
+                cantidad_bultos: row.cantidad_bultos,
+                cantidad_cajas: row.cantidad_cajas,
+                cantidad_por_caja: row.cantidad_por_caja,
+                cantidad_fraccion: row.cantidad_fraccion
+            })
         };
     };
 
@@ -922,7 +779,6 @@ export const NotaIngresoForm = () => {
         const file = event.target.files[0];
         if (!file) return;
 
-        setArchivoCSV(file);
         setErroresImportacion([]);
         const reader = new FileReader();
 
