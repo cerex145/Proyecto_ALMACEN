@@ -170,9 +170,47 @@ async function productoRoutes(fastify, options) {
         }
 
         if (cliente_ruc) {
-            queryBuilder.andWhere("regexp_replace(upper(coalesce(producto.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')", {
-                cliente_ruc
-            });
+            queryBuilder.andWhere(new Brackets(qb => {
+                qb.where(
+                    "regexp_replace(upper(coalesce(producto.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')",
+                    { cliente_ruc }
+                );
+
+                qb.orWhere(
+                    `producto.cliente_id IN (
+                        SELECT c.id
+                        FROM clientes c
+                        WHERE regexp_replace(upper(coalesce(c.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')
+                    )`
+                );
+
+                qb.orWhere(
+                    `regexp_replace(upper(coalesce(producto.proveedor, '')), '[^A-Z0-9]', '', 'g') IN (
+                        SELECT regexp_replace(upper(coalesce(c.razon_social, '')), '[^A-Z0-9]', '', 'g')
+                        FROM clientes c
+                        WHERE regexp_replace(upper(coalesce(c.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')
+                    )`
+                );
+
+                qb.orWhere(qbInner => {
+                    const subQuery = qbInner.subQuery()
+                        .select('1')
+                        .from('lotes', 'l')
+                        .innerJoin('notas_ingreso', 'ni', 'l.nota_ingreso_id = ni.id')
+                        .where('l.producto_id = producto.id')
+                        .andWhere(`(
+                            regexp_replace(upper(coalesce(ni.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')
+                            OR ni.cliente_id IN (
+                                SELECT c2.id
+                                FROM clientes c2
+                                WHERE regexp_replace(upper(coalesce(c2.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')
+                            )
+                        )`)
+                        .getQuery();
+
+                    return 'EXISTS ' + subQuery;
+                });
+            }));
         }
 
         if (cliente_id) {

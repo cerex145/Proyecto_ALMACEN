@@ -20,7 +20,7 @@ export const ProductoList = () => {
     const [isMassCharge, setIsMassCharge] = useState(false);
     const [searchName, setSearchName] = useState('');
     const [searchDoc, setSearchDoc] = useState('');
-    const [clienteId, setClienteId] = useState('');
+    const [clienteRuc, setClienteRuc] = useState('');
     const [clientes, setClientes] = useState([]);
 
     // Cargar clientes para el selector
@@ -64,7 +64,7 @@ export const ProductoList = () => {
             const params = { page, limit };
             if (searchName)  params.busqueda        = searchName;
             if (searchDoc)   params.numero_documento = searchDoc;
-            if (clienteId)   params.cliente_id       = clienteId;
+            if (clienteRuc)  params.cliente_ruc      = clienteRuc;
 
             const response = await productService.getProductsPaginated(params);
             setProducts(response.data || []);
@@ -76,8 +76,8 @@ export const ProductoList = () => {
         }
     };
 
-    useEffect(() => { loadProducts(); }, [searchName, searchDoc, clienteId, page, limit]);
-    useEffect(() => { setPage(1); }, [searchName, searchDoc, clienteId]);
+    useEffect(() => { loadProducts(); }, [searchName, searchDoc, clienteRuc, page, limit]);
+    useEffect(() => { setPage(1); }, [searchName, searchDoc, clienteRuc]);
 
 
 
@@ -153,13 +153,15 @@ export const ProductoList = () => {
                         <select
                             id="filtro-cliente"
                             className="pl-8 pr-3 py-2 border border-slate-300 rounded-lg text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-                            value={clienteId}
-                            onChange={(e) => setClienteId(e.target.value)}
+                            value={clienteRuc}
+                            onChange={(e) => setClienteRuc(e.target.value)}
                         >
                             <option value="">Todos los clientes</option>
-                            {clientes.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {c.razon_social}
+                            {clientes
+                                .filter(c => String(c.cuit || '').trim() !== '')
+                                .map(c => (
+                                <option key={`${c.id}-${c.cuit}`} value={c.cuit}>
+                                    {c.razon_social} ({c.cuit})
                                 </option>
                             ))}
                         </select>
@@ -179,9 +181,9 @@ export const ProductoList = () => {
                     </div>
 
                     {/* Limpiar filtros */}
-                    {(searchName || searchDoc || clienteId) && (
+                    {(searchName || searchDoc || clienteRuc) && (
                         <button
-                            onClick={() => { setSearchName(''); setSearchDoc(''); setClienteId(''); }}
+                            onClick={() => { setSearchName(''); setSearchDoc(''); setClienteRuc(''); }}
                             className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-2 py-2 bg-red-50 hover:bg-red-100 transition"
                             title="Limpiar filtros"
                         >
