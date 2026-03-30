@@ -25,3 +25,25 @@
  unidad_medida      | character varying           | YES         | 
 (23 filas)
 
+id
+codigo
+descripcion
+proveedor
+tipo_documento
+numero_documento
+registro_sanitario
+lote
+fabricante
+categoria_ingreso
+procedencia
+unidad
+unidad_otro
+um
+temperatura_min_c
+temperatura_max_c
+observaciones
+activo
+created_at
+updated_at
+fecha_documento
+unidad_medida

@@ -93,6 +93,7 @@ const nullableDateSchema = () => ({
 
 async function productoRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
+    const clienteRepo = fastify.db.getRepository('Cliente');
     const toActivoSmallint = (value) => (value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0);
     const mapTemperaturaEntrada = (value) => {
         const parsed = Number(value);
@@ -383,6 +384,7 @@ async function productoRoutes(fastify, options) {
                 properties: {
                     codigo: { type: 'string' },
                     descripcion: { type: 'string' },
+                    cliente_id: { type: 'integer', nullable: true },
                     proveedor: { type: 'string', nullable: true },
                     tipo_documento: nullableEnumSchema(tipoDocumentoValues),
                     numero_documento: { type: 'string', nullable: true },
@@ -409,6 +411,7 @@ async function productoRoutes(fastify, options) {
         const {
             codigo,
             descripcion,
+            cliente_id,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -452,14 +455,30 @@ async function productoRoutes(fastify, options) {
             });
         }
 
+        let proveedorFinal = proveedor || null;
+        let proveedorRucFinal = proveedor_ruc || null;
+
+        if (cliente_id !== undefined && cliente_id !== null && cliente_id !== '') {
+            const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
+            if (!cliente) {
+                return reply.status(400).send({
+                    success: false,
+                    error: 'Cliente no encontrado'
+                });
+            }
+
+            proveedorFinal = cliente.razon_social || proveedorFinal;
+            proveedorRucFinal = cliente.cuit || proveedorRucFinal;
+        }
+
         const nuevoProducto = productoRepo.create({
             codigo,
             descripcion,
-            proveedor,
+            proveedor: proveedorFinal,
             tipo_documento: tipo_documento || null,
             numero_documento: numero_documento || null,
             registro_sanitario: registro_sanitario || null,
-            proveedor_ruc: proveedor_ruc || null,
+            proveedor_ruc: proveedorRucFinal,
             fecha_ingreso: fecha_ingreso || null,
             lote: lote || null,
             fabricante: fabricante || null,
@@ -500,6 +519,7 @@ async function productoRoutes(fastify, options) {
                     codigo: { type: 'string' },
                     descripcion: { type: 'string' },
                     activo: { type: 'boolean' },
+                    cliente_id: { type: 'integer', nullable: true },
                     proveedor: { type: 'string', nullable: true },
                     tipo_documento: nullableEnumSchema(tipoDocumentoValues),
                     numero_documento: { type: 'string', nullable: true },
@@ -529,6 +549,7 @@ async function productoRoutes(fastify, options) {
             codigo,
             descripcion,
             activo,
+            cliente_id,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -569,6 +590,19 @@ async function productoRoutes(fastify, options) {
                 });
             }
             producto.codigo = codigo;
+        }
+
+        if (cliente_id !== undefined && cliente_id !== null && cliente_id !== '') {
+            const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
+            if (!cliente) {
+                return reply.status(400).send({
+                    success: false,
+                    error: 'Cliente no encontrado'
+                });
+            }
+
+            producto.proveedor = cliente.razon_social || null;
+            producto.proveedor_ruc = cliente.cuit || null;
         }
 
         producto.descripcion = descripcion;

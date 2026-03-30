@@ -18,6 +18,13 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
     const unidadSeleccionada = watch('unidad');
     const codigoProducto = watch('codigo');
 
+    const normalizarTexto = (valor = '') =>
+        String(valor)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .toUpperCase();
+
     useEffect(() => {
         loadClients();
     }, []);
@@ -25,9 +32,28 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
     const loadClients = async () => {
         try {
             setLoading(true);
-            const data = await clientesService.listar(); // Fetches all clients
-            // If data.data exists (paginated), use it, else usage data directly
-            setClients(data.data || data || []);
+            const pageSize = 200;
+            let currentPage = 1;
+            let totalPages = 1;
+            const allClients = [];
+
+            do {
+                const response = await clientesService.listar({
+                    page: currentPage,
+                    limit: pageSize,
+                    orderBy: 'razon_social',
+                    order: 'ASC'
+                });
+
+                const data = response?.data || [];
+                const pagination = response?.pagination || {};
+
+                allClients.push(...data);
+                totalPages = Number(pagination.totalPages || 1);
+                currentPage += 1;
+            } while (currentPage <= totalPages);
+
+            setClients(allClients);
         } catch (error) {
             console.error("Error loading clients:", error);
         } finally {
@@ -35,20 +61,41 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
         }
     };
 
-    // Auto-fill client data when a client code is selected
-    const selectedClientCode = watch('codigo_cliente');
+    // Auto-fill client data when a client is selected
+    const selectedClienteId = watch('cliente_id');
     useEffect(() => {
-        if (selectedClientCode) {
-            const client = clients.find(c => c.codigo === selectedClientCode);
-            if (client) {
-                setValue('ruc_cliente', client.cuit || '');
-                setValue('razon_social', client.razon_social || '');
-                setValue('direccion', client.direccion || '');
-                setValue('proveedor', client.razon_social || '');
-                // Map other fields if necessary
-            }
+        if (!selectedClienteId) {
+            setValue('ruc_cliente', '');
+            setValue('razon_social', '');
+            setValue('proveedor', '');
+            return;
         }
-    }, [selectedClientCode, clients, setValue]);
+
+        const client = clients.find(c => Number(c.id) === Number(selectedClienteId));
+        if (client) {
+            setValue('ruc_cliente', client.cuit || '');
+            setValue('razon_social', client.razon_social || '');
+            setValue('proveedor', client.razon_social || '');
+        }
+    }, [selectedClienteId, clients, setValue]);
+
+    useEffect(() => {
+        if (!productToEdit || clients.length === 0) return;
+
+        const proveedorNormalizado = normalizarTexto(productToEdit.proveedor || '');
+        if (!proveedorNormalizado) return;
+
+        const clientMatch = clients.find(
+            (c) => normalizarTexto(c.razon_social || '') === proveedorNormalizado
+        );
+
+        if (clientMatch) {
+            setValue('cliente_id', String(clientMatch.id));
+            setValue('ruc_cliente', clientMatch.cuit || '');
+            setValue('razon_social', clientMatch.razon_social || '');
+            setValue('proveedor', clientMatch.razon_social || '');
+        }
+    }, [productToEdit, clients, setValue]);
 
     useEffect(() => {
         if (productToEdit?.id) {
@@ -103,6 +150,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
 
             const payload = {
                 ...data,
+                cliente_id: data.cliente_id ? Number(data.cliente_id) : null,
                 proveedor: data.proveedor || data.razon_social || '',
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
@@ -178,18 +226,24 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Código Cliente/Proveedor</label>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Cliente *</label>
                                     <select
-                                        {...register('codigo_cliente')}
+                                        {...register('cliente_id', {
+                                            validate: (value) => {
+                                                if (productToEdit?.id) return true;
+                                                return value ? true : 'Cliente requerido';
+                                            }
+                                        })}
                                         className="w-full h-9 rounded border-gray-300 bg-white text-sm focus:border-blue-500 focus:ring-blue-500 border px-2"
                                     >
                                         <option value="">Seleccionar...</option>
                                         {clients.map(client => (
-                                            <option key={client.id} value={client.codigo}>
-                                                {client.codigo} - {client.razon_social}
+                                            <option key={client.id} value={client.id}>
+                                                {client.razon_social} ({client.cuit || 'Sin RUC'})
                                             </option>
                                         ))}
                                     </select>
+                                    {errors.cliente_id && <span className="text-red-500 text-xs">{errors.cliente_id.message || 'Cliente requerido'}</span>}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Razón Social</label>
