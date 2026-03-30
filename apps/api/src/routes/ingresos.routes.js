@@ -159,12 +159,14 @@ async function ingresosRoutes(fastify, options) {
                 properties: {
                     fecha_desde: { type: 'string', format: 'date' },
                     fecha_hasta: { type: 'string', format: 'date' },
+                    numero_ingreso: { type: 'string' },
                     cliente_id: { type: 'integer' },
                     proveedor: { type: 'string' },
                     tipo_documento: { type: 'string' },
                     numero_documento: { type: 'string' },
                     categoria: { type: 'string', enum: ['IMPORTACION', 'COMPRA_LOCAL', 'TRASLADO', 'DEVOLUCION'] },
                     estado: { type: 'string' },
+                    include_detalles: { type: 'boolean', default: false },
                     page: { type: 'integer', minimum: 1, default: 1 },
                     limit: { type: 'integer', minimum: 1, default: 50 }
                 }
@@ -183,6 +185,7 @@ async function ingresosRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             busqueda = '',
+            numero_ingreso,
             cliente_id,
             proveedor,
             tipo_documento,
@@ -190,6 +193,7 @@ async function ingresosRoutes(fastify, options) {
             estado,
             fecha_desde,
             fecha_hasta,
+            include_detalles = false,
             page = 1,
             limit = 50,
             orderBy = 'created_at',
@@ -223,6 +227,10 @@ async function ingresosRoutes(fastify, options) {
             queryBuilder.andWhere('nota.numero_documento = :numero_documento', { numero_documento });
         }
 
+        if (numero_ingreso) {
+            queryBuilder.andWhere('nota.numero_ingreso LIKE :numero_ingreso', { numero_ingreso: `%${numero_ingreso}%` });
+        }
+
         if (tipo_documento) {
             queryBuilder.andWhere('nota.tipo_documento = :tipo_documento', { tipo_documento });
         }
@@ -239,8 +247,8 @@ async function ingresosRoutes(fastify, options) {
             queryBuilder.andWhere('nota.fecha <= :fecha_hasta', { fecha_hasta });
         }
 
-        // Si se busca por numero_documento, incluir detalles y productos
-        if (numero_documento) {
+        // Incluir detalles/productos cuando se solicite explícitamente o por búsqueda de documento
+        if (include_detalles || numero_documento) {
             queryBuilder
                 .leftJoinAndSelect('nota.detalles', 'detalles')
                 .leftJoinAndSelect('detalles.producto', 'producto');

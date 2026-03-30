@@ -45,34 +45,22 @@ export const HistorialIngresosFuncional = () => {
     const cargarIngresos = async () => {
         try {
             setLoading(true);
-            const params = filtro ? `?numero_ingreso=${filtro}` : '';
-            const response = await fetch(`${API_ORIGIN}/api/ingresos${params}`);
+            const params = new URLSearchParams();
+            if (filtro) params.set('numero_ingreso', filtro);
+            params.set('include_detalles', 'true');
+            const response = await fetch(`${API_ORIGIN}/api/ingresos?${params.toString()}`);
             const result = await response.json();
             const notas = result.data || [];
             setIngresos(notas);
 
-            const detallesResponses = await Promise.all(
-                notas.map(async (nota) => {
-                    try {
-                        const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
-                        const detJson = await detRes.json();
-                        return detJson?.data || { detalles: [], proveedor: null };
-                    } catch (err) {
-                        console.error('Error al cargar detalles:', err);
-                        return { detalles: [], proveedor: null };
-                    }
-                })
-            );
-
             const rows = [];
-            detallesResponses.forEach((data, idx) => {
-                const nota = notas[idx];
+            notas.forEach((nota) => {
                 const fechaObj = new Date(nota.fecha);
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
-                const ruc = clientesMap[String(nota.proveedor_id)] || data?.proveedor?.cuit || '-';
-                const detalles = data?.detalles || [];
+                const ruc = clientesMap[String(nota.cliente_id)] || '-';
+                const detalles = Array.isArray(nota?.detalles) ? nota.detalles : [];
 
                 if (detalles.length === 0) {
                     rows.push({
@@ -99,38 +87,40 @@ export const HistorialIngresosFuncional = () => {
                     return;
                 }
 
-                detalles.forEach((d, index) => {
-                    const fmt = (v) => (v != null) ? parseFloat(v).toFixed(0) : '-';
-                    const tempMin = d.temperatura_min_c ?? d.producto?.temperatura_min_c;
-                    const tempMax = d.temperatura_max_c ?? d.producto?.temperatura_max_c;
-                    let tempText = '-';
-                    if (tempMin != null || tempMax != null) {
-                        tempText = `${tempMin ?? '-'} a ${tempMax ?? '-'}`;
-                    }
-                    const fVcto = d.fecha_vencimiento || null;
-                    const totalIngreso = d.cantidad_total != null ? Number(d.cantidad_total) : Number(d.cantidad);
+                const joinCampo = (mapper) => detalles
+                    .map(mapper)
+                    .filter((v) => v != null && String(v).trim() !== '')
+                    .join(' | ');
 
-                    rows.push({
-                        key: `${nota.id}-${index}`,
-                        ingresoId: nota.id,
-                        codigo: d.producto?.codigo || '-',
-                        producto: d.producto?.descripcion || '-',
-                        lote: d.lote_numero || '-',
-                        vencimiento: fVcto ? new Date(fVcto).toLocaleDateString('es-PE') : '-',
-                        um: d.um || d.producto?.um || '-',
-                        fabricante: d.fabricante || d.producto?.fabricante || '-',
-                        temperatura: tempText,
-                        cantBulto: fmt(d.cantidad_bultos),
-                        cantCajas: fmt(d.cantidad_cajas),
-                        cantPorCaja: fmt(d.cantidad_por_caja),
-                        cantFraccion: fmt(d.cantidad_fraccion),
-                        cantTotal: Number.isFinite(totalIngreso) ? totalIngreso.toFixed(2) : '-',
-                        fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
-                        mes,
-                        dia,
-                        ruc,
-                        anio
-                    });
+                const sumCampo = (mapper) => detalles.reduce((acc, d) => {
+                    const n = Number(mapper(d));
+                    return acc + (Number.isFinite(n) ? n : 0);
+                }, 0);
+
+                rows.push({
+                    key: `${nota.id}`,
+                    ingresoId: nota.id,
+                    codigo: joinCampo((d) => d.producto?.codigo || '-'),
+                    producto: joinCampo((d) => d.producto?.descripcion || '-'),
+                    lote: joinCampo((d) => d.lote_numero || '-'),
+                    vencimiento: joinCampo((d) => d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-'),
+                    um: joinCampo((d) => d.um || d.producto?.unidad_medida || '-'),
+                    fabricante: joinCampo((d) => d.fabricante || d.producto?.fabricante || '-'),
+                    temperatura: joinCampo((d) => {
+                        const min = d.temperatura_min_c ?? d.producto?.temperatura_min_c;
+                        const max = d.temperatura_max_c ?? d.producto?.temperatura_max_c;
+                        return (min != null || max != null) ? `${min ?? '-'} a ${max ?? '-'}` : '-';
+                    }),
+                    cantBulto: sumCampo((d) => d.cantidad_bultos).toFixed(0),
+                    cantCajas: sumCampo((d) => d.cantidad_cajas).toFixed(0),
+                    cantPorCaja: sumCampo((d) => d.cantidad_por_caja).toFixed(0),
+                    cantFraccion: sumCampo((d) => d.cantidad_fraccion).toFixed(0),
+                    cantTotal: sumCampo((d) => d.cantidad_total ?? d.cantidad).toFixed(2),
+                    fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
+                    mes,
+                    dia,
+                    ruc,
+                    anio
                 });
             });
 
