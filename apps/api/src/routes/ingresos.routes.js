@@ -7,6 +7,7 @@ const NotaIngresoSchema = {
     properties: {
         id: { type: 'integer' },
         numero_ingreso: { type: 'string' },
+        numero_guia: { type: 'integer', nullable: true },
         fecha: { type: 'string', format: 'date' },
         cliente_id: { type: 'integer', nullable: true },
         proveedor: { type: 'string' },
@@ -1192,4 +1193,3 @@ async function ingresosRoutes(fastify, options) {
 }
 
 module.exports = ingresosRoutes;
-
