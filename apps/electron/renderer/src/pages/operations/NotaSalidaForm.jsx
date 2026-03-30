@@ -150,11 +150,11 @@ export const NotaSalidaForm = () => {
 
         const candidatosCodigoUnicos = dedupeById(candidatosPorCodigo);
         if (candidatosCodigoUnicos.length === 0) {
-            return null;
+            return { producto: null, candidatos: [] };
         }
 
         if (candidatosCodigoUnicos.length === 1) {
-            return candidatosCodigoUnicos[0];
+            return { producto: candidatosCodigoUnicos[0], candidatos: candidatosCodigoUnicos };
         }
 
         if (nombre) {
@@ -167,15 +167,60 @@ export const NotaSalidaForm = () => {
 
             const porNombreUnicos = dedupeById(candidatosPorNombre);
             if (porNombreUnicos.length === 1) {
-                return porNombreUnicos[0];
+                return { producto: porNombreUnicos[0], candidatos: porNombreUnicos };
             }
 
             if (porNombreUnicos.length > 1) {
-                return selectDeterministicById(porNombreUnicos);
+                return { producto: selectDeterministicById(porNombreUnicos), candidatos: porNombreUnicos };
             }
         }
 
-        return selectDeterministicById(candidatosCodigoUnicos);
+        return { producto: selectDeterministicById(candidatosCodigoUnicos), candidatos: candidatosCodigoUnicos };
+    };
+
+    const loteCoincideCSV = (numeroLote, loteCsv) => {
+        const loteCsvNormalizado = normalizeLote(loteCsv);
+        const loteCsvCanonico = normalizeLoteCanonico(loteCsv);
+        const loteNormalizado = normalizeLote(numeroLote);
+        const loteCanonico = normalizeLoteCanonico(numeroLote);
+
+        return loteNormalizado === loteCsvNormalizado
+            || loteCanonico === loteCsvCanonico
+            || loteNormalizado.includes(loteCsvNormalizado)
+            || loteCsvNormalizado.includes(loteNormalizado)
+            || (loteCanonico && loteCsvCanonico && (
+                loteCanonico.includes(loteCsvCanonico)
+                || loteCsvCanonico.includes(loteCanonico)
+            ));
+    };
+
+    const getLotesActivosForProducto = async ({ productoId, clienteTrabajo, lotesCache, errores, filaNumero }) => {
+        if (!lotesCache.has(productoId)) {
+            const lotesCliente = await productService.getLotesByProduct(productoId, clienteTrabajo);
+            let activos = Array.isArray(lotesCliente)
+                ? lotesCliente.filter((l) => Number(l.cantidad_disponible) > 0)
+                : [];
+
+            if (activos.length === 0) {
+                const lotesGenerales = await productService.getLotesByProduct(productoId);
+                const activosGenerales = Array.isArray(lotesGenerales)
+                    ? lotesGenerales.filter((l) => Number(l.cantidad_disponible) > 0)
+                    : [];
+
+                if (activosGenerales.length > 0) {
+                    errores.push(`Fila ${filaNumero}: sin lotes para cliente, se usará stock general.`);
+                }
+
+                activos = activosGenerales;
+            }
+
+            const activosFinales = Array.isArray(activos)
+                ? activos.filter((l) => Number(l.cantidad_disponible) > 0)
+                : [];
+            lotesCache.set(productoId, activosFinales);
+        }
+
+        return lotesCache.get(productoId) || [];
     };
 
     const parseCSVLine = (line, delimiter = ',') => {
@@ -1013,42 +1058,25 @@ export const NotaSalidaForm = () => {
                         ...(Array.isArray(allProducts) ? allProducts : [])
                     ];
 
-                    const producto = resolveProductoCSVSalida({
+                    const resolucionProducto = resolveProductoCSVSalida({
                         productos: productosBusqueda,
                         codigoRaw: codigoOriginal,
                         nombreRaw: nombreOriginal
                     });
+                    const producto = resolucionProducto?.producto || null;
                     if (!producto) {
                         errores.push(`Fila ${i + 1}: producto no encontrado (${row.codigo_producto || row.nombre || '-' }).`);
                         continue;
                     }
 
-                    if (!lotesCache.has(producto.id)) {
-                        const lotesCliente = await productService.getLotesByProduct(producto.id, clienteTrabajo);
-                        let activos = Array.isArray(lotesCliente)
-                            ? lotesCliente.filter((l) => Number(l.cantidad_disponible) > 0)
-                            : [];
-
-                        if (activos.length === 0) {
-                            const lotesGenerales = await productService.getLotesByProduct(producto.id);
-                            const activosGenerales = Array.isArray(lotesGenerales)
-                                ? lotesGenerales.filter((l) => Number(l.cantidad_disponible) > 0)
-                                : [];
-
-                            if (activosGenerales.length > 0) {
-                                errores.push(`Fila ${i + 1}: sin lotes para cliente, se usará stock general.`);
-                            }
-
-                            activos = activosGenerales;
-                        }
-
-                        const activosFinales = Array.isArray(activos)
-                            ? activos.filter((l) => Number(l.cantidad_disponible) > 0)
-                            : [];
-                        lotesCache.set(producto.id, activosFinales);
-                    }
-
-                    const lotesActivos = lotesCache.get(producto.id) || [];
+                    let productoSeleccionado = producto;
+                    let lotesActivos = await getLotesActivosForProducto({
+                        productoId: Number(productoSeleccionado.id),
+                        clienteTrabajo,
+                        lotesCache,
+                        errores,
+                        filaNumero: i + 1
+                    });
                     if (lotesActivos.length === 0) {
                         errores.push(`Fila ${i + 1}: sin lotes disponibles para ${row.codigo_producto}.`);
                         continue;
@@ -1068,23 +1096,32 @@ export const NotaSalidaForm = () => {
 
                     let lote = null;
                     if (loteCsv) {
-                        const loteCsvNormalizado = normalizeLote(loteCsv);
-                        const loteCsvCanonico = normalizeLoteCanonico(loteCsv);
+                        lote = lotesActivos.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
 
-                        lote = lotesActivos.find((l) => {
-                            const numeroLote = String(l.numero_lote || '');
-                            const loteNormalizado = normalizeLote(numeroLote);
-                            const loteCanonico = normalizeLoteCanonico(numeroLote);
+                        // Si no coincide en el primer candidato, probar con otros candidatos de producto.
+                        if (!lote && Array.isArray(resolucionProducto?.candidatos) && resolucionProducto.candidatos.length > 1) {
+                            for (const candidato of resolucionProducto.candidatos) {
+                                if (Number(candidato?.id) === Number(productoSeleccionado.id)) {
+                                    continue;
+                                }
 
-                            return loteNormalizado === loteCsvNormalizado
-                                || loteCanonico === loteCsvCanonico
-                                || loteNormalizado.includes(loteCsvNormalizado)
-                                || loteCsvNormalizado.includes(loteNormalizado)
-                                || (loteCanonico && loteCsvCanonico && (
-                                    loteCanonico.includes(loteCsvCanonico)
-                                    || loteCsvCanonico.includes(loteCanonico)
-                                ));
-                        }) || null;
+                                const lotesCandidato = await getLotesActivosForProducto({
+                                    productoId: Number(candidato.id),
+                                    clienteTrabajo,
+                                    lotesCache,
+                                    errores,
+                                    filaNumero: i + 1
+                                });
+
+                                const loteCandidato = lotesCandidato.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
+                                if (loteCandidato) {
+                                    productoSeleccionado = candidato;
+                                    lotesActivos = lotesCandidato;
+                                    lote = loteCandidato;
+                                    break;
+                                }
+                            }
+                        }
 
                         if (!lote) {
                             errores.push(`Fila ${i + 1}: lote ${loteCsv} no encontrado, se usará FIFO automático.`);
@@ -1102,14 +1139,14 @@ export const NotaSalidaForm = () => {
                     }
 
                     const detalle = {
-                        producto_id: Number(producto.id),
-                        nota_ingreso_id: lote ? getNotaIngresoIdByProductoLote(Number(producto.id), lote.numero_lote) : null,
-                        producto_codigo: producto.codigo || '',
-                        producto_nombre: producto.descripcion || '',
+                        producto_id: Number(productoSeleccionado.id),
+                        nota_ingreso_id: lote ? getNotaIngresoIdByProductoLote(Number(productoSeleccionado.id), lote.numero_lote) : null,
+                        producto_codigo: productoSeleccionado.codigo || '',
+                        producto_nombre: productoSeleccionado.descripcion || '',
                         lote_id: lote?.id ? Number(lote.id) : null,
                         lote_numero: lote?.numero_lote || null,
-                        fecha_vencimiento: normalizeDateInput(lote?.fecha_vencimiento || producto.fecha_vencimiento) || null,
-                        um: row.um || producto.um || producto.unidad || '-',
+                        fecha_vencimiento: normalizeDateInput(lote?.fecha_vencimiento || productoSeleccionado.fecha_vencimiento) || null,
+                        um: row.um || productoSeleccionado.um || productoSeleccionado.unidad || '-',
                         cant_bulto: parseNumber(row.cant_bulto ?? row.cantidad_bultos, 0),
                         cant_caja: parseNumber(row.cant_caja ?? row.cantidad_cajas, 0),
                         cant_por_caja: parseNumber(row.cant_x_caja ?? row.cantidad_por_caja, 0),
