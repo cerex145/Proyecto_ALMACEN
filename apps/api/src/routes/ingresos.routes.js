@@ -98,8 +98,10 @@ async function ingresosRoutes(fastify, options) {
     const generarNumeroGuia = async () => {
         const result = await notaIngresoRepo
             .createQueryBuilder('nota')
-            .select("MAX(CAST(SUBSTRING(nota.numero_guia FROM '[0-9]+$') AS INTEGER))", 'max')
-            .where("nota.numero_guia LIKE 'guia-%'")
+            .select(
+                "MAX(CAST(NULLIF(REGEXP_REPLACE(COALESCE(nota.numero_guia::text, ''), '\\D', '', 'g'), '') AS INTEGER))",
+                'max'
+            )
             .getRawOne();
         const siguienteNumero = (Number(result?.max) || 0) + 1;
         return `guia-${String(siguienteNumero).padStart(7, '0')}`;
