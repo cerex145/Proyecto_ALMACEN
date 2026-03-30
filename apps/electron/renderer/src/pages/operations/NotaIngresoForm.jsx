@@ -95,6 +95,7 @@ export const NotaIngresoForm = () => {
     const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
     const [uiError, setUiError] = useState('');
     const [uiSuccess, setUiSuccess] = useState('');
+    const selectedClientRuc = normalizarRuc(clienteRuc);
 
     const showError = (message) => {
         setUiSuccess('');
@@ -112,7 +113,7 @@ export const NotaIngresoForm = () => {
 
     useEffect(() => {
         loadProducts();
-    }, [selectedClient, showAllProducts]);
+    }, [selectedClient, selectedClientRuc, showAllProducts]);
 
     useEffect(() => {
         if (!mostrarModalMasivo) {
@@ -136,7 +137,11 @@ export const NotaIngresoForm = () => {
                 };
 
                 if (!showAllProducts && selectedClient) {
-                    filtros.cliente_id = Number(selectedClient);
+                    if (selectedClientRuc) {
+                        filtros.cliente_ruc = selectedClientRuc;
+                    } else {
+                        filtros.cliente_id = Number(selectedClient);
+                    }
                 }
 
                 const response = await productService.getProducts(filtros);
@@ -151,7 +156,7 @@ export const NotaIngresoForm = () => {
         }, 300);
 
         return () => clearTimeout(timeout);
-    }, [mostrarModalMasivo, filtroProductosMasivos, showAllProducts, selectedClient]);
+    }, [mostrarModalMasivo, filtroProductosMasivos, showAllProducts, selectedClient, selectedClientRuc]);
 
     useEffect(() => {
         if (!selectedClient) {
@@ -205,7 +210,11 @@ export const NotaIngresoForm = () => {
                     producto_id: Number(selectedProduct)
                 };
                 if (!showAllProducts && selectedClient) {
-                    filters.cliente_id = Number(selectedClient);
+                    if (selectedClientRuc) {
+                        filters.cliente_ruc = selectedClientRuc;
+                    } else {
+                        filters.cliente_id = Number(selectedClient);
+                    }
                 }
                 const lotes = await productService.getLotes(filters);
                 const product = products.find(p => p.id === parseInt(selectedProduct));
@@ -230,7 +239,7 @@ export const NotaIngresoForm = () => {
         };
 
         loadLotes();
-    }, [selectedProduct, selectedClient, showAllProducts]);
+    }, [selectedProduct, selectedClient, showAllProducts, selectedClientRuc]);
 
     const loadData = async () => {
         // Load Clients
@@ -248,7 +257,11 @@ export const NotaIngresoForm = () => {
 
     const loadProducts = async () => {
         try {
-            const filters = getProductFilters({ showAllProducts, selectedClient });
+            const filters = getProductFilters({
+                showAllProducts,
+                selectedClient,
+                selectedClientRuc
+            });
             if (!filters) {
                 setProducts([]);
                 return;

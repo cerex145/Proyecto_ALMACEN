@@ -41,6 +41,7 @@ const ErrorResponseSchema = {
 async function lotesRoutes(fastify, options) {
     const loteRepo = fastify.db.getRepository('Lote');
     const productoRepo = fastify.db.getRepository('Producto');
+    const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
 
     // GET /api/lotes - Listar lotes
     fastify.get('/api/lotes', {
@@ -56,6 +57,7 @@ async function lotesRoutes(fastify, options) {
                     fecha_vencimiento_desde: { type: 'string', format: 'date' },
                     fecha_vencimiento_hasta: { type: 'string', format: 'date' },
                     cliente_id: { type: 'integer', description: 'Filtrar por cliente de la nota de ingreso' },
+                    cliente_ruc: { type: 'string', description: 'Filtrar por RUC/CUIT del cliente de la nota de ingreso' },
                     page: { type: 'integer', minimum: 1, default: 1 },
                     limit: { type: 'integer', minimum: 1, default: 50 }
                 }
@@ -79,6 +81,7 @@ async function lotesRoutes(fastify, options) {
             fecha_vencimiento_desde,
             fecha_vencimiento_hasta,
             cliente_id,
+            cliente_ruc,
             page = 1,
             limit = 50
         } = request.query;
@@ -97,6 +100,13 @@ async function lotesRoutes(fastify, options) {
             // Evitar dependencia de una columna cliente_id ausente en notas_ingreso.
             queryBuilder.leftJoin('clientes', 'cliente', 'cliente.razon_social = notaIngreso.proveedor');
             queryBuilder.andWhere('cliente.id = :cliente_id', { cliente_id: Number(cliente_id) });
+        }
+
+        if (cliente_ruc) {
+            const rucNormalizado = normalizarRuc(cliente_ruc);
+            queryBuilder.andWhere("regexp_replace(coalesce(notaIngreso.cliente_ruc, ''), '\\D', '', 'g') = :cliente_ruc", {
+                cliente_ruc: rucNormalizado
+            });
         }
 
         if (busqueda) {
@@ -361,7 +371,8 @@ async function lotesRoutes(fastify, options) {
             querystring: {
                 type: 'object',
                 properties: {
-                    cliente_id: { type: 'integer', description: 'Filtrar por cliente de la nota de ingreso' }
+                    cliente_id: { type: 'integer', description: 'Filtrar por cliente de la nota de ingreso' },
+                    cliente_ruc: { type: 'string', description: 'Filtrar por RUC/CUIT del cliente de la nota de ingreso' }
                 }
             },
             response: {
@@ -376,7 +387,7 @@ async function lotesRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { producto_id } = request.params;
-        const { cliente_id } = request.query;
+        const { cliente_id, cliente_ruc } = request.query;
 
         const queryBuilder = loteRepo.createQueryBuilder('lote')
             .where('lote.producto_id = :producto_id', { producto_id: Number(producto_id) })
@@ -387,6 +398,15 @@ async function lotesRoutes(fastify, options) {
                 .leftJoin('lote.notaIngreso', 'notaIngreso')
                 .leftJoin('clientes', 'cliente', 'cliente.razon_social = notaIngreso.proveedor')
                 .andWhere('cliente.id = :cliente_id', { cliente_id: Number(cliente_id) });
+        }
+
+        if (cliente_ruc) {
+            const rucNormalizado = normalizarRuc(cliente_ruc);
+            queryBuilder
+                .leftJoin('lote.notaIngreso', 'notaIngreso')
+                .andWhere("regexp_replace(coalesce(notaIngreso.cliente_ruc, ''), '\\D', '', 'g') = :cliente_ruc", {
+                    cliente_ruc: rucNormalizado
+                });
         }
 
         const lotes = await queryBuilder.getMany();

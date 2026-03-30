@@ -184,7 +184,7 @@ export const buildDetalleCalculo = ({
     cantidad_fraccion = 0
 }) => `Bultos: ${cantidad_bultos || 0}, Cajas: ${cantidad_cajas || 0}, Und/Caja: ${cantidad_por_caja || 0}, Frac: ${cantidad_fraccion || 0}`;
 
-export const getProductFilters = ({ showAllProducts, selectedClient, limit = 5000, extra = {} }) => {
+export const getProductFilters = ({ showAllProducts, selectedClient, selectedClientRuc, limit = 5000, extra = {} }) => {
     const filters = {
         page: 1,
         limit,
@@ -195,7 +195,12 @@ export const getProductFilters = ({ showAllProducts, selectedClient, limit = 500
         if (!selectedClient) {
             return null;
         }
-        filters.cliente_id = Number(selectedClient);
+
+        if (selectedClientRuc) {
+            filters.cliente_ruc = selectedClientRuc;
+        } else {
+            filters.cliente_id = Number(selectedClient);
+        }
     }
 
     return filters;
