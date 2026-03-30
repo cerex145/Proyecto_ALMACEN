@@ -165,12 +165,17 @@ async function productoRoutes(fastify, options) {
         }
 
         if (cliente_id) {
-            // Filtrar por cliente considerando productos creados en inventario (proveedor = razon_social)
-            // y como respaldo productos con lotes asociados via NotaIngreso.
+            // Filtrado robusto por cliente:
+            // 1) Normaliza proveedor/razon_social para evitar fallos por puntos, espacios o formato.
+            // 2) Como respaldo usa relación por lotes->nota_ingreso, priorizando ni.cliente_id cuando exista.
             queryBuilder.andWhere(new Brackets(qb => {
                 qb.where(
-                    'producto.proveedor = (SELECT razon_social FROM clientes WHERE id = :cliente_id)',
-                    { cliente_id }
+                    `regexp_replace(upper(coalesce(producto.proveedor, '')), '[^A-Z0-9]', '', 'g') = (
+                        SELECT regexp_replace(upper(coalesce(c.razon_social, '')), '[^A-Z0-9]', '', 'g')
+                        FROM clientes c
+                        WHERE c.id = :cliente_id
+                    )`,
+                    { cliente_id: Number(cliente_id) }
                 );
 
                 qb.orWhere(qbInner => {
@@ -178,9 +183,15 @@ async function productoRoutes(fastify, options) {
                         .select("1")
                         .from("lotes", "l")
                         .innerJoin("notas_ingreso", "ni", "l.nota_ingreso_id = ni.id")
-                        .innerJoin("clientes", "c", "c.razon_social = ni.proveedor")
                         .where("l.producto_id = producto.id")
-                        .andWhere("c.id = :cliente_id")
+                        .andWhere(`(
+                            ni.cliente_id = :cliente_id
+                            OR regexp_replace(upper(coalesce(ni.proveedor, '')), '[^A-Z0-9]', '', 'g') = (
+                                SELECT regexp_replace(upper(coalesce(c2.razon_social, '')), '[^A-Z0-9]', '', 'g')
+                                FROM clientes c2
+                                WHERE c2.id = :cliente_id
+                            )
+                        )`)
                         .getQuery();
                     return "EXISTS " + subQuery;
                 });
