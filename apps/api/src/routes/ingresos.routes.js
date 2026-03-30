@@ -10,6 +10,7 @@ const NotaIngresoSchema = {
         numero_guia: { type: 'string', nullable: true },
         fecha: { type: 'string', format: 'date' },
         cliente_id: { type: 'integer', nullable: true },
+        cliente_ruc: { type: 'string', nullable: true },
         proveedor: { type: 'string' },
         estado: { type: 'string' },
         observaciones: { type: 'string', nullable: true }
@@ -161,6 +162,7 @@ async function ingresosRoutes(fastify, options) {
                     fecha_hasta: { type: 'string', format: 'date' },
                     numero_ingreso: { type: 'string' },
                     cliente_id: { type: 'integer' },
+                    cliente_ruc: { type: 'string' },
                     proveedor: { type: 'string' },
                     tipo_documento: { type: 'string' },
                     numero_documento: { type: 'string' },
@@ -187,6 +189,7 @@ async function ingresosRoutes(fastify, options) {
             busqueda = '',
             numero_ingreso,
             cliente_id,
+            cliente_ruc,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -221,6 +224,12 @@ async function ingresosRoutes(fastify, options) {
 
         if (cliente_id) {
             queryBuilder.andWhere('nota.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
+        }
+
+        if (cliente_ruc) {
+            queryBuilder.andWhere("regexp_replace(coalesce(nota.cliente_ruc, ''), '\\D', '', 'g') = regexp_replace(:cliente_ruc, '\\D', '', 'g')", {
+                cliente_ruc: String(cliente_ruc)
+            });
         }
 
         if (numero_documento) {
@@ -391,7 +400,7 @@ async function ingresosRoutes(fastify, options) {
             description: 'Crear una nueva nota de ingreso con sus detalles',
             body: {
                 type: 'object',
-                required: ['fecha', 'ruc_cliente', 'detalles'],
+                required: ['fecha', 'detalles'],
                 properties: {
                     fecha: { type: 'string', format: 'date' },
                     ruc_cliente: { type: 'string' },
@@ -458,24 +467,39 @@ async function ingresosRoutes(fastify, options) {
         } = request.body;
 
         // Validaciones
-        if (!fecha || !ruc_cliente || !detalles || detalles.length === 0) {
+        if (!fecha || !detalles || detalles.length === 0) {
             return reply.status(400).send({
                 success: false,
-                error: 'Fecha, ruc_cliente y detalles son obligatorios'
+                error: 'Fecha y detalles son obligatorios'
+            });
+        }
+
+        if (!cliente_id && !ruc_cliente) {
+            return reply.status(400).send({
+                success: false,
+                error: 'Debe enviar cliente_id o ruc_cliente'
             });
         }
 
         try {
-            const rucNormalizado = normalizarRuc(ruc_cliente);
-            const cliente = await clienteRepo
-                .createQueryBuilder('cliente')
-                .where("REPLACE(REPLACE(REPLACE(COALESCE(cliente.cuit, ''), '-', ''), '.', ''), ' ', '') = :ruc", { ruc: rucNormalizado })
-                .getOne();
+            let cliente = null;
+
+            if (cliente_id) {
+                cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
+            }
+
+            if (!cliente && ruc_cliente) {
+                const rucNormalizado = normalizarRuc(ruc_cliente);
+                cliente = await clienteRepo
+                    .createQueryBuilder('cliente')
+                    .where("REPLACE(REPLACE(REPLACE(COALESCE(cliente.cuit, ''), '-', ''), '.', ''), ' ', '') = :ruc", { ruc: rucNormalizado })
+                    .getOne();
+            }
 
             if (!cliente) {
                 return reply.status(400).send({
                     success: false,
-                    error: 'Cliente no encontrado por RUC'
+                    error: 'Cliente no encontrado por cliente_id o RUC'
                 });
             }
 
@@ -517,6 +541,7 @@ async function ingresosRoutes(fastify, options) {
                 numero_guia: numeroGuia,
                 fecha,
                 cliente_id: Number(cliente.id),
+                cliente_ruc: cliente.cuit || null,
                 proveedor: cliente.razon_social || proveedor || null,
                 tipo_documento: tipo_documento || null,
                 numero_documento: numero_documento || null,
@@ -835,6 +860,7 @@ async function ingresosRoutes(fastify, options) {
                 detallesActuales.push({
                     fecha: fechaIngresoParsed,
                     cliente_id: Number(cliente.id),
+                    cliente_ruc: cliente.cuit || null,
                     proveedor: cliente.razon_social,
                     responsable_id: responsable ? Number(responsable) : 1,
                     codigo_producto: String(codigo_producto).trim(),
@@ -874,6 +900,7 @@ async function ingresosRoutes(fastify, options) {
                     grupos.set(key, {
                         fecha: detalle.fecha,
                         cliente_id: detalle.cliente_id,
+                        cliente_ruc: detalle.cliente_ruc,
                         proveedor: detalle.proveedor,
                         responsable_id: detalle.responsable_id,
                         detalles: []
@@ -909,6 +936,7 @@ async function ingresosRoutes(fastify, options) {
                             numero_guia: numeroGuia,
                             fecha: grupo.fecha,
                             cliente_id: grupo.cliente_id,
+                            cliente_ruc: grupo.cliente_ruc || null,
                             proveedor: grupo.proveedor,
                             responsable_id: grupo.responsable_id,
                             estado: 'REGISTRADA'

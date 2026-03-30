@@ -19,6 +19,15 @@ module.exports = new EntitySchema({
             type: 'date',
             nullable: false
         },
+        cliente_id: {
+            type: 'int',
+            nullable: true
+        },
+        cliente_ruc: {
+            type: 'varchar',
+            length: 20,
+            nullable: true
+        },
         estado: {
             type: 'enum',
             enum: ['REGISTRADA', 'DESPACHO_PENDIENTE', 'DESPACHADA', 'COMPLETADA', 'PARCIAL'],
@@ -38,6 +47,12 @@ module.exports = new EntitySchema({
         }
     },
     relations: {
+        cliente: {
+            type: 'many-to-one',
+            target: 'Cliente',
+            nullable: true,
+            joinColumn: { name: 'cliente_id' }
+        },
         detalles: {
             type: 'one-to-many',
             target: 'NotaSalidaDetalle',

@@ -11,6 +11,8 @@ const ProductoSchema = {
         tipo_documento: { type: 'string', enum: ['Factura', 'Invoice', 'Boleta de Venta', 'Guía de Remisión Remitente', 'Guía de Remisión Transportista', 'Orden de Compra'], nullable: true },
         numero_documento: { type: 'string', nullable: true },
         registro_sanitario: { type: 'string', nullable: true },
+        cliente_id: { type: 'integer', nullable: true },
+        cliente_ruc: { type: 'string', nullable: true },
         proveedor_ruc: { type: 'string', nullable: true },
         fecha_ingreso: { type: 'string', format: 'date', nullable: true },
         lote: { type: 'string', nullable: true },
@@ -118,6 +120,7 @@ async function productoRoutes(fastify, options) {
                     categoria_ingreso: { type: 'string' },
                     lote: { type: 'string' },
                     cliente_id: { type: 'integer' },
+                    cliente_ruc: { type: 'string' },
                     page: { type: 'integer', minimum: 1 },
                     limit: { type: 'integer', minimum: 1 },
                     orderBy: { type: 'string' },
@@ -135,6 +138,7 @@ async function productoRoutes(fastify, options) {
             categoria_ingreso,
             lote,
             cliente_id,
+            cliente_ruc,
             numero_documento, // <-- Nuevo filtro
             page = 1,
             limit = 50,
@@ -163,6 +167,12 @@ async function productoRoutes(fastify, options) {
 
         if (numero_documento) {
             queryBuilder.andWhere('producto.numero_documento LIKE :numero_documento', { numero_documento: `%${numero_documento}%` });
+        }
+
+        if (cliente_ruc) {
+            queryBuilder.andWhere("regexp_replace(upper(coalesce(producto.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')", {
+                cliente_ruc
+            });
         }
 
         if (cliente_id) {
@@ -387,6 +397,7 @@ async function productoRoutes(fastify, options) {
                     codigo: { type: 'string' },
                     descripcion: { type: 'string' },
                     cliente_id: { type: 'integer', nullable: true },
+                    cliente_ruc: { type: 'string', nullable: true },
                     proveedor: { type: 'string', nullable: true },
                     tipo_documento: nullableEnumSchema(tipoDocumentoValues),
                     numero_documento: { type: 'string', nullable: true },
@@ -414,6 +425,7 @@ async function productoRoutes(fastify, options) {
             codigo,
             descripcion,
             cliente_id,
+            cliente_ruc,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -459,6 +471,7 @@ async function productoRoutes(fastify, options) {
 
         let proveedorFinal = proveedor || null;
         let proveedorRucFinal = proveedor_ruc || null;
+        let clienteRucFinal = cliente_ruc || null;
         let clienteIdFinal = null;
 
         if (cliente_id !== undefined && cliente_id !== null && cliente_id !== '') {
@@ -473,12 +486,14 @@ async function productoRoutes(fastify, options) {
             clienteIdFinal = Number(cliente_id);
             proveedorFinal = cliente.razon_social || proveedorFinal;
             proveedorRucFinal = cliente.cuit || proveedorRucFinal;
+            clienteRucFinal = cliente.cuit || clienteRucFinal;
         }
 
         const nuevoProducto = productoRepo.create({
             codigo,
             descripcion,
             cliente_id: clienteIdFinal,
+            cliente_ruc: clienteRucFinal,
             proveedor: proveedorFinal,
             tipo_documento: tipo_documento || null,
             numero_documento: numero_documento || null,
@@ -525,6 +540,7 @@ async function productoRoutes(fastify, options) {
                     descripcion: { type: 'string' },
                     activo: { type: 'boolean' },
                     cliente_id: { type: 'integer', nullable: true },
+                    cliente_ruc: { type: 'string', nullable: true },
                     proveedor: { type: 'string', nullable: true },
                     tipo_documento: nullableEnumSchema(tipoDocumentoValues),
                     numero_documento: { type: 'string', nullable: true },
@@ -555,6 +571,7 @@ async function productoRoutes(fastify, options) {
             descripcion,
             activo,
             cliente_id,
+            cliente_ruc,
             proveedor,
             tipo_documento,
             numero_documento,
@@ -610,6 +627,7 @@ async function productoRoutes(fastify, options) {
                 }
 
                 producto.cliente_id = Number(cliente_id);
+                producto.cliente_ruc = cliente.cuit || null;
                 producto.proveedor = cliente.razon_social || null;
                 producto.proveedor_ruc = cliente.cuit || null;
             }
@@ -618,6 +636,12 @@ async function productoRoutes(fastify, options) {
         producto.descripcion = descripcion;
         if (activo !== undefined) producto.activo = toActivoSmallint(activo);
         if (proveedor !== undefined && cliente_id === undefined) producto.proveedor = proveedor;
+        if (cliente_ruc !== undefined && cliente_id === undefined) {
+            producto.cliente_ruc = cliente_ruc || null;
+            if (proveedor_ruc === undefined) {
+                producto.proveedor_ruc = cliente_ruc || null;
+            }
+        }
         if (tipo_documento !== undefined) producto.tipo_documento = tipo_documento || null;
         if (numero_documento !== undefined) producto.numero_documento = numero_documento || null;
         if (registro_sanitario !== undefined) producto.registro_sanitario = registro_sanitario || null;

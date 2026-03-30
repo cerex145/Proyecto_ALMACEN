@@ -10,6 +10,7 @@ const NotaSalidaSchema = {
         numero_salida: { type: 'string' },
         fecha: { type: 'string', format: 'date' },
         cliente_id: { type: 'integer', nullable: true },
+        cliente_ruc: { type: 'string', nullable: true },
         estado: { type: 'string' },
         observaciones: { type: 'string', nullable: true }
     }
@@ -261,6 +262,7 @@ async function salidasRoutes(fastify, options) {
                     fecha_desde: { type: 'string', format: 'date' },
                     fecha_hasta: { type: 'string', format: 'date' },
                     cliente_id: { type: 'integer' },
+                    cliente_ruc: { type: 'string' },
                     estado: { type: 'string' },
                     include_detalles: { type: 'boolean', default: false },
                     page: { type: 'integer', minimum: 1, default: 1 },
@@ -294,6 +296,7 @@ async function salidasRoutes(fastify, options) {
             busqueda = '',
             numero_salida,
             cliente_id,
+            cliente_ruc,
             estado,
             fecha_desde,
             fecha_hasta,
@@ -315,6 +318,16 @@ async function salidasRoutes(fastify, options) {
 
         if (estado) {
             queryBuilder.andWhere('nota.estado = :estado', { estado });
+        }
+
+        if (cliente_id) {
+            queryBuilder.andWhere('nota.cliente_id = :cliente_id', { cliente_id: Number(cliente_id) });
+        }
+
+        if (cliente_ruc) {
+            queryBuilder.andWhere("regexp_replace(coalesce(nota.cliente_ruc, ''), '\\D', '', 'g') = regexp_replace(:cliente_ruc, '\\D', '', 'g')", {
+                cliente_ruc: String(cliente_ruc)
+            });
         }
 
         if (fecha_desde) {
@@ -533,6 +546,7 @@ async function salidasRoutes(fastify, options) {
                 required: ['detalles'],
                 properties: {
                     cliente_id: { type: 'integer' },
+                    cliente_ruc: { type: 'string' },
                     fecha: { type: 'string', format: 'date' },
                     observaciones: { type: 'string' },
                     detalles: {
@@ -568,6 +582,7 @@ async function salidasRoutes(fastify, options) {
     }, async (request, reply) => {
         const {
             cliente_id,
+            cliente_ruc,
             fecha,
             responsable_id,
             detalles,
@@ -631,6 +646,7 @@ async function salidasRoutes(fastify, options) {
             const nota = notaSalidaRepo.create({
                 numero_salida: numeroSalida,
                 cliente_id: Number(cliente_id),
+                cliente_ruc: cliente.cuit || cliente_ruc || null,
                 fecha: fechaFinal,
                 responsable_id,
                 tipo_documento: tipo_documento || null,
@@ -1032,6 +1048,7 @@ async function salidasRoutes(fastify, options) {
                 if (!grupos.has(key)) {
                     grupos.set(key, {
                         cliente_id: item.cliente.id,
+                        cliente_ruc: item.cliente.cuit || null,
                         fecha: item.fechaSql,
                         motivo_salida: item.motivoSalida,
                         detalles: []
@@ -1048,6 +1065,7 @@ async function salidasRoutes(fastify, options) {
                         const nota = notaSalidaRepo.create({
                             numero_salida: numeroSalida,
                             cliente_id: grupo.cliente_id,
+                            cliente_ruc: grupo.cliente_ruc || null,
                             fecha: grupo.fecha,
                             responsable_id: 1,
                             motivo_salida: grupo.motivo_salida,

@@ -34,6 +34,11 @@ module.exports = new EntitySchema({
             type: 'int',
             nullable: true
         },
+        cliente_ruc: {
+            type: 'varchar',
+            length: 20,
+            nullable: true
+        },
         fabricante: {
             type: 'varchar',
             length: 200,
