@@ -683,7 +683,7 @@ async function ingresosRoutes(fastify, options) {
     fastify.post('/api/ingresos/importar', {
         schema: {
             tags: ['Ingresos'],
-            description: 'Importar notas de ingreso desde archivo Excel',
+            description: 'Importar notas de ingreso desde archivo Excel o CSV',
             consumes: ['multipart/form-data'],
             response: {
                 200: {
@@ -706,26 +706,84 @@ async function ingresosRoutes(fastify, options) {
         try {
             const buffer = await data.toBuffer();
             const workbook = new ExcelJS.Workbook();
-            await workbook.xlsx.load(buffer);
+            const fileName = String(data.filename || '').toLowerCase();
+            const mimeType = String(data.mimetype || '').toLowerCase();
+            const isCsv = fileName.endsWith('.csv') || mimeType.includes('csv');
+
+            if (isCsv) {
+                const { Readable } = require('stream');
+                await workbook.csv.read(Readable.from([buffer]));
+            } else {
+                await workbook.xlsx.load(buffer);
+            }
 
             const worksheet = workbook.worksheets[0];
-            const ingresos = [];
             const errores = [];
-
-            let detallesActuales = [];
-            let notaActual = null;
+            const detallesActuales = [];
 
             const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
+            const parseNumero = (value) => {
+                if (value === null || value === undefined || value === '') return null;
+                if (typeof value === 'number') return value;
+                const clean = String(value).trim().replace(',', '.').replace(/[^0-9.-]/g, '');
+                if (!clean) return null;
+                const parsed = Number(clean);
+                return Number.isFinite(parsed) ? parsed : null;
+            };
+            const parseFecha = (value) => {
+                if (!value) return null;
+                if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+                const parsed = new Date(value);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            };
+            const parseTemperatura = (value) => {
+                if (value === null || value === undefined || String(value).trim() === '') {
+                    return { min: null, max: null };
+                }
+                const raw = String(value).replace(',', '.').trim();
+                const rango = raw.match(/^(-?\d+(?:\.\d+)?)\s*(?:a|hasta|-|:|;)\s*(-?\d+(?:\.\d+)?)$/i);
+                if (rango) {
+                    const n1 = Number(rango[1]);
+                    const n2 = Number(rango[2]);
+                    return {
+                        min: Math.min(n1, n2),
+                        max: Math.max(n1, n2)
+                    };
+                }
+
+                const unico = raw.match(/^-?\d+(?:\.\d+)?$/);
+                if (!unico) {
+                    return { min: null, max: null, invalida: true };
+                }
+
+                const v = Number(unico[0]);
+                return { min: v, max: v };
+            };
+
             const clientes = await clienteRepo.find();
 
             worksheet.eachRow((row, rowNumber) => {
-                if (rowNumber === 1) return; // Skip header
+                if (rowNumber === 1) return;
 
-                const [fecha, ruc_cliente, responsable, codigo_producto, lote, fecha_vencimiento, cantidad] = row.values.slice(1);
+                const [
+                    ruc_cliente,
+                    codigo_producto,
+                    lote,
+                    fecha_vencimiento,
+                    fecha_ingreso,
+                    cantidad_bultos,
+                    cantidad_cajas,
+                    cantidad_por_caja,
+                    cantidad_fraccion,
+                    cantidad_total,
+                    um,
+                    fabricante,
+                    temperatura,
+                    responsable
+                ] = row.values.slice(1);
 
-                // Validaciones básicas
-                if (!fecha || !ruc_cliente || !codigo_producto || !cantidad) {
-                    errores.push(`Fila ${rowNumber}: Faltan datos obligatorios`);
+                if (!ruc_cliente || !codigo_producto || !lote || !fecha_ingreso) {
+                    errores.push(`Fila ${rowNumber}: Faltan datos obligatorios (ruc_cliente, codigo_producto, lote, fecha_ingreso)`);
                     return;
                 }
 
@@ -736,15 +794,54 @@ async function ingresosRoutes(fastify, options) {
                     return;
                 }
 
+                const fechaIngresoParsed = parseFecha(fecha_ingreso);
+                const fechaVencParsed = parseFecha(fecha_vencimiento);
+                if (!fechaIngresoParsed) {
+                    errores.push(`Fila ${rowNumber}: fecha_ingreso inválida`);
+                    return;
+                }
+                if (fecha_vencimiento && !fechaVencParsed) {
+                    errores.push(`Fila ${rowNumber}: fecha_vencimiento inválida`);
+                    return;
+                }
+
+                const bultos = parseNumero(cantidad_bultos) || 0;
+                const cajas = parseNumero(cantidad_cajas) || 0;
+                const porCaja = parseNumero(cantidad_por_caja) || 0;
+                const fraccion = parseNumero(cantidad_fraccion) || 0;
+                const totalIngresado = parseNumero(cantidad_total);
+                const totalCalculado = (bultos * cajas * porCaja) + fraccion;
+                const totalFinal = totalIngresado !== null ? totalIngresado : totalCalculado;
+
+                if (!Number.isFinite(totalFinal) || totalFinal <= 0) {
+                    errores.push(`Fila ${rowNumber}: cantidad_total inválida (debe ser > 0)`);
+                    return;
+                }
+
+                const temp = parseTemperatura(temperatura);
+                if (temp.invalida) {
+                    errores.push(`Fila ${rowNumber}: temperatura inválida. Usa formato como 2-8 o 4`);
+                    return;
+                }
+
                 detallesActuales.push({
-                    fecha: new Date(fecha),
+                    fecha: fechaIngresoParsed,
                     cliente_id: Number(cliente.id),
                     proveedor: cliente.razon_social,
                     responsable_id: responsable ? Number(responsable) : 1,
-                    codigo_producto: String(codigo_producto),
-                    lote_numero: String(lote),
-                    fecha_vencimiento: fecha_vencimiento ? new Date(fecha_vencimiento) : null,
-                    cantidad: Number(cantidad)
+                    codigo_producto: String(codigo_producto).trim(),
+                    lote_numero: String(lote).trim(),
+                    fecha_vencimiento: fechaVencParsed,
+                    cantidad: totalFinal,
+                    cantidad_bultos: bultos,
+                    cantidad_cajas: cajas,
+                    cantidad_por_caja: porCaja,
+                    cantidad_fraccion: fraccion,
+                    cantidad_total: totalFinal,
+                    um: um ? String(um).trim() : null,
+                    fabricante: fabricante ? String(fabricante).trim() : null,
+                    temperatura_min_c: temp.min,
+                    temperatura_max_c: temp.max
                 });
             });
 
@@ -762,8 +859,10 @@ async function ingresosRoutes(fastify, options) {
                 }
 
                 const numeroIngreso = await generarNumeroIngreso();
+                const numeroGuia = await generarNumeroGuia();
                 const nota = notaIngresoRepo.create({
                     numero_ingreso: numeroIngreso,
+                    numero_guia: numeroGuia,
                     fecha: detalle.fecha,
                     cliente_id: detalle.cliente_id,
                     proveedor: detalle.proveedor,
@@ -779,7 +878,16 @@ async function ingresosRoutes(fastify, options) {
                     producto_id: producto.id,
                     lote_numero: detalle.lote_numero,
                     fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad: detalle.cantidad
+                    cantidad: detalle.cantidad,
+                    cantidad_bultos: detalle.cantidad_bultos,
+                    cantidad_cajas: detalle.cantidad_cajas,
+                    cantidad_por_caja: detalle.cantidad_por_caja,
+                    cantidad_fraccion: detalle.cantidad_fraccion,
+                    cantidad_total: detalle.cantidad_total,
+                    um: detalle.um,
+                    fabricante: detalle.fabricante,
+                    temperatura_min_c: detalle.temperatura_min_c,
+                    temperatura_max_c: detalle.temperatura_max_c
                 });
                 await notaIngresoDetalleRepo.save(detalleNota);
 
@@ -881,24 +989,38 @@ async function ingresosRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla Ingreso');
 
         worksheet.columns = [
-            { header: 'Fecha (YYYY-MM-DD)', key: 'fecha', width: 20 },
             { header: 'RUC Cliente', key: 'ruc_cliente', width: 20 },
-            { header: 'Responsable (ID)', key: 'responsable', width: 15 },
             { header: 'Código Producto', key: 'codigo_producto', width: 20 },
             { header: 'Número Lote', key: 'lote', width: 20 },
             { header: 'Fecha Vencimiento (YYYY-MM-DD)', key: 'fecha_vencimiento', width: 25 },
-            { header: 'Cantidad', key: 'cantidad', width: 15 }
+            { header: 'Fecha de Ingreso (YYYY-MM-DD)', key: 'fecha_ingreso', width: 25 },
+            { header: 'Cantidad Bultos', key: 'cantidad_bultos', width: 18 },
+            { header: 'Cantidad Cajas', key: 'cantidad_cajas', width: 18 },
+            { header: 'Cantidad por Caja', key: 'cantidad_por_caja', width: 18 },
+            { header: 'Cantidad Fraccion', key: 'cantidad_fraccion', width: 18 },
+            { header: 'Cantidad Total', key: 'cantidad_total', width: 18 },
+            { header: 'UM', key: 'um', width: 12 },
+            { header: 'Fabricante', key: 'fabricante', width: 25 },
+            { header: 'Temperatura', key: 'temperatura', width: 18 },
+            { header: 'Responsable (ID)', key: 'responsable', width: 15 }
         ];
 
         // Agregar fila de ejemplo
         worksheet.addRow({
-            fecha: '2026-01-30',
             ruc_cliente: '20123456789',
-            responsable: '1',
             codigo_producto: 'PROD001',
             lote: 'LOTE-2026-001',
             fecha_vencimiento: '2027-01-30',
-            cantidad: '100'
+            fecha_ingreso: '2026-01-30',
+            cantidad_bultos: '2',
+            cantidad_cajas: '10',
+            cantidad_por_caja: '12',
+            cantidad_fraccion: '3',
+            cantidad_total: '243',
+            um: 'UND',
+            fabricante: 'FABRICA SAC',
+            temperatura: '2-8',
+            responsable: '1'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
