@@ -25,9 +25,36 @@ export const ProductoList = () => {
 
     // Cargar clientes para el selector
     useEffect(() => {
-        clientesService.listar({ limit: 200 })
-            .then(r => setClientes(r.data || []))
-            .catch(() => {});
+        const cargarTodosLosClientes = async () => {
+            try {
+                const pageSize = 200;
+                let currentPage = 1;
+                let totalPages = 1;
+                const todos = [];
+
+                do {
+                    const response = await clientesService.listar({
+                        page: currentPage,
+                        limit: pageSize,
+                        orderBy: 'razon_social',
+                        order: 'ASC'
+                    });
+
+                    const data = response?.data || [];
+                    const pagination = response?.pagination || {};
+
+                    todos.push(...data);
+                    totalPages = Number(pagination.totalPages || 1);
+                    currentPage += 1;
+                } while (currentPage <= totalPages);
+
+                setClientes(todos);
+            } catch {
+                setClientes([]);
+            }
+        };
+
+        cargarTodosLosClientes();
     }, []);
 
 
