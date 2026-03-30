@@ -195,8 +195,19 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (cliente_nombre) {
-            sql += ` AND ${clienteFilterExpr} ILIKE $${paramIndex++}`;
+            // Mostrar INGRESO directo + SALIDA del cliente + SALIDA de productos que ese cliente ingresó
+            sql += ` AND (
+                ni.proveedor ILIKE $${paramIndex}
+                OR c.razon_social ILIKE $${paramIndex}
+                OR EXISTS (
+                    SELECT 1 FROM lotes l__cf
+                    JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
+                    WHERE l__cf.producto_id = k.producto_id
+                    AND ni__cf.proveedor ILIKE $${paramIndex}
+                )
+            )`;
             params.push(`%${cliente_nombre}%`);
+            paramIndex++;
         }
 
         if (lote_numero) {
@@ -395,8 +406,18 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (cliente_nombre) {
-            sql += ` AND ${clienteFilterExpr} ILIKE $${paramIndex++}`;
+            sql += ` AND (
+                ni.proveedor ILIKE $${paramIndex}
+                OR c.razon_social ILIKE $${paramIndex}
+                OR EXISTS (
+                    SELECT 1 FROM lotes l__cf
+                    JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
+                    WHERE l__cf.producto_id = k.producto_id
+                    AND ni__cf.proveedor ILIKE $${paramIndex}
+                )
+            )`;
             params.push(`%${cliente_nombre}%`);
+            paramIndex++;
         }
 
         if (fecha_desde) {

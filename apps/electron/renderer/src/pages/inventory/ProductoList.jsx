@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { productService } from '../../services/product.service';
+import { clientesService } from '../../services/clientes.service';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/common/Card';
@@ -13,19 +14,30 @@ export const ProductoList = () => {
     const [page, setPage] = useState(1);
     const [limit] = useState(50);
     const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
-    const [selectedProduct, setSelectedProduct] = useState(null); // For Lotes
-    const [isEditing, setIsEditing] = useState(false); // For Form
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [isEditing, setIsEditing] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
     const [isMassCharge, setIsMassCharge] = useState(false);
-    const [searchDoc, setSearchDoc] = useState('');
     const [searchName, setSearchName] = useState('');
+    const [searchDoc, setSearchDoc] = useState('');
+    const [clienteId, setClienteId] = useState('');
+    const [clientes, setClientes] = useState([]);
+
+    // Cargar clientes para el selector
+    useEffect(() => {
+        clientesService.listar({ limit: 200 })
+            .then(r => setClientes(r.data || []))
+            .catch(() => {});
+    }, []);
+
 
     const loadProducts = async () => {
         try {
             setLoading(true);
             const params = { page, limit };
-            if (searchDoc) params.numero_documento = searchDoc;
-            if (searchName) params.busqueda = searchName;
+            if (searchName)  params.busqueda        = searchName;
+            if (searchDoc)   params.numero_documento = searchDoc;
+            if (clienteId)   params.cliente_id       = clienteId;
 
             const response = await productService.getProductsPaginated(params);
             setProducts(response.data || []);
@@ -37,13 +49,10 @@ export const ProductoList = () => {
         }
     };
 
-    useEffect(() => {
-        loadProducts();
-    }, [searchDoc, searchName, page, limit]);
+    useEffect(() => { loadProducts(); }, [searchName, searchDoc, clienteId, page, limit]);
+    useEffect(() => { setPage(1); }, [searchName, searchDoc, clienteId]);
 
-    useEffect(() => {
-        setPage(1);
-    }, [searchDoc, searchName]);
+
 
     const handleCreate = () => {
         setEditingProduct(null);
@@ -97,28 +106,70 @@ export const ProductoList = () => {
                     <h1 className="text-2xl font-bold text-slate-800">Inventario de Productos</h1>
                     <p className="text-slate-500">Gestión general del catálogo</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <input
-                        type="text"
-                        placeholder="Buscar por código o nombre..."
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm min-w-[220px]"
-                        value={searchName}
-                        onChange={(e) => setSearchName(e.target.value)}
-                    />
-                    <input
-                        type="text"
-                        placeholder="Filtrar por N° Documento..."
-                        className="px-3 py-2 border border-slate-300 rounded-lg text-sm min-w-[200px]"
-                        value={searchDoc}
-                        onChange={(e) => setSearchDoc(e.target.value)}
-                    />
-                    <Button onClick={handleMassCharge} className="bg-green-600 hover:bg-green-700 text-white shadow-lg mx-2">
+                <div className="flex flex-wrap gap-2 items-center">
+                    {/* Filtro: nombre / código */}
+                    <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                        <input
+                            id="filtro-busqueda"
+                            type="text"
+                            placeholder="Buscar código o nombre..."
+                            className="pl-8 pr-3 py-2 border border-slate-300 rounded-lg text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            value={searchName}
+                            onChange={(e) => setSearchName(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Filtro: cliente */}
+                    <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🏢</span>
+                        <select
+                            id="filtro-cliente"
+                            className="pl-8 pr-3 py-2 border border-slate-300 rounded-lg text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                            value={clienteId}
+                            onChange={(e) => setClienteId(e.target.value)}
+                        >
+                            <option value="">Todos los clientes</option>
+                            {clientes.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.razon_social}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Filtro: N° documento */}
+                    <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📄</span>
+                        <input
+                            id="filtro-documento"
+                            type="text"
+                            placeholder="N° Documento..."
+                            className="pl-8 pr-3 py-2 border border-slate-300 rounded-lg text-sm w-44 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            value={searchDoc}
+                            onChange={(e) => setSearchDoc(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Limpiar filtros */}
+                    {(searchName || searchDoc || clienteId) && (
+                        <button
+                            onClick={() => { setSearchName(''); setSearchDoc(''); setClienteId(''); }}
+                            className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-2 py-2 bg-red-50 hover:bg-red-100 transition"
+                            title="Limpiar filtros"
+                        >
+                            ✕ Limpiar
+                        </button>
+                    )}
+
+                    <Button onClick={handleMassCharge} className="bg-green-600 hover:bg-green-700 text-white shadow-lg">
                         + Carga Masiva
                     </Button>
                     <Button onClick={handleCreate} className="shadow-lg shadow-blue-500/20">
                         + Nuevo Producto
                     </Button>
                 </div>
+
             </div>
 
             <div className="flex flex-col xl:flex-row gap-6 items-start">

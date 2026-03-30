@@ -254,17 +254,17 @@ async function productoRoutes(fastify, options) {
         // Encabezados en la fila 3 — SOLO campos por-producto
         const row3 = worksheet.getRow(3);
         const columnas = [
-            { header: '⭐ Cod. Producto', key: 'codigo',              width: 18 },
-            { header: '⭐ Descripción',   key: 'descripcion',         width: 45 },
-            { header: 'Lote',             key: 'lote',                width: 16 },
+            { header: '⭐ Cod. Producto', key: 'codigo', width: 18 },
+            { header: '⭐ Descripción', key: 'descripcion', width: 45 },
+            { header: 'Lote', key: 'lote', width: 16 },
             { header: 'Registro Sanitario', key: 'registro_sanitario', width: 22 },
-            { header: 'Fecha Ingreso',    key: 'fecha_ingreso',       width: 16 },
-            { header: 'F. Vencimiento',   key: 'fecha_vencimiento',  width: 16 },
-            { header: 'Unidad',           key: 'unidad',              width: 12 },
-            { header: 'UM',               key: 'um',                  width: 10 },
-            { header: 'Fabricante',       key: 'fabricante',          width: 25 },
-            { header: 'Procedencia',      key: 'procedencia',         width: 18 },
-            { header: 'Observaciones',    key: 'observaciones',       width: 35 }
+            { header: 'Fecha Ingreso', key: 'fecha_ingreso', width: 16 },
+            { header: 'F. Vencimiento', key: 'fecha_vencimiento', width: 16 },
+            { header: 'Unidad', key: 'unidad', width: 12 },
+            { header: 'UM', key: 'um', width: 10 },
+            { header: 'Fabricante', key: 'fabricante', width: 25 },
+            { header: 'Procedencia', key: 'procedencia', width: 18 },
+            { header: 'Observaciones', key: 'observaciones', width: 35 }
         ];
 
         columnas.forEach((col, i) => {
@@ -689,10 +689,10 @@ async function productoRoutes(fastify, options) {
                 const s = String(v).trim();
                 // DD/MM/YYYY o DD-MM-YYYY
                 const dmySlash = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-                if (dmySlash) return `${dmySlash[3]}-${dmySlash[2].padStart(2,'0')}-${dmySlash[1].padStart(2,'0')}`;
+                if (dmySlash) return `${dmySlash[3]}-${dmySlash[2].padStart(2, '0')}-${dmySlash[1].padStart(2, '0')}`;
                 // YYYY-MM-DD o YYYY/MM/DD
                 const ymd = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-                if (ymd) return `${ymd[1]}-${ymd[2].padStart(2,'0')}-${ymd[3].padStart(2,'0')}`;
+                if (ymd) return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
                 return null; // formato no reconocido
             };
 
