@@ -934,6 +934,9 @@ async function salidasRoutes(fastify, options) {
                 }
             }
 
+            const detallesParseados = [];
+            const clienteTieneCuit = clienteRepo.metadata.columns.some(c => c.propertyName === 'cuit');
+
             for (const fila of filas) {
                 const headerMap = mapearEncabezados(fila.headers);
 
@@ -954,14 +957,15 @@ async function salidasRoutes(fastify, options) {
                 const fechaSalidaTexto = obtenerValor(fila.valores, headerMap, ['fecha', 'fecha de h_salida', 'fecha_salida', 'ano', 'año', 'columna1'], 0);
                 const mesAux = obtenerValor(fila.valores, headerMap, ['mes'], null);
                 const diaAux = obtenerValor(fila.valores, headerMap, ['dia'], null);
-                // Si el año/fecha principal es epoch cero de Excel, usar Columna1 o fechaH
                 let fechaSalidaFinal = fechaSalidaTexto;
                 const fechaPreliminar = parsearFecha(fechaSalidaTexto, mesAux, diaAux);
                 if (!fechaPreliminar) {
                     const col1 = obtenerValor(fila.valores, headerMap, ['columna1'], null);
                     if (col1) fechaSalidaFinal = col1;
                 }
+
                 const fecha = fechaPreliminar || parsearFecha(fechaSalidaFinal, mesAux, diaAux);
+                const fechaSql = toSqlDate(fecha);
                 const cantidad = parsearNumero(cantidadTexto);
                 const precio = parsearNumero(precioTexto);
                 const cantBulto = parsearNumero(cantBultoTexto);
@@ -969,158 +973,174 @@ async function salidasRoutes(fastify, options) {
                 const cantXCaja = parsearNumero(cantXCajaTexto);
                 const cantFraccion = parsearNumero(cantFraccionTexto);
 
-                if (!fecha || !codigoProducto || cantidad <= 0) {
+                if (!fechaSql || !codigoProducto || cantidad <= 0) {
                     errores.push(`Fila ${fila.rowNumber}: Faltan datos obligatorios (fecha/código producto/cantidad)`);
                     continue;
                 }
 
+                let cliente = null;
+                const rucLimpio = String(ruc || '').trim();
+                const codigoClienteLimpio = String(codigoCliente || '').trim();
+
+                if (codigoClienteLimpio) {
+                    cliente = await clienteRepo.findOneBy({ codigo: codigoClienteLimpio });
+                }
+                if (!cliente && rucLimpio) {
+                    cliente = await clienteRepo.findOneBy({ codigo: rucLimpio });
+                }
+                if (!cliente && rucLimpio && clienteTieneCuit) {
+                    cliente = await clienteRepo.findOneBy({ cuit: rucLimpio });
+                }
+                if (!cliente && rucLimpio && rucLimpio !== '-') {
+                    cliente = await clienteRepo.save(clienteRepo.create({
+                        codigo: rucLimpio,
+                        razon_social: `CLIENTE ${rucLimpio}`
+                    }));
+                }
+                if (!cliente) {
+                    errores.push(`Fila ${fila.rowNumber}: Cliente no encontrado (Código: ${codigoCliente || '-'} / RUC: ${ruc || '-'})`);
+                    continue;
+                }
+
+                const producto = await productoRepo.findOneBy({ codigo: String(codigoProducto) });
+                if (!producto) {
+                    errores.push(`Fila ${fila.rowNumber}: Producto no encontrado (${codigoProducto})`);
+                    continue;
+                }
+
+                detallesParseados.push({
+                    rowNumber: fila.rowNumber,
+                    cliente,
+                    producto,
+                    fechaSql,
+                    motivoSalida: motivoSalida || null,
+                    loteNumero: loteNumero || null,
+                    fechaVencimientoSql: toSqlDate(parsearFecha(fechaVctoTexto)),
+                    um: umTexto || producto.unidad_medida || null,
+                    cantidad: Number(cantidad),
+                    precio: Number(precio) || null,
+                    cant_bulto: String(cantBultoTexto || '').trim() !== '' ? Number(cantBulto) : null,
+                    cant_caja: String(cantCajaTexto || '').trim() !== '' ? Number(cantCaja) : null,
+                    cant_x_caja: String(cantXCajaTexto || '').trim() !== '' ? Number(cantXCaja) : null,
+                    cant_fraccion: String(cantFraccionTexto || '').trim() !== '' ? Number(cantFraccion) : null
+                });
+            }
+
+            const grupos = new Map();
+            for (const item of detallesParseados) {
+                const key = `${item.cliente.id}|${item.fechaSql}|${item.motivoSalida || ''}`;
+                if (!grupos.has(key)) {
+                    grupos.set(key, {
+                        cliente_id: item.cliente.id,
+                        fecha: item.fechaSql,
+                        motivo_salida: item.motivoSalida,
+                        detalles: []
+                    });
+                }
+                grupos.get(key).detalles.push(item);
+            }
+
+            for (const grupo of grupos.values()) {
                 try {
-                    let cliente = null;
-                    const clienteTieneCuit = clienteRepo.metadata.columns.some(c => c.propertyName === 'cuit');
-                    const rucLimpio = String(ruc || '').trim();
-                    const codigoClienteLimpio = String(codigoCliente || '').trim();
+                    await fastify.db.transaction(async (tx) => {
+                        const numeroSalida = await generarNumeroSalida();
 
-                    if (codigoClienteLimpio) {
-                        cliente = await clienteRepo.findOneBy({ codigo: codigoClienteLimpio });
-                    }
-
-                    if (!cliente && rucLimpio) {
-                        cliente = await clienteRepo.findOneBy({ codigo: rucLimpio });
-                    }
-
-                    if (!cliente && rucLimpio && clienteTieneCuit) {
-                        cliente = await clienteRepo.findOneBy({ cuit: rucLimpio });
-                    }
-
-                    if (!cliente && rucLimpio && rucLimpio !== '-') {
-                        cliente = await clienteRepo.save(clienteRepo.create({
-                            codigo: rucLimpio,
-                            razon_social: `CLIENTE ${rucLimpio}`
-                        }));
-                    }
-
-                    if (!cliente) {
-                        errores.push(`Fila ${fila.rowNumber}: Cliente no encontrado (Código: ${codigoCliente || '-'} / RUC: ${ruc || '-'})`);
-                        continue;
-                    }
-
-                    const producto = await productoRepo.findOneBy({ codigo: String(codigoProducto) });
-                    if (!producto) {
-                        errores.push(`Fila ${fila.rowNumber}: Producto no encontrado (${codigoProducto})`);
-                        continue;
-                    }
-
-                    const stockDisponible = await obtenerStockDisponiblePorLotes(fastify.db, producto.id);
-                    if (stockDisponible < Number(cantidad)) {
-                        errores.push(`Fila ${fila.rowNumber}: Stock insuficiente de ${codigoProducto}`);
-                        continue;
-                    }
-
-                    let loteId = null;
-                    if (loteNumero) {
-                        const fechaVcto = parsearFecha(fechaVctoTexto);
-                        const whereLote = {
-                            producto_id: producto.id,
-                            numero_lote: loteNumero
-                        };
-
-                        if (fechaVcto) {
-                            whereLote.fecha_vencimiento = toSqlDate(fechaVcto);
-                        }
-
-                        const lote = await loteRepo.findOne({ where: whereLote });
-                        if (lote) loteId = lote.id;
-                    }
-
-                    const numeroSalida = await generarNumeroSalida();
-
-                    const nota = notaSalidaRepo.create({
-                        numero_salida: numeroSalida,
-                        cliente_id: cliente.id,
-                        fecha: toSqlDate(fecha),
-                        responsable_id: 1,
-                        motivo_salida: motivoSalida || null,
-                        observaciones: null,
-                        estado: 'REGISTRADA'
-                    });
-
-                    const notaGuardada = await notaSalidaRepo.save(nota);
-
-                    const detalle = notaSalidaDetalleRepo.create({
-                        nota_salida_id: notaGuardada.id,
-                        producto_id: producto.id,
-                        lote_numero: loteNumero || null,
-                        fecha_vencimiento: toSqlDate(parsearFecha(fechaVctoTexto)),
-                        um: umTexto || producto.unidad_medida || null,
-                        fabricante: producto.fabricante || null,
-                        cantidad: Number(cantidad),
-                        cant_bulto: String(cantBultoTexto || '').trim() !== '' ? Number(cantBulto) : null,
-                        cant_caja: String(cantCajaTexto || '').trim() !== '' ? Number(cantCaja) : null,
-                        cant_x_caja: String(cantXCajaTexto || '').trim() !== '' ? Number(cantXCaja) : null,
-                        cant_fraccion: String(cantFraccionTexto || '').trim() !== '' ? Number(cantFraccion) : null,
-                        cantidad_total: Number(cantidad)
-                    });
-                    await notaSalidaDetalleRepo.save(detalle);
-
-                    let saldoMovimiento = 0;
-                    if (loteNumero) {
-                        const lote = await loteRepo.findOne({
-                            where: {
-                                producto_id: producto.id,
-                                numero_lote: loteNumero
-                            }
+                        const nota = notaSalidaRepo.create({
+                            numero_salida: numeroSalida,
+                            cliente_id: grupo.cliente_id,
+                            fecha: grupo.fecha,
+                            responsable_id: 1,
+                            motivo_salida: grupo.motivo_salida,
+                            observaciones: null,
+                            estado: 'REGISTRADA'
                         });
 
-                        if (!lote || Number(lote.cantidad_disponible || 0) < Number(cantidad)) {
-                            throw new Error(`Stock insuficiente en lote ${loteNumero}`);
-                        }
+                        const notaGuardada = await tx.save('NotaSalida', nota);
 
-                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(cantidad);
-                        await loteRepo.save(lote);
-                        saldoMovimiento = Number(lote.cantidad_disponible);
-                    } else {
-                        const lotesDisponibles = await loteRepo.find({
-                            where: {
-                                producto_id: producto.id,
-                                cantidad_disponible: MoreThan(0.00)
-                            },
-                            order: {
-                                fecha_vencimiento: 'ASC',
-                                created_at: 'ASC'
+                        for (const d of grupo.detalles) {
+                            let saldoMovimiento = 0;
+                            let loteId = null;
+
+                            if (d.loteNumero) {
+                                let lote = await tx.findOne('Lote', {
+                                    where: {
+                                        producto_id: d.producto.id,
+                                        numero_lote: d.loteNumero
+                                    }
+                                });
+
+                                if (!lote || Number(lote.cantidad_disponible || 0) < Number(d.cantidad)) {
+                                    throw new Error(`Fila ${d.rowNumber}: Stock insuficiente en lote ${d.loteNumero}`);
+                                }
+
+                                lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(d.cantidad);
+                                await tx.save('Lote', lote);
+                                loteId = lote.id;
+                                saldoMovimiento = Number(lote.cantidad_disponible);
+                            } else {
+                                const lotesDisponibles = await tx.find('Lote', {
+                                    where: {
+                                        producto_id: d.producto.id,
+                                        cantidad_disponible: MoreThan(0.00)
+                                    },
+                                    order: {
+                                        fecha_vencimiento: 'ASC',
+                                        created_at: 'ASC'
+                                    }
+                                });
+
+                                let pendiente = Number(d.cantidad);
+                                for (const lote of lotesDisponibles) {
+                                    if (pendiente <= 0) break;
+                                    const disponible = Number(lote.cantidad_disponible || 0);
+                                    if (disponible <= 0) continue;
+                                    const aTomar = Math.min(disponible, pendiente);
+                                    lote.cantidad_disponible = disponible - aTomar;
+                                    await tx.save('Lote', lote);
+                                    saldoMovimiento = Number(lote.cantidad_disponible);
+                                    pendiente -= aTomar;
+                                }
+
+                                if (pendiente > 0) {
+                                    throw new Error(`Fila ${d.rowNumber}: Stock insuficiente en lotes para ${d.producto.codigo}`);
+                                }
                             }
-                        });
 
-                        let pendiente = Number(cantidad);
-                        for (const lote of lotesDisponibles) {
-                            if (pendiente <= 0) break;
-                            const disponible = Number(lote.cantidad_disponible || 0);
-                            if (disponible <= 0) continue;
-                            const aTomar = Math.min(disponible, pendiente);
-                            lote.cantidad_disponible = disponible - aTomar;
-                            await loteRepo.save(lote);
-                            saldoMovimiento = Number(lote.cantidad_disponible);
-                            pendiente -= aTomar;
+                            const detalle = notaSalidaDetalleRepo.create({
+                                nota_salida_id: notaGuardada.id,
+                                producto_id: d.producto.id,
+                                lote_id: loteId,
+                                lote_numero: d.loteNumero,
+                                fecha_vencimiento: d.fechaVencimientoSql,
+                                um: d.um,
+                                fabricante: d.producto.fabricante || null,
+                                precio_unitario: d.precio,
+                                cantidad: Number(d.cantidad),
+                                cant_bulto: d.cant_bulto,
+                                cant_caja: d.cant_caja,
+                                cant_x_caja: d.cant_x_caja,
+                                cant_fraccion: d.cant_fraccion,
+                                cantidad_total: Number(d.cantidad)
+                            });
+                            await tx.save('NotaSalidaDetalle', detalle);
+
+                            const movimiento = kardexRepo.create({
+                                producto_id: d.producto.id,
+                                lote_numero: d.loteNumero,
+                                tipo_movimiento: 'SALIDA',
+                                cantidad: Number(d.cantidad),
+                                saldo: saldoMovimiento,
+                                documento_tipo: 'NOTA_SALIDA',
+                                documento_numero: numeroSalida,
+                                referencia_id: notaGuardada.id
+                            });
+                            await tx.save('Kardex', movimiento);
                         }
-
-                        if (pendiente > 0) {
-                            throw new Error(`Stock insuficiente en lotes para ${codigoProducto}`);
-                        }
-                    }
-
-                    const movimiento = kardexRepo.create({
-                        producto_id: producto.id,
-                        tipo_movimiento: 'SALIDA',
-                        cantidad: Number(cantidad),
-                        saldo: saldoMovimiento,
-                        documento_tipo: 'NOTA_SALIDA',
-                        documento_numero: numeroSalida,
-                        referencia_id: notaGuardada.id
                     });
-                    await kardexRepo.save(movimiento);
 
                     generadas++;
                 } catch (error) {
-                    errores.push(`Fila ${fila.rowNumber}: ${error.message}`);
+                    errores.push(error.message);
                 }
             }
 
@@ -1302,7 +1322,7 @@ async function salidasRoutes(fastify, options) {
                     columns: [
                         logoImage,
                         { text: 'NOTA DE SALIDA', style: 'headerTitle', alignment: 'center', margin: [0, 10, 0, 0] },
-                        { text: `N° ${Number(nota.numero_salida)}`, style: 'headerNumber', alignment: 'right', margin: [0, 10, 0, 0] }
+                        { text: `N° ${nota.numero_salida}`, style: 'headerNumber', alignment: 'right', margin: [0, 10, 0, 0] }
                     ],
                     margin: [0, 0, 0, 10]
                 },
@@ -1390,12 +1410,12 @@ async function salidasRoutes(fastify, options) {
                                 { text: d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
                                 { text: (d.lote ? d.lote.numero_lote : d.lote_numero) || '-', style: 'tableCell' },
                                 { text: (d.lote ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : (d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-')), style: 'tableCell' },
-                                { text: d.producto?.unidad || 'UND', style: 'tableCell' },
-                                { text: d.producto?.fabricante || '-', style: 'tableCell' },
-                                { text: (d.producto?.temperatura_min_c != null) ? `${d.producto.temperatura_min_c}° ${d.producto.temperatura_max_c}°C` : '-', style: 'tableCell' },
+                                { text: d.um || d.producto?.unidad_medida || 'UND', style: 'tableCell' },
+                                { text: d.fabricante || d.producto?.fabricante || '-', style: 'tableCell' },
+                                { text: (d.temperatura_min_c != null) ? `${d.temperatura_min_c}° ${d.temperatura_max_c ?? d.temperatura_min_c}°C` : ((d.producto?.temperatura_min_c != null) ? `${d.producto.temperatura_min_c}° ${d.producto.temperatura_max_c}°C` : '-'), style: 'tableCell' },
                                 { text: parseFloat(d.cant_bulto || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cant_caja || 0).toFixed(2), style: 'tableCell' },
-                                { text: parseFloat(d.cant_por_caja || 0).toFixed(2), style: 'tableCell' },
+                                { text: parseFloat(d.cant_x_caja || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cant_fraccion || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cantidad_total || d.cantidad).toFixed(2), style: 'tableCell' }
                             ])

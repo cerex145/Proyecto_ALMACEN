@@ -849,73 +849,114 @@ async function ingresosRoutes(fastify, options) {
                 return reply.status(400).send({ success: false, errores });
             }
 
-            // Procesar ingresos
-            let generados = 0;
+            // Procesar ingresos agrupando por cabecera para crear una nota con varios productos
+            const toDateKey = (value) => {
+                const d = value instanceof Date ? value : new Date(value);
+                if (Number.isNaN(d.getTime())) return '';
+                const yyyy = d.getFullYear();
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            };
+
+            const grupos = new Map();
             for (const detalle of detallesActuales) {
-                const producto = await productoRepo.findOneBy({ codigo: detalle.codigo_producto });
-                if (!producto) {
-                    errores.push(`Producto ${detalle.codigo_producto} no encontrado`);
-                    continue;
+                const key = `${detalle.cliente_id}|${toDateKey(detalle.fecha)}|${detalle.responsable_id || 1}`;
+                if (!grupos.has(key)) {
+                    grupos.set(key, {
+                        fecha: detalle.fecha,
+                        cliente_id: detalle.cliente_id,
+                        proveedor: detalle.proveedor,
+                        responsable_id: detalle.responsable_id,
+                        detalles: []
+                    });
+                }
+                grupos.get(key).detalles.push(detalle);
+            }
+
+            let generados = 0;
+            for (const grupo of grupos.values()) {
+                const detallesConProducto = [];
+                let faltanteProducto = false;
+
+                for (const detalle of grupo.detalles) {
+                    const producto = await productoRepo.findOneBy({ codigo: detalle.codigo_producto });
+                    if (!producto) {
+                        errores.push(`Producto ${detalle.codigo_producto} no encontrado`);
+                        faltanteProducto = true;
+                        break;
+                    }
+                    detallesConProducto.push({ detalle, producto });
                 }
 
-                const numeroIngreso = await generarNumeroIngreso();
-                const numeroGuia = await generarNumeroGuia();
-                const nota = notaIngresoRepo.create({
-                    numero_ingreso: numeroIngreso,
-                    numero_guia: numeroGuia,
-                    fecha: detalle.fecha,
-                    cliente_id: detalle.cliente_id,
-                    proveedor: detalle.proveedor,
-                    responsable_id: detalle.responsable_id,
-                    estado: 'REGISTRADA'
-                });
+                if (faltanteProducto) continue;
 
-                const notaGuardada = await notaIngresoRepo.save(nota);
+                try {
+                    await fastify.db.transaction(async (tx) => {
+                        const numeroIngreso = await generarNumeroIngreso();
+                        const numeroGuia = await generarNumeroGuia();
 
-                // Crear detalle
-                const detalleNota = notaIngresoDetalleRepo.create({
-                    nota_ingreso_id: notaGuardada.id,
-                    producto_id: producto.id,
-                    lote_numero: detalle.lote_numero,
-                    fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad: detalle.cantidad,
-                    cantidad_bultos: detalle.cantidad_bultos,
-                    cantidad_cajas: detalle.cantidad_cajas,
-                    cantidad_por_caja: detalle.cantidad_por_caja,
-                    cantidad_fraccion: detalle.cantidad_fraccion,
-                    cantidad_total: detalle.cantidad_total,
-                    um: detalle.um,
-                    fabricante: detalle.fabricante,
-                    temperatura_min_c: detalle.temperatura_min_c,
-                    temperatura_max_c: detalle.temperatura_max_c
-                });
-                await notaIngresoDetalleRepo.save(detalleNota);
+                        const nota = notaIngresoRepo.create({
+                            numero_ingreso: numeroIngreso,
+                            numero_guia: numeroGuia,
+                            fecha: grupo.fecha,
+                            cliente_id: grupo.cliente_id,
+                            proveedor: grupo.proveedor,
+                            responsable_id: grupo.responsable_id,
+                            estado: 'REGISTRADA'
+                        });
 
-                // Crear lote
-                const lote = loteRepo.create({
-                    producto_id: producto.id,
-                    numero_lote: detalle.lote_numero,
-                    fecha_vencimiento: detalle.fecha_vencimiento,
-                    cantidad_ingresada: detalle.cantidad,
-                    cantidad_disponible: detalle.cantidad,
-                    nota_ingreso_id: notaGuardada.id
-                });
-                await loteRepo.save(lote);
+                        const notaGuardada = await tx.save('NotaIngreso', nota);
 
-                // Kardex
-                const movimiento = kardexRepo.create({
-                    producto_id: producto.id,
-                    lote_numero: detalle.lote_numero,
-                    tipo_movimiento: 'INGRESO',
-                    cantidad: detalle.cantidad,
-                    saldo: Number(detalle.cantidad),
-                    documento_tipo: 'NOTA_INGRESO',
-                    documento_numero: numeroIngreso,
-                    referencia_id: notaGuardada.id
-                });
-                await kardexRepo.save(movimiento);
+                        for (const item of detallesConProducto) {
+                            const { detalle, producto } = item;
 
-                generados++;
+                            const detalleNota = notaIngresoDetalleRepo.create({
+                                nota_ingreso_id: notaGuardada.id,
+                                producto_id: producto.id,
+                                lote_numero: detalle.lote_numero,
+                                fecha_vencimiento: detalle.fecha_vencimiento,
+                                cantidad: detalle.cantidad,
+                                cantidad_bultos: detalle.cantidad_bultos,
+                                cantidad_cajas: detalle.cantidad_cajas,
+                                cantidad_por_caja: detalle.cantidad_por_caja,
+                                cantidad_fraccion: detalle.cantidad_fraccion,
+                                cantidad_total: detalle.cantidad_total,
+                                um: detalle.um,
+                                fabricante: detalle.fabricante,
+                                temperatura_min_c: detalle.temperatura_min_c,
+                                temperatura_max_c: detalle.temperatura_max_c
+                            });
+                            await tx.save('NotaIngresoDetalle', detalleNota);
+
+                            const lote = loteRepo.create({
+                                producto_id: producto.id,
+                                numero_lote: detalle.lote_numero,
+                                fecha_vencimiento: detalle.fecha_vencimiento,
+                                cantidad_ingresada: detalle.cantidad,
+                                cantidad_disponible: detalle.cantidad,
+                                nota_ingreso_id: notaGuardada.id
+                            });
+                            await tx.save('Lote', lote);
+
+                            const movimiento = kardexRepo.create({
+                                producto_id: producto.id,
+                                lote_numero: detalle.lote_numero,
+                                tipo_movimiento: 'INGRESO',
+                                cantidad: detalle.cantidad,
+                                saldo: Number(detalle.cantidad),
+                                documento_tipo: 'NOTA_INGRESO',
+                                documento_numero: numeroIngreso,
+                                referencia_id: notaGuardada.id
+                            });
+                            await tx.save('Kardex', movimiento);
+                        }
+                    });
+
+                    generados++;
+                } catch (error) {
+                    errores.push(`Error al crear nota de ingreso agrupada: ${error.message}`);
+                }
             }
 
             return {
@@ -1122,7 +1163,7 @@ async function ingresosRoutes(fastify, options) {
                         },
                         {
                             width: 150,
-                            text: `N° ${Number(nota.numero_ingreso)}`,
+                            text: `N° ${nota.numero_ingreso}`,
                             style: 'headerNumber',
                             alignment: 'right',
                             margin: [0, 12, 0, 0]
