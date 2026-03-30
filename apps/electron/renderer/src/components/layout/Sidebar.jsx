@@ -31,20 +31,12 @@ export const Sidebar = () => {
     return (
         <aside className="w-[270px] fixed left-0 top-0 bottom-0 z-50 glass-panel flex flex-col p-6 animate-fade-in">
             {/* Header */}
-            <div className="flex items-center gap-4 mb-12 px-2">
-                <div className="relative group">
-                    <div className="absolute inset-0 bg-blue-500 rounded-xl blur opacity-40 group-hover:opacity-60 transition-opacity"></div>
-                    <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-500 flex items-center justify-center text-white shadow-xl">
-                        <BoxIcon />
-                    </div>
-                </div>
-                <div>
-                    <h1 className="text-xl font-bold tracking-tight text-slate-800 font-display">Almacén</h1>
-                    <div className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <p className="text-xs text-slate-500 font-medium tracking-wide">BPA System v1.0</p>
-                    </div>
-                </div>
+            <div className="flex items-center gap-3 mb-12 px-2">
+                <img
+                    src="/Logo_agupal.jpg"
+                    alt="AGUPAL PERU"
+                    className="h-14 w-auto object-contain"
+                />
             </div>
 
             {/* Navigation */}

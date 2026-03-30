@@ -176,10 +176,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Número de Documento</label>
                                     <input {...register('numero_documento')} className="w-full h-9 rounded border-gray-300 bg-white text-sm border px-2" />
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Registro Sanitario</label>
-                                    <input {...register('registro_sanitario')} className="w-full h-9 rounded border-gray-300 bg-white text-sm border px-2" />
-                                </div>
+
                                 <div>
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Código Cliente/Proveedor</label>
                                     <select
@@ -305,6 +302,10 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                 <div className="md:col-span-2">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Observaciones</label>
                                     <textarea {...register('observaciones')} rows={2} className="w-full rounded border-gray-300 border px-2 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Registro Sanitario</label>
+                                    <input {...register('registro_sanitario')} className="w-full h-9 rounded border-gray-300 border px-2 text-sm focus:border-blue-500" />
                                 </div>
                             </div>
                         </div>

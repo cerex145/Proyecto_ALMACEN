@@ -237,33 +237,34 @@ async function productoRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla');
 
         // Título e instrucciones
-        worksheet.mergeCells('A1', 'P1');
-        worksheet.getCell('A1').value = 'PLANTILLA DE IMPORTACIÓN DE PRODUCTOS';
+        const totalCols = 11;
+        worksheet.mergeCells(1, 1, 1, totalCols);
+        worksheet.getCell('A1').value = 'PLANTILLA DE CARGA MASIVA — DATOS POR PRODUCTO';
         worksheet.getCell('A1').font = { bold: true, size: 14 };
         worksheet.getCell('A1').alignment = { horizontal: 'center' };
+        worksheet.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+        worksheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
 
-        worksheet.mergeCells('A2', 'P2');
-        worksheet.getCell('A2').value = 'Instrucciones: Llenar los datos desde la fila 4. Los campos Código y Descripción son obligatorios. Revisa la hoja "Ejemplo" para una referencia completa.';
-        worksheet.getCell('A2').font = { italic: true };
-        worksheet.getCell('A2').alignment = { horizontal: 'center' };
+        worksheet.mergeCells(2, 1, 2, totalCols);
+        worksheet.getCell('A2').value = 'Los datos globales (proveedor, tipo/n° de documento, categoría) se configuran en el panel izquierdo del sistema y se aplican a todos los productos automáticamente.';
+        worksheet.getCell('A2').font = { italic: true, size: 10 };
+        worksheet.getCell('A2').alignment = { horizontal: 'center', wrapText: true };
+        worksheet.getRow(2).height = 30;
 
-        // Encabezados en la fila 3
+        // Encabezados en la fila 3 — SOLO campos por-producto
         const row3 = worksheet.getRow(3);
         const columnas = [
-            { header: 'Cod. Producto*', key: 'codigo', width: 15 },
-            { header: 'Producto*', key: 'descripcion', width: 40 },
-            { header: 'Lote', key: 'lote', width: 15 },
-            { header: 'Registro Sanitario', key: 'registro_sanitario', width: 25 },
-            { header: 'Proveedor', key: 'proveedor_ruc', width: 15 },
-            { header: 'Razón Social', key: 'proveedor', width: 35 },
-            { header: 'Fecha Ingreso', key: 'fecha_ingreso', width: 20 },
-            { header: 'T. Documento', key: 'tipo_documento', width: 15 },
-            { header: 'N° de Documento', key: 'numero_documento', width: 20 },
-            { header: 'Unidad', key: 'unidad', width: 15 },
-            { header: 'UM', key: 'um', width: 15 },
-            { header: 'Fabricante', key: 'fabricante', width: 25 },
-            { header: 'Procedencia', key: 'procedencia', width: 20 },
-            { header: 'Observaciones', key: 'observaciones', width: 40 }
+            { header: '⭐ Cod. Producto', key: 'codigo',              width: 18 },
+            { header: '⭐ Descripción',   key: 'descripcion',         width: 45 },
+            { header: 'Lote',             key: 'lote',                width: 16 },
+            { header: 'Registro Sanitario', key: 'registro_sanitario', width: 22 },
+            { header: 'Fecha Ingreso',    key: 'fecha_ingreso',       width: 16 },
+            { header: 'F. Vencimiento',   key: 'fecha_vencimiento',  width: 16 },
+            { header: 'Unidad',           key: 'unidad',              width: 12 },
+            { header: 'UM',               key: 'um',                  width: 10 },
+            { header: 'Fabricante',       key: 'fabricante',          width: 25 },
+            { header: 'Procedencia',      key: 'procedencia',         width: 18 },
+            { header: 'Observaciones',    key: 'observaciones',       width: 35 }
         ];
 
         columnas.forEach((col, i) => {
@@ -302,17 +303,13 @@ async function productoRoutes(fastify, options) {
             'Paracetamol 500 mg Tabletas x 100',
             'L240315A',
             'RS-12345',
-            '20123456789',
-            'DISTRIBUIDORA MÉDICA S.A.C.',
             '2026-03-15',
             '2028-03-15',
-            'Factura',
-            'F001-000123',
             'Caja',
             'UND',
             'Laboratorios Salud',
             'Perú',
-            'Ejemplo referencial para carga masiva'
+            'Ejemplo referencial'
         ]);
 
         ejemplo.addRow([
@@ -320,17 +317,13 @@ async function productoRoutes(fastify, options) {
             'Ibuprofeno 400 mg Tabletas x 50',
             'L240315B',
             'RS-67890',
-            '20987654321',
-            'IMPORTADORA FARMACÉUTICA S.R.L.',
             '2026-03-15',
             '2027-12-31',
-            'Guía de Remisión Remitente',
-            'T001-000456',
             'Blíster',
             'UND',
             'Pharma Global',
             'Colombia',
-            'Segundo ejemplo de referencia'
+            'Segundo ejemplo'
         ]);
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -652,22 +645,19 @@ async function productoRoutes(fastify, options) {
             return reply.status(400).send({ success: false, error: 'No se recibió archivo' });
         }
 
-        // Mapeo por POSICIÓN de columna (independiente del nombre del encabezado)
+        // Mapeo por POSICIÓN de columna — solo campos por-producto
         const COLUMNAS = [
-            'codigo',              // A - col 1 (Cod. Producto)
-            'descripcion',         // B - col 2 (Producto)
+            'codigo',              // A - col 1
+            'descripcion',         // B - col 2
             'lote',                // C - col 3
             'registro_sanitario',  // D - col 4
-            'proveedor_ruc',       // E - col 5
-            'proveedor',           // F - col 6 (Razón Social)
-            'fecha_ingreso',       // G - col 7
-            'tipo_documento',      // H - col 8
-            'numero_documento',    // I - col 9
-            'unidad',              // J - col 10
-            'um',                  // K - col 11
-            'fabricante',          // L - col 12
-            'procedencia',         // M - col 13
-            'observaciones'        // N - col 14
+            'fecha_ingreso',       // E - col 5
+            'fecha_vencimiento',   // F - col 6
+            'unidad',              // G - col 7
+            'um',                  // H - col 8
+            'fabricante',          // I - col 9
+            'procedencia',         // J - col 10
+            'observaciones'        // K - col 11
         ];
         const NUMERICAS = [];
 
@@ -691,15 +681,37 @@ async function productoRoutes(fastify, options) {
             if (!tieneAlgo) return;
 
             const obj = {};
+            const FIELDS_FECHA = ['fecha_ingreso', 'fecha_vencimiento'];
+
+            // Convierte cualquier formato de fecha a YYYY-MM-DD
+            const normalizeDate = (v) => {
+                if (v instanceof Date) return v.toISOString().split('T')[0];
+                const s = String(v).trim();
+                // DD/MM/YYYY o DD-MM-YYYY
+                const dmySlash = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                if (dmySlash) return `${dmySlash[3]}-${dmySlash[2].padStart(2,'0')}-${dmySlash[1].padStart(2,'0')}`;
+                // YYYY-MM-DD o YYYY/MM/DD
+                const ymd = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+                if (ymd) return `${ymd[1]}-${ymd[2].padStart(2,'0')}-${ymd[3].padStart(2,'0')}`;
+                return null; // formato no reconocido
+            };
+
             COLUMNAS.forEach((key, i) => {
                 let val = values[i + 1];
                 // Manejar celdas con objetos rich text de ExcelJS
                 if (val && typeof val === 'object' && val.text) val = val.text;
                 if (val && typeof val === 'object' && val.result !== undefined) val = val.result;
-                // Manejar fechas de Excel
-                if (val instanceof Date) {
-                    val = val.toISOString().split('T')[0]; // AAAA-MM-DD
+
+                // Campos de fecha: normalizar a YYYY-MM-DD
+                if (FIELDS_FECHA.includes(key)) {
+                    if (val !== null && val !== undefined && String(val).trim() !== '') {
+                        obj[key] = normalizeDate(val);
+                    } else {
+                        obj[key] = null;
+                    }
+                    return;
                 }
+
                 const str = val !== null && val !== undefined ? String(val).trim() : '';
                 if (NUMERICAS.includes(key)) {
                     obj[key] = str !== '' ? parseFloat(str) : null;
@@ -707,6 +719,7 @@ async function productoRoutes(fastify, options) {
                     obj[key] = str || null;
                 }
             });
+
 
             // Validaciones mínimas
             if (!obj.codigo) {

@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "npm run dev:clean && concurrently \"npm run dev:renderer\" \"npm run dev:electron\"",
     "dev:full": "npm run dev:clean && concurrently \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
-    "dev:clean": "fuser -k 3000/tcp || true && fuser -k 5173/tcp || true",
+    "dev:clean": "npx kill-port 3000 5173 || true",
     "dev:api": "npm run dev --workspace=@sistema-almacen/api",
     "dev:renderer": "npm run dev --workspace=@sistema-almacen/renderer",
     "dev:electron": "wait-on http://localhost:5173 && npm run dev --workspace=@sistema-almacen/electron",

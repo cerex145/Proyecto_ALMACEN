@@ -15,6 +15,11 @@ module.exports = new EntitySchema({
             unique: true,
             nullable: false
         },
+        numero_guia: {
+            type: 'int',
+            nullable: true,
+            comment: 'Número de guía autoincremental por nota de ingreso'
+        },
         fecha: {
             type: 'date',
             nullable: false

@@ -93,6 +93,16 @@ async function ingresosRoutes(fastify, options) {
         return String(numero).padStart(8, '0');
     };
 
+    // Genera el siguiente numero_guia (1, 2, 3, ...) — un número por nota de ingreso
+    const generarNumeroGuia = async () => {
+        const result = await notaIngresoRepo
+            .createQueryBuilder('nota')
+            .select('MAX(nota.numero_guia)', 'max')
+            .getRawOne();
+        return (Number(result?.max) || 0) + 1;
+    };
+
+
     // GET /api/ingresos - Listar notas de ingreso
     fastify.get('/api/ingresos', {
         schema: {
@@ -416,6 +426,8 @@ async function ingresosRoutes(fastify, options) {
             }
 
             const numeroIngreso = await generarNumeroIngreso();
+            const numeroGuia = await generarNumeroGuia();
+
 
             // Validar detalles
             const hoy = new Date();
@@ -448,6 +460,7 @@ async function ingresosRoutes(fastify, options) {
             // Crear nota
             const nota = notaIngresoRepo.create({
                 numero_ingreso: numeroIngreso,
+                numero_guia: numeroGuia,
                 fecha,
                 cliente_id: Number(cliente.id),
                 proveedor: cliente.razon_social || proveedor || null,

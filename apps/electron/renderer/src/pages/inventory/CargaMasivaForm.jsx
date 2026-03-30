@@ -64,7 +64,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
     const [proveedor, setProveedor] = useState('');
     const [tipoDocumento, setTipoDocumento] = useState('');
     const [numeroDocumento, setNumeroDocumento] = useState('');
-    const [registroSanitario, setRegistroSanitario] = useState('');
+
     const [categoriaIngreso, setCategoriaIngreso] = useState('');
 
     // ── Archivo y previsualizacion ──
@@ -162,7 +162,6 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             proveedor: proveedor || razonSocial,
             tipo_documento: tipoDocumento || null,
             numero_documento: numeroDocumento || null,
-            registro_sanitario: registroSanitario || null,
             categoria_ingreso: categoriaIngreso || null,
         };
 
@@ -219,7 +218,6 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             proveedor: proveedor || razonSocial,
             tipo_documento: tipoDocumento || null,
             numero_documento: numeroDocumento || null,
-            registro_sanitario: registroSanitario || null,
             categoria_ingreso: categoriaIngreso || null,
         };
 
@@ -372,14 +370,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Registro Sanitario</label>
-                                <input
-                                    value={registroSanitario}
-                                    onChange={e => setRegistroSanitario(e.target.value)}
-                                    className="w-full h-9 rounded border border-gray-300 text-sm px-2 focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
+
 
                             <div>
                                 <label className="block text-xs font-bold text-gray-700 mb-1">Categoría Ingreso</label>
@@ -487,7 +478,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             <table className="w-full text-xs">
                                                 <thead className="bg-slate-50 text-slate-500 uppercase">
                                                     <tr>
-                                                        {['#', 'Código', 'Descripción', 'Lote', 'Fabricante', 'F. Venc.', 'UM'].map(h => (
+                                                        {['#', 'Código', 'Descripción', 'Lote', 'Reg. Sanitario', 'F. Ingreso', 'F. Venc.', 'UM', 'Fabricante'].map(h => (
                                                             <th key={h} className="px-3 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
                                                         ))}
                                                     </tr>
@@ -499,9 +490,11 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                                             <td className="px-3 py-2 font-mono font-bold text-slate-700">{row.codigo}</td>
                                                             <td className="px-3 py-2 text-slate-600 max-w-[180px] truncate">{row.descripcion}</td>
                                                             <td className="px-3 py-2">{row.lote || '-'}</td>
-                                                            <td className="px-3 py-2">{row.fabricante || '-'}</td>
+                                                            <td className="px-3 py-2">{row.registro_sanitario || '-'}</td>
+                                                            <td className="px-3 py-2">{row.fecha_ingreso || '-'}</td>
                                                             <td className="px-3 py-2">{row.fecha_vencimiento || '-'}</td>
                                                             <td className="px-3 py-2">{row.um || '-'}</td>
+                                                            <td className="px-3 py-2">{row.fabricante || '-'}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
