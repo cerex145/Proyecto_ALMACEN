@@ -120,6 +120,64 @@ export const NotaSalidaForm = () => {
         });
     };
 
+    const selectDeterministicById = (items = []) => {
+        const sorted = [...(Array.isArray(items) ? items : [])]
+            .sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0));
+        return sorted[0] || null;
+    };
+
+    const resolveProductoCSVSalida = ({ productos = [], codigoRaw = '', nombreRaw = '' }) => {
+        const nombre = normalizeText(nombreRaw);
+        const codigo = normalizeText(codigoRaw);
+        const codigoCanonico = normalizeProductCode(codigoRaw);
+        const codigoNoInformativo = !codigoCanonico || codigo === '-' || codigo === '--';
+
+        const candidatosPorCodigo = (Array.isArray(productos) ? productos : []).filter((p) => {
+            const codigoProducto = normalizeText(p?.codigo || '');
+            const codigoProductoCanonico = normalizeProductCode(p?.codigo || '');
+
+            if (codigoNoInformativo) {
+                return true;
+            }
+
+            return (codigoProducto && (codigoProducto === codigo || codigoProducto.includes(codigo) || codigo.includes(codigoProducto)))
+                || (codigoProductoCanonico && codigoCanonico && (
+                    codigoProductoCanonico === codigoCanonico
+                    || codigoProductoCanonico.includes(codigoCanonico)
+                    || codigoCanonico.includes(codigoProductoCanonico)
+                ));
+        });
+
+        const candidatosCodigoUnicos = dedupeById(candidatosPorCodigo);
+        if (candidatosCodigoUnicos.length === 0) {
+            return null;
+        }
+
+        if (candidatosCodigoUnicos.length === 1) {
+            return candidatosCodigoUnicos[0];
+        }
+
+        if (nombre) {
+            const candidatosPorNombre = candidatosCodigoUnicos.filter((p) => {
+                const nombreProducto = normalizeText(p?.descripcion || p?.nombre || '');
+                return nombreProducto === nombre
+                    || nombreProducto.includes(nombre)
+                    || nombre.includes(nombreProducto);
+            });
+
+            const porNombreUnicos = dedupeById(candidatosPorNombre);
+            if (porNombreUnicos.length === 1) {
+                return porNombreUnicos[0];
+            }
+
+            if (porNombreUnicos.length > 1) {
+                return selectDeterministicById(porNombreUnicos);
+            }
+        }
+
+        return selectDeterministicById(candidatosCodigoUnicos);
+    };
+
     const parseCSVLine = (line, delimiter = ',') => {
         const result = [];
         let current = '';
@@ -934,14 +992,15 @@ export const NotaSalidaForm = () => {
                     });
 
                     const codigoOriginal = String(row.codigo_producto || '').trim();
+                    const nombreOriginal = String(row.nombre || row.producto_nombre || '').trim();
                     const codigo = normalizeText(codigoOriginal);
                     const codigoCanonico = normalizeProductCode(codigoOriginal);
                     const loteCsv = String(row.lote || '').trim();
                     const cantidadRaw = parseNumber(row.cantidad ?? row.cant_total ?? row.cantidad_total, 0);
                     const cantidad = cantidadRaw > 0 ? cantidadRaw : 1;
 
-                    if (!codigo) {
-                        errores.push(`Fila ${i + 1}: código de producto inválido.`);
+                    if (!codigo && !nombreOriginal) {
+                        errores.push(`Fila ${i + 1}: código/nombre de producto inválido.`);
                         continue;
                     }
 
@@ -954,21 +1013,13 @@ export const NotaSalidaForm = () => {
                         ...(Array.isArray(allProducts) ? allProducts : [])
                     ];
 
-                    const producto = productosBusqueda.find((p) => normalizeText(p.codigo) === codigo)
-                        || productosBusqueda.find((p) => normalizeProductCode(p.codigo || '') === codigoCanonico)
-                        || productosBusqueda.find((p) => {
-                            const codigoProducto = normalizeText(p.codigo || '');
-                            const codigoProductoCanonico = normalizeProductCode(p.codigo || '');
-                            const nombreProducto = normalizeText(p.descripcion || p.nombre || '');
-                            return (codigoProducto && (codigoProducto.includes(codigo) || codigo.includes(codigoProducto)))
-                                || (codigoProductoCanonico && codigoCanonico && (
-                                    codigoProductoCanonico.includes(codigoCanonico)
-                                    || codigoCanonico.includes(codigoProductoCanonico)
-                                ))
-                                || (nombreProducto && nombreProducto.includes(codigo));
-                        });
+                    const producto = resolveProductoCSVSalida({
+                        productos: productosBusqueda,
+                        codigoRaw: codigoOriginal,
+                        nombreRaw: nombreOriginal
+                    });
                     if (!producto) {
-                        errores.push(`Fila ${i + 1}: producto no encontrado (${row.codigo_producto}).`);
+                        errores.push(`Fila ${i + 1}: producto no encontrado (${row.codigo_producto || row.nombre || '-' }).`);
                         continue;
                     }
 
