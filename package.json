@@ -21,6 +21,7 @@
     "migrate:supabase": "npm run migrate:mysql-to-postgres:init --workspace=@sistema-almacen/api",
     "verify:migrate:supabase": "npm run verify:mysql-to-postgres --workspace=@sistema-almacen/api",
     "stock:rebuild": "npm run stock:rebuild --workspace=@sistema-almacen/api",
+    "validate:inventory": "node scripts/validate-inventory-import.js",
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "npm run build --workspace=@sistema-almacen/renderer",
     "build:electron": "npm run build --workspace=@sistema-almacen/electron"
