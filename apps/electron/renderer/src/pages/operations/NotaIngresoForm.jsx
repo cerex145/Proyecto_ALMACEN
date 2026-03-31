@@ -821,8 +821,28 @@ export const NotaIngresoForm = () => {
         return { producto: null, opciones: opcionesUnicas };
     };
 
+    const parseTemperaturaCSV = (value, fallback = 25) => {
+        const raw = String(value || '').trim();
+        if (!raw) return fallback;
+
+        const rango = raw
+            .replace(/,/g, '.')
+            .match(/(-?\d+(?:\.\d+)?)\s*(?:°|º)?\s*(?:a|hasta|\-|:)\s*(-?\d+(?:\.\d+)?)\s*(?:°|º)?/i);
+
+        if (rango) {
+            const min = Number(rango[1]);
+            return Number.isFinite(min) ? min : fallback;
+        }
+
+        const unico = raw.replace(/,/g, '.').match(/-?\d+(?:\.\d+)?/);
+        if (!unico) return fallback;
+
+        const parsed = Number(unico[0]);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
     const construirDetalleDesdeCSV = (producto, row) => {
-        const temperatura = parseNumber(
+        const temperatura = parseTemperaturaCSV(
             row.temperatura || row.temperatura_min || row.temperatura_max || producto.temperatura || producto.temperatura_min_c || 25,
             25
         );
@@ -922,6 +942,7 @@ export const NotaIngresoForm = () => {
 
                 let rucDetectado = '';
                 let fechaIngresoDetectada = '';
+                const fechasIngresoDistintas = new Set();
 
                 // Procesar cada fila
                 for (let i = 1; i < rows.length; i++) {
@@ -962,11 +983,9 @@ export const NotaIngresoForm = () => {
                     }
 
                     if (fechaIngresoFila) {
+                        fechasIngresoDistintas.add(fechaIngresoFila);
                         if (!fechaIngresoDetectada) {
                             fechaIngresoDetectada = fechaIngresoFila;
-                        } else if (fechaIngresoDetectada !== fechaIngresoFila) {
-                            errores.push(`Fila ${i + 1}: fecha de ingreso no coincide con el resto del archivo (${row.fecha_ingreso})`);
-                            continue;
                         }
                     }
 
@@ -1085,6 +1104,11 @@ export const NotaIngresoForm = () => {
                 setProveedorNombre(clienteDetectado.razon_social || '');
                 if (fechaIngresoDetectada) {
                     setValue('fecha', fechaIngresoDetectada);
+                }
+
+                if (fechasIngresoDistintas.size > 1) {
+                    const listaFechas = Array.from(fechasIngresoDistintas).sort();
+                    errores.push(`Se detectaron ${fechasIngresoDistintas.size} fechas de ingreso distintas en el archivo. Se aplicó ${fechaIngresoDetectada} en el formulario actual. Fechas detectadas: ${listaFechas.join(', ')}`);
                 }
 
                 // Agregar productos importados al formulario
