@@ -2,6 +2,12 @@ export const detectarDelimitadorCSV = (line) => {
     const raw = String(line || '');
     const comas = (raw.match(/,/g) || []).length;
     const puntosComa = (raw.match(/;/g) || []).length;
+    const tabs = (raw.match(/\t/g) || []).length;
+
+    if (tabs > puntosComa && tabs > comas) {
+        return '\t';
+    }
+
     return puntosComa > comas ? ';' : ',';
 };
 

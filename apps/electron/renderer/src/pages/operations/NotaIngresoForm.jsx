@@ -97,6 +97,40 @@ export const NotaIngresoForm = () => {
     const [uiSuccess, setUiSuccess] = useState('');
     const selectedClientRuc = normalizarRuc(clienteRuc);
 
+    const normalizarHeaderCSV = (header) => String(header || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[.\-]+/g, ' ')
+        .replace(/\s+/g, '_');
+
+    const HEADER_ALIAS_CSV = {
+        ruc: 'ruc_cliente',
+        ruc_proveedor: 'ruc_cliente',
+        cod_producto: 'codigo_producto',
+        codigo: 'codigo_producto',
+        producto_codigo: 'codigo_producto',
+        nombre_producto: 'nombre',
+        producto: 'nombre',
+        descripcion: 'nombre',
+        fecha_vcto: 'fecha_vencimiento',
+        fecha_venc: 'fecha_vencimiento',
+        fecha_de_ingreso: 'fecha_ingreso',
+        fecha_ingreso: 'fecha_ingreso',
+        fecha_de_h_ingreso: 'fecha_ingreso',
+        cant_bultos: 'cantidad_bultos',
+        cant_bulto: 'cantidad_bultos',
+        cant_cajas: 'cantidad_cajas',
+        cant_x_caja: 'cantidad_por_caja',
+        cant_por_caja: 'cantidad_por_caja',
+        cant_fraccion: 'cantidad_fraccion',
+        cant_total: 'cantidad_total',
+        cant_total_ingreso: 'cantidad_total',
+        cant_total__ingreso: 'cantidad_total',
+        unidad_medida: 'um'
+    };
+
     const showError = (message) => {
         setUiSuccess('');
         setUiError(message);
@@ -868,14 +902,16 @@ export const NotaIngresoForm = () => {
                     return;
                 }
 
-                // Parsear encabezados
-                const headers = rows[0].map((h) => String(h || '').trim().toLowerCase());
+                // Parsear y normalizar encabezados
+                const headers = rows[0]
+                    .map((h) => normalizarHeaderCSV(h))
+                    .map((h) => HEADER_ALIAS_CSV[h] || h);
                 const errores = [];
                 const productosImportados = [];
                 const pendientes = [];
 
                 // Validar encabezados requeridos
-                const requeridos = ['ruc_cliente', 'codigo_producto', 'lote', 'cantidad_total'];
+                const requeridos = ['ruc_cliente', 'codigo_producto', 'lote', 'fecha_ingreso', 'cantidad_total'];
                 const faltantes = requeridos.filter(r => !headers.includes(r));
 
                 if (faltantes.length > 0) {
@@ -885,18 +921,24 @@ export const NotaIngresoForm = () => {
                 }
 
                 let rucDetectado = '';
+                let fechaIngresoDetectada = '';
 
                 // Procesar cada fila
                 for (let i = 1; i < rows.length; i++) {
                     let values = Array.isArray(rows[i]) ? [...rows[i]] : [];
 
                     // Algunas exportaciones mezclan delimitador por fila.
-                    const altDelimiter = delimiter === ',' ? ';' : ',';
+                    const posiblesDelimitadores = ['\t', ';', ','].filter((d) => d !== delimiter);
                     const rawLine = values.join(delimiter);
-                    if ((values.length <= 1 || values.length < headers.length) && rawLine.includes(altDelimiter)) {
-                        const altValues = parseCSVLine(rawLine, altDelimiter);
-                        if (altValues.length > values.length) {
-                            values = altValues;
+                    if (values.length <= 1 || values.length < headers.length) {
+                        for (const altDelimiter of posiblesDelimitadores) {
+                            if (!rawLine.includes(altDelimiter)) {
+                                continue;
+                            }
+                            const altValues = parseCSVLine(rawLine, altDelimiter);
+                            if (altValues.length > values.length) {
+                                values = altValues;
+                            }
                         }
                     }
 
@@ -912,6 +954,21 @@ export const NotaIngresoForm = () => {
                     headers.forEach((header, index) => {
                         row[header] = values[index] || '';
                     });
+
+                    const fechaIngresoFila = normalizarFechaInput(row.fecha_ingreso || '');
+                    if (row.fecha_ingreso && !fechaIngresoFila) {
+                        errores.push(`Fila ${i + 1}: fecha de ingreso inválida (${row.fecha_ingreso})`);
+                        continue;
+                    }
+
+                    if (fechaIngresoFila) {
+                        if (!fechaIngresoDetectada) {
+                            fechaIngresoDetectada = fechaIngresoFila;
+                        } else if (fechaIngresoDetectada !== fechaIngresoFila) {
+                            errores.push(`Fila ${i + 1}: fecha de ingreso no coincide con el resto del archivo (${row.fecha_ingreso})`);
+                            continue;
+                        }
+                    }
 
                     let rucFila = String(row.ruc_cliente || '').trim();
 
@@ -1026,6 +1083,9 @@ export const NotaIngresoForm = () => {
                 setSelectedClient(String(clienteDetectado.id));
                 setClienteRuc(clienteDetectado.cuit || clienteDetectado.ruc || rucDetectado);
                 setProveedorNombre(clienteDetectado.razon_social || '');
+                if (fechaIngresoDetectada) {
+                    setValue('fecha', fechaIngresoDetectada);
+                }
 
                 // Agregar productos importados al formulario
                 if (productosImportados.length > 0) {
@@ -1063,8 +1123,10 @@ export const NotaIngresoForm = () => {
         const headers = [
             'ruc_cliente',
             'codigo_producto',
+            'nombre',
             'lote',
             'fecha_vencimiento',
+            'fecha de ingreso',
             'cantidad_bultos',
             'cantidad_cajas',
             'cantidad_por_caja',
@@ -1077,9 +1139,9 @@ export const NotaIngresoForm = () => {
 
         // Usar códigos reales del sistema
         const ejemplos = [
-            ['20123456789', 'MED-003', 'LOTE-2024-001', '2025-12-31', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
-            ['20123456789', 'MED-007', 'LOTE-2024-002', '2026-06-15', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
-            ['20123456789', 'INS-004', 'LOTE-2024-003', '2027-03-20', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
+            ['20123456789', 'MED-003', 'PARACETAMOL 500MG', 'LOTE-2024-001', '2025-12-31', '2026-03-30', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
+            ['20123456789', 'MED-007', 'AMOXICILINA 500MG', 'LOTE-2024-002', '2026-06-15', '2026-03-30', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
+            ['20123456789', 'INS-004', 'GUANTES LATEX TALLA M', 'LOTE-2024-003', '2027-03-20', '2026-03-30', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
         ];
 
         const csvContent = headers.join(',') + '\n' + ejemplos.map(e => e.join(',')).join('\n');
@@ -1720,6 +1782,11 @@ export const NotaIngresoForm = () => {
                                         <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">LOTE-2024-001</span></p>
                                     </div>
                                     <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                        <p className="font-mono font-bold text-sm text-slate-800">fecha de ingreso</p>
+                                        <p className="text-xs text-slate-600 mt-1">Fecha única para la nota (YYYY-MM-DD o DD/MM/YYYY)</p>
+                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">2026-03-30</span></p>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
                                         <p className="font-mono font-bold text-sm text-slate-800">cantidad_total</p>
                                         <p className="text-xs text-slate-600 mt-1">Cantidad total de unidades</p>
                                         <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">505</span></p>
@@ -1727,10 +1794,10 @@ export const NotaIngresoForm = () => {
                                 </div>
                                 <details className="mt-3">
                                     <summary className="text-xs text-amber-800 cursor-pointer hover:text-amber-900 font-medium">
-                                        Ver todas las columnas disponibles (13 en total)
+                                        Ver formato completo compatible
                                     </summary>
                                     <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
-                                        <p className="font-mono">ruc_cliente, codigo_producto, lote, cantidad_total, fecha_vencimiento, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, um, fabricante, temperatura</p>
+                                        <p className="font-mono">ruc_cliente, codigo_producto, nombre, lote, fecha_vencimiento, fecha de ingreso, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, cantidad_total, um, fabricante, temperatura</p>
                                     </div>
                                 </details>
                             </div>
@@ -1743,12 +1810,12 @@ export const NotaIngresoForm = () => {
                                 </h3>
                                 <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
                                     <pre className="text-xs font-mono text-green-400">
-                                        {`ruc_cliente,codigo_producto,lote,cantidad_total
-20123456789,PROD001,LOTE-2024-001,505
-20123456789,PROD002,LOTE-2024-002,500`}
+                                        {`ruc_cliente,codigo_producto,nombre,lote,fecha_vencimiento,fecha de ingreso,cantidad_bultos,cantidad_cajas,cantidad_por_caja,cantidad_fraccion,cantidad_total,um,fabricante,temperatura
+20123456789,PROD001,PARACETAMOL 500MG,LOTE-2024-001,2025-12-31,2026-03-30,2,10,50,5,505,UND,LAB ABC,25
+20123456789,PROD002,AMOXICILINA 500MG,LOTE-2024-002,2026-06-15,2026-03-30,1,5,100,0,500,UND,LAB XYZ,25`}
                                     </pre>
                                 </div>
-                                <p className="text-xs text-green-800 mt-2">💡 Puedes agregar más columnas opcionales como: fecha_vencimiento, cantidad_cajas, um, fabricante, etc.</p>
+                                <p className="text-xs text-green-800 mt-2">💡 También acepta separador por coma, punto y coma o tabulación.</p>
                             </div>
 
                             {/* Errores */}
