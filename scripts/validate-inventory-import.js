@@ -212,6 +212,7 @@ function normalizeSalidaRow(row, idx) {
 function validateAndBuild({ ingresosRows, salidasRows, fifoEnabled = true }) {
     const errors = [];
     const warnings = [];
+    const EPS = 1e-9;
 
     const nameToCodes = new Map();
     const codeToNames = new Map();
@@ -318,17 +319,19 @@ function validateAndBuild({ ingresosRows, salidasRows, fifoEnabled = true }) {
     for (const s of salidasConsolidadas) {
         const key = `${s.codigo}|${s.lote}`;
         const available = stock.get(key) || 0;
+        const projected = available - s.cantidad;
 
-        if (available <= 0) {
-            const hasAnyProductStock = Array.from(stock.keys()).some((k) => k.startsWith(`${s.codigo}|`) && (stock.get(k) || 0) > 0);
-            if (hasAnyProductStock) {
-                warnings.push(`Producto encontrado pero lote incorrecto o inexistente: ${s.codigo} lote ${s.lote}`);
+        // Solo es error si la operación deja stock negativo real. Quedar exactamente en 0 es válido.
+        if (projected < -EPS) {
+            const hasAnyProductStock = Array.from(stock.keys()).some((k) => k.startsWith(`${s.codigo}|`) && (stock.get(k) || 0) > EPS);
+            if (available <= EPS) {
+                if (hasAnyProductStock) {
+                    warnings.push(`Producto encontrado pero lote incorrecto o inexistente: ${s.codigo} lote ${s.lote}`);
+                }
+                errors.push(`Sin stock disponible para el producto ${s.codigo} lote ${s.lote}`);
+                continue;
             }
-            errors.push(`Sin stock disponible para el producto ${s.codigo} lote ${s.lote}`);
-            continue;
-        }
 
-        if (s.cantidad > available) {
             const msg = `Cantidad supera stock disponible. Stock actual: ${available}, solicitado: ${s.cantidad} (producto ${s.codigo}, lote ${s.lote}, filas ${s.sourceRows.join(',')})`;
             errors.push(msg);
 
@@ -342,7 +345,7 @@ function validateAndBuild({ ingresosRows, salidasRows, fifoEnabled = true }) {
             continue;
         }
 
-        stock.set(key, available - s.cantidad);
+        stock.set(key, Math.abs(projected) <= EPS ? 0 : projected);
 
         if (fifoEnabled) {
             const lots = fifoByProduct.get(s.codigo) || [];
