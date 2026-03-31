@@ -83,7 +83,8 @@ export const KardexFuncional = () => {
     const cargarKardex = async () => {
         try {
             setLoading(true);
-            let url = `${API_ORIGIN}/api/kardex?limit=1000&order=ASC`;
+            // Se sube el límite a 100,000 para traer todo el histórico y evitar discrepancias de suma.
+            let url = `${API_ORIGIN}/api/kardex?limit=100000&order=ASC`;
             if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
             if (filtroLote) url += `&lote_numero=${encodeURIComponent(filtroLote)}`;
             if (filtroDocumento) url += `&documento_numero=${encodeURIComponent(filtroDocumento)}`;
