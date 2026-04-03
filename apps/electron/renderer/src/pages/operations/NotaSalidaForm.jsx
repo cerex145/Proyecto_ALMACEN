@@ -1083,19 +1083,11 @@ export const NotaSalidaForm = () => {
                         stockRestantePorProducto.set(productoIdSeleccionado, stockTotalProducto);
                     }
 
-                    const stockRestanteActual = Number(stockRestantePorProducto.get(productoIdSeleccionado) || 0);
-                    if (stockRestanteActual <= 0) {
-                        errores.push(`Fila ${i + 1}: sin stock disponible para ${row.codigo_producto}.`);
-                        continue;
-                    }
-
-                    let cantidadAUsar = Number(cantidad);
-                    if (cantidadAUsar > stockRestanteActual) {
-                        errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera stock total restante ${stockRestanteActual}, se ajustó a ${stockRestanteActual}.`);
-                        cantidadAUsar = stockRestanteActual;
-                    }
-
+                    // Separar validación de stock: usar lotes reales del sistema, no el contador local
                     let lote = null;
+                    let productoIdFinal = productoIdSeleccionado;
+                    let lotesActivosFinal = lotesActivos;
+                    
                     if (loteCsv) {
                         lote = lotesActivos.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
 
@@ -1115,24 +1107,40 @@ export const NotaSalidaForm = () => {
                                 const loteCandidato = lotesCandidato.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
                                 if (loteCandidato) {
                                     productoSeleccionado = candidato;
-                                    lotesActivos = lotesCandidato;
+                                    lotesActivosFinal = lotesCandidato;
                                     lote = loteCandidato;
+                                    productoIdFinal = Number(candidato.id);
                                     break;
                                 }
                             }
                         }
                     }
 
+                    // Validar disponibilidad real del lote o del producto
+                    let cantidadDisponibleRealActual = 0;
                     if (lote) {
-                        const disponibleLote = Number(lote.cantidad_disponible || 0);
-                        if (cantidadAUsar > disponibleLote) {
-                            lote = null;
-                        }
+                        // Si hay lote específico, usar su disponibilidad del sistema
+                        cantidadDisponibleRealActual = Number(lote.cantidad_disponible || 0);
+                    } else {
+                        // Si no hay lote especificado, acumular de todos los lotes disponibles
+                        cantidadDisponibleRealActual = lotesActivosFinal.reduce(
+                            (acc, l) => acc + Number(l.cantidad_disponible || 0), 
+                            0
+                        );
                     }
 
-                    const disponibleBase = lote
-                        ? Number(lote.cantidad_disponible || 0)
-                        : Number(stockRestantePorProducto.get(productoIdSeleccionado) || 0);
+                    if (cantidadDisponibleRealActual <= 0) {
+                        errores.push(`Fila ${i + 1}: sin stock disponible para ${row.codigo_producto}.`);
+                        continue;
+                    }
+
+                    let cantidadAUsar = Number(cantidad);
+                    if (cantidadAUsar > cantidadDisponibleRealActual) {
+                        errores.push(`Fila ${i + 1}: cantidad ${cantidadAUsar} supera stock disponible ${cantidadDisponibleRealActual}, se ajustó a ${cantidadDisponibleRealActual}.`);
+                        cantidadAUsar = cantidadDisponibleRealActual;
+                    }
+
+                    const disponibleBase = cantidadDisponibleRealActual;
 
                     const detalle = {
                         producto_id: Number(productoSeleccionado.id),
@@ -1154,10 +1162,13 @@ export const NotaSalidaForm = () => {
                     };
 
                     upsertDetalleSalida(detalle);
-                    stockRestantePorProducto.set(
-                        productoIdSeleccionado,
-                        Math.max(Number(stockRestantePorProducto.get(productoIdSeleccionado) || 0) - Number(cantidadAUsar), 0)
-                    );
+                    // Actualizar contador local solo si es sin lote específico
+                    if (!lote) {
+                        stockRestantePorProducto.set(
+                            productoIdFinal,
+                            Math.max(cantidadDisponibleRealActual - Number(cantidadAUsar), 0)
+                        );
+                    }
                     importados += 1;
                 }
 
@@ -1912,22 +1923,22 @@ export const NotaSalidaForm = () => {
                     </div>
                 </Card>
 
-                <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
+                        <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs sticky top-0">
                             <tr>
-                                <th className="px-6 py-4 text-center">Sel</th>
-                                <th className="px-6 py-4">Cod.Producto</th>
-                                <th className="px-6 py-4">Producto</th>
-                                <th className="px-6 py-4">Lote</th>
-                                <th className="px-6 py-4">Vencimiento</th>
-                                <th className="px-6 py-4">UM</th>
-                                <th className="px-6 py-4">Cant.Bulto</th>
-                                <th className="px-6 py-4">Cant.Cajas</th>
-                                <th className="px-6 py-4">Cant.x Caja</th>
-                                <th className="px-6 py-4">Cant.Fracción</th>
-                                <th className="px-6 py-4 text-right">Cant.Salida</th>
-                                <th className="px-6 py-4 text-center">Acción</th>
+                                <th className="px-6 py-4 text-center whitespace-nowrap">Sel</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Cod.Producto</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Producto</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Lote</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Vencimiento</th>
+                                <th className="px-6 py-4 whitespace-nowrap">UM</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Cant.Bulto</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Cant.Cajas</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Cant.x Caja</th>
+                                <th className="px-6 py-4 whitespace-nowrap">Cant.Fracción</th>
+                                <th className="px-6 py-4 text-right whitespace-nowrap">Cant.Salida</th>
+                                <th className="px-6 py-4 text-center whitespace-nowrap">Acción</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
