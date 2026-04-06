@@ -4,6 +4,7 @@ import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
 import { API_ORIGIN } from '../../services/api';
+import * as XLSX from 'xlsx';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import {
@@ -764,7 +765,9 @@ export const NotaIngresoForm = () => {
 
     const seleccionarOpcionDeterministicaCSV = (opciones = []) => {
         if (!opciones.length) return null;
-        return [...opciones].sort((a, b) => Number(a.id || 0) - Number(b.id || 0))[0] || null;
+        // DESCENDENTE (LIFO): Number(b.id) - Number(a.id)
+        // Esto garantiza que si hay productos duplicados, se considere el último ingresado (ID mayor).
+        return [...opciones].sort((a, b) => Number(b.id || 0) - Number(a.id || 0))[0] || null;
     };
 
     const resolverProductoCSV = ({ row, candidatosCodigo = [], candidatosPorLote = [] }) => {
@@ -903,15 +906,30 @@ export const NotaIngresoForm = () => {
         if (!file) return;
 
         setErroresImportacion([]);
+        const isExcel = file.name.match(/\.(xlsx|xls)$/i);
         const reader = new FileReader();
 
         reader.onload = async (e) => {
             try {
-                const text = String(e.target.result || '').replace(/^\uFEFF/, '');
-                const { delimiter, rows } = parseCSVDocument(text);
+                let rows = [];
+                let delimiter = ',';
+
+                if (isExcel) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    rows = jsonRows.filter(row => row.some(cell => String(cell || '').trim() !== ''));
+                } else {
+                    const text = String(e.target.result || '').replace(/^\uFEFF/, '');
+                    const parsed = parseCSVDocument(text);
+                    delimiter = parsed.delimiter;
+                    rows = parsed.rows;
+                }
 
                 if (rows.length < 2) {
-                    showError('El archivo CSV está vacío o no tiene datos.');
+                    showError('El archivo está vacío o no tiene datos.');
                     return;
                 }
 
@@ -1128,12 +1146,16 @@ export const NotaIngresoForm = () => {
                 }
                 event.target.value = ''; // Limpiar input file
             } catch (error) {
-                console.error('Error al procesar CSV:', error);
-                showError('Error al procesar el archivo CSV: ' + error.message);
+                console.error('Error al procesar archivo:', error);
+                showError('Error al procesar el archivo: ' + error.message);
             }
         };
 
-        reader.readAsText(file);
+        if (isExcel) {
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.readAsText(file);
+        }
     };
 
     const descargarPlantillaCSV = () => {
@@ -1859,7 +1881,7 @@ export const NotaIngresoForm = () => {
                                 <label className="flex-1">
                                     <input
                                         type="file"
-                                        accept=".csv"
+                                        accept=".csv, .xlsx, .xls"
                                         onChange={handleImportarCSV}
                                         className="hidden"
                                     />

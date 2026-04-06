@@ -87,4 +87,4 @@ async function cleanupRUC(targetRUC) {
 }
 
 // target RUC solicitado
-cleanupRUC('20605712241');
+cleanupRUC('20600124871');

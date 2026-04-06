@@ -25,10 +25,32 @@ const NotaIngresoDetalleSchema = {
         producto_id: { type: 'integer' },
         lote_id: { type: 'integer', nullable: true },
         cantidad: { type: 'number' },
+        cantidad_total: { type: 'number', nullable: true },
+        cantidad_bultos: { type: 'number', nullable: true },
+        cantidad_cajas: { type: 'number', nullable: true },
+        cantidad_por_caja: { type: 'number', nullable: true },
+        cantidad_fraccion: { type: 'number', nullable: true },
         lote_numero: { type: 'string', nullable: true },
-        fecha_vencimiento: { type: 'string', format: 'date', nullable: true },
+        fecha_vencimiento: { type: 'string', nullable: true },
+        um: { type: 'string', nullable: true },
+        fabricante: { type: 'string', nullable: true },
+        temperatura_min_c: { type: 'number', nullable: true },
+        temperatura_max_c: { type: 'number', nullable: true },
         cantidad_disponible: { type: 'number', nullable: true },
-        producto: { type: 'object', nullable: true }
+        producto: {
+            type: 'object',
+            nullable: true,
+            properties: {
+                id: { type: 'integer' },
+                codigo: { type: 'string', nullable: true },
+                descripcion: { type: 'string', nullable: true },
+                fabricante: { type: 'string', nullable: true },
+                um: { type: 'string', nullable: true },
+                unidad_medida: { type: 'string', nullable: true },
+                temperatura_min_c: { type: 'number', nullable: true },
+                temperatura_max_c: { type: 'number', nullable: true }
+            }
+        }
     }
 };
 
@@ -180,7 +202,16 @@ async function ingresosRoutes(fastify, options) {
                     type: 'object',
                     properties: {
                         success: { type: 'boolean' },
-                        data: { type: 'array', items: NotaIngresoSchema },
+                        data: {
+                            type: 'array',
+                            items: {
+                                ...NotaIngresoSchema.properties,
+                                detalles: {
+                                    type: 'array',
+                                    items: NotaIngresoDetalleSchema
+                                }
+                            }
+                        },
                         pagination: PaginationSchema
                     }
                 }

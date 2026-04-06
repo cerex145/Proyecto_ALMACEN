@@ -4,6 +4,7 @@ import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
 import { API_ORIGIN } from '../../services/api';
+import * as XLSX from 'xlsx';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
@@ -122,7 +123,9 @@ export const NotaSalidaForm = () => {
 
     const selectDeterministicById = (items = []) => {
         const sorted = [...(Array.isArray(items) ? items : [])]
-            .sort((a, b) => Number(a?.id || 0) - Number(b?.id || 0));
+            // DESCENDENTE (LIFO): Number(b.id) - Number(a.id)
+            // Esto garantiza que si hay productos duplicados, se elija el último ingresado (ID mayor).
+            .sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0));
         return sorted[0] || null;
     };
 
@@ -934,15 +937,28 @@ export const NotaSalidaForm = () => {
         if (!file) return;
 
         setErroresImportacionCSV([]);
+        const isExcel = file.name.match(/\.(xlsx|xls)$/i);
         const reader = new FileReader();
 
         reader.onload = async (e) => {
             try {
-                const text = String(e.target?.result || '').replace(/^\uFEFF/, '');
-                const { delimiter, rows } = parseCSVDocument(text);
+                let rows = [];
+                
+                if (isExcel) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    rows = jsonRows.filter(row => row.some(cell => String(cell || '').trim() !== ''));
+                } else {
+                    const text = String(e.target?.result || '').replace(/^\uFEFF/, '');
+                    const parsed = parseCSVDocument(text);
+                    rows = parsed.rows;
+                }
 
                 if (rows.length < 2) {
-                    showToast('El CSV está vacío o sin filas de datos.', 'warning');
+                    showToast('El archivo está vacío o sin filas de datos.', 'warning');
                     return;
                 }
 
@@ -1194,7 +1210,11 @@ export const NotaSalidaForm = () => {
             }
         };
 
-        reader.readAsText(file);
+        if (isExcel) {
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.readAsText(file);
+        }
     };
 
     const descargarPlantillaSalidaCSV = () => {
@@ -2093,7 +2113,7 @@ export const NotaSalidaForm = () => {
                             <input
                                 ref={inputCsvSalidaRef}
                                 type="file"
-                                accept=".csv,text/csv"
+                                accept=".csv,text/csv, .xlsx, .xls"
                                 className="hidden"
                                 onChange={handleImportarSalidaCSV}
                             />
