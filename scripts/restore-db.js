@@ -12,7 +12,8 @@ async function restore() {
     const backupDir = path.join(__dirname, '..', 'backups');
     
     // Hardcode explicitly since mtime was wrong
-    const latestBackup = 'backup_2026-03-30T04-52-49.sql';
+    // Hardcode explicitly since mtime was wrong
+    const latestBackup = 'backup_2026-03-31T03-47-34.sql';
     const backupPath = path.join(backupDir, latestBackup);
     
     if (!fs.existsSync(backupPath)) {
