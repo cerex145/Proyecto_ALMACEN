@@ -87,14 +87,16 @@ async function ingresosRoutes(fastify, options) {
 
     // Generar número único de nota de ingreso
     const generarNumeroIngreso = async () => {
-        const ultimaNote = await notaIngresoRepo
+        const result = await notaIngresoRepo
             .createQueryBuilder('nota')
-            .orderBy('nota.id', 'DESC')
-            .limit(1)
-            .getOne();
+            .select(
+                "MAX(CAST(NULLIF(REGEXP_REPLACE(COALESCE(nota.numero_ingreso::text, ''), '\\D', '', 'g'), '') AS INTEGER))",
+                'max'
+            )
+            .getRawOne();
 
-        const numero = ultimaNote ? parseInt(ultimaNote.numero_ingreso) + 1 : 1;
-        return String(numero).padStart(8, '0');
+        const siguiente = (Number(result?.max) || 0) + 1;
+        return String(siguiente).padStart(8, '0');
     };
 
     // Asegura compatibilidad: si numero_guia sigue en tipo integer, la convierte a varchar.

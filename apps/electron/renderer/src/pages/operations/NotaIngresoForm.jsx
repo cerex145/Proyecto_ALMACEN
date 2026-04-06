@@ -52,14 +52,14 @@ export const NotaIngresoForm = () => {
     const [lastIngresoId, setLastIngresoId] = useState(null);
 
     // Calculator State
-    const [cajas, setCajas] = useState('');
-    const [unidadesCaja, setUnidadesCaja] = useState('');
-    const [fraccion, setFraccion] = useState('');
+    const [cajas, setCajas] = useState(1);
+    const [unidadesCaja, setUnidadesCaja] = useState(1);
+    const [fraccion, setFraccion] = useState(0);
     const [quantity, setQuantity] = useState(0);
     const [quantityManual, setQuantityManual] = useState(false);
 
-    const [bultos, setBultos] = useState('');
-    const [um, setUm] = useState('');
+    const [bultos, setBultos] = useState(1);
+    const [um, setUm] = useState('UND');
     const [fabricante, setFabricante] = useState('');
     const [temperatura, setTemperatura] = useState('25');
 
@@ -77,20 +77,19 @@ export const NotaIngresoForm = () => {
     const [filtroProductosMasivos, setFiltroProductosMasivos] = useState('');
     const [productosBusquedaModal, setProductosBusquedaModal] = useState([]);
     const [buscandoProductos, setBuscandoProductos] = useState(false);
-    const [modoSeleccionProducto, setModoSeleccionProducto] = useState('masivo');
     const [productoDetalleModal, setProductoDetalleModal] = useState(null);
     const [mostrarModalDetalleProducto, setMostrarModalDetalleProducto] = useState(false);
     const [detalleProductoDraft, setDetalleProductoDraft] = useState({
         lote_numero: '',
         fecha_vencimiento: '',
-        um: '',
+        um: 'UND',
         fabricante: '',
         temperatura: '25',
-        cantidad_bultos: 0,
-        cantidad_cajas: 0,
-        cantidad_por_caja: 0,
+        cantidad_bultos: 1,
+        cantidad_cajas: 1,
+        cantidad_por_caja: 1,
         cantidad_fraccion: 0,
-        cantidad_total: 0
+        cantidad_total: 1
     });
     const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
     const [uiError, setUiError] = useState('');
@@ -213,15 +212,15 @@ export const NotaIngresoForm = () => {
         }
         const product = products.find(p => p.id === parseInt(selectedProduct));
         setSelectedLoteId(product?.lote ? 'PRODUCTO_LOTE' : '');
-        setUm(product?.um || '');
+        setUm(product?.um || product?.unidad || 'UND');
         setFabricante(product?.fabricante || '');
         setTemperatura(String(product?.temperatura ?? product?.temperatura_min_c ?? 25));
         setLote(product?.lote || '');
         setVencimiento(normalizarFechaInput(product?.fecha_vencimiento));
-        setBultos(product?.cantidad_bultos ?? '');
-        setCajas(product?.cantidad_cajas ?? '');
-        setUnidadesCaja(product?.cantidad_por_caja ?? '');
-        setFraccion(product?.cantidad_fraccion ?? '');
+        setBultos(product?.cantidad_bultos ?? 1);
+        setCajas(product?.cantidad_cajas ?? 1);
+        setUnidadesCaja(product?.cantidad_por_caja ?? 1);
+        setFraccion(product?.cantidad_fraccion ?? 0);
         setQuantityManual(false);
         setQuantity(0);
         const currentTipo = getValues('tipo_documento');
@@ -437,13 +436,13 @@ export const NotaIngresoForm = () => {
         // Reset fields
         setSelectedProduct('');
         setSelectedLoteId('');
-        setCajas('');
-        setUnidadesCaja('');
-        setFraccion('');
+        setCajas(1);
+        setUnidadesCaja(1);
+        setFraccion(0);
         setQuantity(0);
         setQuantityManual(false);
-        setBultos('');
-        setUm('');
+        setBultos(1);
+        setUm('UND');
         setFabricante('');
         setTemperatura('25');
         setLote('');
@@ -508,17 +507,25 @@ export const NotaIngresoForm = () => {
 
     const abrirModalDetalleProducto = (producto) => {
         setProductoDetalleModal(producto);
+        const cantidadBultos = Number(producto.cantidad_bultos);
+        const cantidadCajas = Number(producto.cantidad_cajas);
+        const cantidadPorCaja = Number(producto.cantidad_por_caja);
+        const cantidadFraccion = Number(producto.cantidad_fraccion);
+        const bultosIniciales = Number.isFinite(cantidadBultos) && cantidadBultos > 0 ? cantidadBultos : 1;
+        const cajasIniciales = Number.isFinite(cantidadCajas) && cantidadCajas > 0 ? cantidadCajas : 1;
+        const unidadesPorCajaIniciales = Number.isFinite(cantidadPorCaja) && cantidadPorCaja > 0 ? cantidadPorCaja : 1;
+        const fraccionInicial = Number.isFinite(cantidadFraccion) && cantidadFraccion >= 0 ? cantidadFraccion : 0;
         setDetalleProductoDraft({
             lote_numero: producto.lote || '',
             fecha_vencimiento: normalizarFechaInput(producto.fecha_vencimiento),
-            um: producto.um || producto.unidad || '',
+            um: producto.um || producto.unidad || 'UND',
             fabricante: producto.fabricante || '',
             temperatura: String(producto.temperatura ?? producto.temperatura_min_c ?? 25),
-            cantidad_bultos: Number(producto.cantidad_bultos || 0),
-            cantidad_cajas: Number(producto.cantidad_cajas || 0),
-            cantidad_por_caja: Number(producto.cantidad_por_caja || 0),
-            cantidad_fraccion: Number(producto.cantidad_fraccion || 0),
-            cantidad_total: 0
+            cantidad_bultos: bultosIniciales,
+            cantidad_cajas: cajasIniciales,
+            cantidad_por_caja: unidadesPorCajaIniciales,
+            cantidad_fraccion: fraccionInicial,
+            cantidad_total: (cajasIniciales * unidadesPorCajaIniciales) + fraccionInicial
         });
         setMostrarModalDetalleProducto(true);
     };
@@ -561,24 +568,10 @@ export const NotaIngresoForm = () => {
 
     const productoSeleccionado = products.find((p) => String(p.id) === String(selectedProduct));
 
-    const abrirModalBusquedaProductos = (modo = 'masivo') => {
-        setModoSeleccionProducto(modo);
+    const abrirModalBusquedaProductos = () => {
         setFiltroProductosMasivos('');
         setProductosBusquedaModal([]);
         setMostrarModalMasivo(true);
-    };
-
-    const seleccionarProductoDesdeModal = (producto) => {
-        setProducts((prev) => {
-            const existe = prev.some((p) => Number(p.id) === Number(producto.id));
-            if (existe) {
-                return prev;
-            }
-            return [...prev, producto];
-        });
-        setSelectedProduct(String(producto.id));
-        setMostrarModalMasivo(false);
-        showSuccess(`Producto seleccionado: ${producto.codigo} - ${producto.descripcion}`);
     };
 
     const handleToggleDetalle = (id) => {
@@ -694,13 +687,13 @@ export const NotaIngresoForm = () => {
         setSelectedLoteId('');
         setLote('');
         setVencimiento('');
-        setCajas('');
-        setUnidadesCaja('');
-        setFraccion('');
+        setCajas(1);
+        setUnidadesCaja(1);
+        setFraccion(0);
         setQuantity(0);
         setQuantityManual(false);
-        setBultos('');
-        setUm('');
+        setBultos(1);
+        setUm('UND');
         setFabricante('');
         setTemperatura('25');
         setLastIngresoId(null);
@@ -1344,10 +1337,10 @@ export const NotaIngresoForm = () => {
                                 <Button
                                     type="button"
                                     variant="secondary"
-                                    onClick={() => abrirModalBusquedaProductos('individual')}
+                                    onClick={() => abrirModalBusquedaProductos()}
                                     className="w-full"
                                 >
-                                    Buscar producto
+                                    Seleccionar productos
                                 </Button>
                             </div>
                         </div>
@@ -1433,7 +1426,7 @@ export const NotaIngresoForm = () => {
                         <div className="flex gap-3 items-center">
                             <Button
                                 type="button"
-                                onClick={() => abrirModalBusquedaProductos('masivo')}
+                                onClick={() => abrirModalBusquedaProductos()}
                                 variant="primary"
                                 className="bg-purple-600 hover:bg-purple-700"
                             >
@@ -1451,7 +1444,7 @@ export const NotaIngresoForm = () => {
                             </Button>
                         </div>
                         <p className="text-xs text-purple-600 mt-2">
-                            💡 Elige productos de la lista, configura bultos/cajas/unidades/fracción y agrégalos al detalle.
+                            💡 Busca por código, abre el detalle del producto y agrégalo con sus cantidades.
                         </p>
                     </div>
 
@@ -1910,14 +1903,14 @@ export const NotaIngresoForm = () => {
                         <div className="p-6">
                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 pb-3 border-b">
                                 <p className="text-sm text-slate-600">
-                                    Seleccione un producto y configure su detalle para agregarlo
+                                    Busque el producto por código y luego añádalo con su detalle
                                 </p>
                                 <input
                                     type="text"
                                     value={filtroProductosMasivos}
                                     onChange={(e) => setFiltroProductosMasivos(e.target.value)}
                                     className="input-premium md:w-80"
-                                    placeholder="Buscar por código o nombre (mínimo 2 caracteres)"
+                                    placeholder="Buscar por código (mínimo 2 caracteres)"
                                 />
                             </div>
 
@@ -1953,17 +1946,11 @@ export const NotaIngresoForm = () => {
                                                 <td className="px-4 py-3 text-center">
                                                     <Button
                                                         type="button"
-                                                        onClick={() => {
-                                                            if (modoSeleccionProducto === 'individual') {
-                                                                seleccionarProductoDesdeModal(producto);
-                                                                return;
-                                                            }
-                                                            abrirModalDetalleProducto(producto);
-                                                        }}
+                                                        onClick={() => abrirModalDetalleProducto(producto)}
                                                         variant="primary"
                                                         className="bg-purple-600 hover:bg-purple-700 text-xs"
                                                     >
-                                                        {modoSeleccionProducto === 'individual' ? 'Seleccionar' : 'Configurar'}
+                                                        Añadir
                                                     </Button>
                                                 </td>
                                             </tr>
