@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -15,6 +15,8 @@ export const HistorialIngresosFuncional = () => {
     const [showForm, setShowForm] = useState(false);
     const [detalleRows, setDetalleRows] = useState([]);
     const [clientesMap, setClientesMap] = useState({});
+    const requestSeqRef = useRef(0);
+    const activeControllerRef = useRef(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -24,6 +26,14 @@ export const HistorialIngresosFuncional = () => {
     useEffect(() => {
         cargarIngresos();
     }, [filtro, clientesMap]);
+
+    useEffect(() => {
+        return () => {
+            if (activeControllerRef.current) {
+                activeControllerRef.current.abort();
+            }
+        };
+    }, []);
 
     const cargarClientes = async () => {
         try {
@@ -43,13 +53,28 @@ export const HistorialIngresosFuncional = () => {
     };
 
     const cargarIngresos = async () => {
+        const requestId = ++requestSeqRef.current;
+        if (activeControllerRef.current) {
+            activeControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        activeControllerRef.current = controller;
+
         try {
             setLoading(true);
             const params = new URLSearchParams();
             if (filtro) params.set('numero_ingreso', filtro);
             params.set('include_detalles', 'true');
-            const response = await fetch(`${API_ORIGIN}/api/ingresos?${params.toString()}`);
+            params.set('limit', '8000');
+            const response = await fetch(`${API_ORIGIN}/api/ingresos?${params.toString()}`, {
+                cache: 'no-store',
+                signal: controller.signal
+            });
+            if (!response.ok) {
+                throw new Error(`Error HTTP ${response.status}`);
+            }
             const result = await response.json();
+            if (requestId !== requestSeqRef.current) return;
             const notas = result.data || [];
             setIngresos(notas);
 
@@ -59,7 +84,7 @@ export const HistorialIngresosFuncional = () => {
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
-                const ruc = clientesMap[String(nota.cliente_id)] || '-';
+                const ruc = nota.cliente_ruc || clientesMap[String(nota.cliente_id)] || '-';
                 const detalles = Array.isArray(nota?.detalles) ? nota.detalles : [];
 
                 if (detalles.length === 0) {
@@ -87,48 +112,42 @@ export const HistorialIngresosFuncional = () => {
                     return;
                 }
 
-                const joinCampo = (mapper) => detalles
-                    .map(mapper)
-                    .filter((v) => v != null && String(v).trim() !== '')
-                    .join(' | ');
+                detalles.forEach((d, index) => {
+                    const min = d.temperatura_min_c ?? d.producto?.temperatura_min_c;
+                    const max = d.temperatura_max_c ?? d.producto?.temperatura_max_c;
 
-                const sumCampo = (mapper) => detalles.reduce((acc, d) => {
-                    const n = Number(mapper(d));
-                    return acc + (Number.isFinite(n) ? n : 0);
-                }, 0);
-
-                rows.push({
-                    key: `${nota.id}`,
-                    ingresoId: nota.id,
-                    codigo: joinCampo((d) => d.producto?.codigo || '-'),
-                    producto: joinCampo((d) => d.producto?.descripcion || '-'),
-                    lote: joinCampo((d) => d.lote_numero || '-'),
-                    vencimiento: joinCampo((d) => d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-'),
-                    um: joinCampo((d) => d.um || d.producto?.unidad_medida || '-'),
-                    fabricante: joinCampo((d) => d.fabricante || d.producto?.fabricante || '-'),
-                    temperatura: joinCampo((d) => {
-                        const min = d.temperatura_min_c ?? d.producto?.temperatura_min_c;
-                        const max = d.temperatura_max_c ?? d.producto?.temperatura_max_c;
-                        return (min != null || max != null) ? `${min ?? '-'} a ${max ?? '-'}` : '-';
-                    }),
-                    cantBulto: sumCampo((d) => d.cantidad_bultos).toFixed(0),
-                    cantCajas: sumCampo((d) => d.cantidad_cajas).toFixed(0),
-                    cantPorCaja: sumCampo((d) => d.cantidad_por_caja).toFixed(0),
-                    cantFraccion: sumCampo((d) => d.cantidad_fraccion).toFixed(0),
-                    cantTotal: sumCampo((d) => d.cantidad_total ?? d.cantidad).toFixed(2),
-                    fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
-                    mes,
-                    dia,
-                    ruc,
-                    anio
+                    rows.push({
+                        key: `${nota.id}-${d.id ?? index}`,
+                        ingresoId: nota.id,
+                        codigo: d.producto?.codigo || '-',
+                        producto: d.producto?.descripcion || '-',
+                        lote: d.lote_numero || '-',
+                        vencimiento: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
+                        um: d.um || d.producto?.unidad_medida || '-',
+                        fabricante: d.fabricante || d.producto?.fabricante || '-',
+                        temperatura: (min != null || max != null) ? `${min ?? '-'} a ${max ?? '-'}` : '-',
+                        cantBulto: Number(d.cantidad_bultos || 0).toFixed(0),
+                        cantCajas: Number(d.cantidad_cajas || 0).toFixed(0),
+                        cantPorCaja: Number(d.cantidad_por_caja || 0).toFixed(0),
+                        cantFraccion: Number(d.cantidad_fraccion || 0).toFixed(0),
+                        cantTotal: Number(d.cantidad_total ?? d.cantidad ?? 0).toFixed(2),
+                        fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
+                        mes,
+                        dia,
+                        ruc,
+                        anio
+                    });
                 });
             });
 
             setDetalleRows(rows);
         } catch (error) {
+            if (error?.name === 'AbortError') return;
+            if (requestId !== requestSeqRef.current) return;
             console.error('Error al cargar ingresos:', error);
             setDetalleRows([]);
         } finally {
+            if (requestId !== requestSeqRef.current) return;
             setLoading(false);
         }
     };
