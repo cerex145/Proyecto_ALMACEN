@@ -1,0 +1,12 @@
+nota_salida_id=25
+numero_salida=00000010
+fecha=2026-04-06
+cliente_ruc=20606511991
+csv_file=salidas_trauma_spine_preparado.csv
+csv_sha1=b82c32db4bd814edd3f6d6c9ddb7bfe9d7cf947c
+total_solicitado_csv=2132.00
+total_despachado_nota=1486.00
+diferencia_exacta=646.00
+codigos_omitidos=2
+codigos_recortados=11
+filas_reporte=13

@@ -1,0 +1,2 @@
+cliente_ruc=20606511991
+productos_stock_cero=447

@@ -2,7 +2,7 @@
 /*
   Importa ingresos desde CSV usando la logica oficial del backend (/api/ingresos).
   - Normaliza fechas y cantidades
-  - Agrupa por codigo+lote para evitar duplicados
+  - Agrupa por codigo+lote+vto(+fecha_ingreso si existe) para evitar duplicados reales
   - Mapea codigo -> producto_id (con normalizaciones basicas)
   - Opcional: crea productos faltantes en Supabase
 */
@@ -29,6 +29,8 @@ const API_BASE = arg('--api', 'http://localhost:3000');
 const AUTO_CREATE_PRODUCTS = has('--auto-create-products');
 const DRY_RUN = has('--dry-run');
 const REPLACE_LAST_IMPORT = has('--replace-last-import');
+const SPLIT_BY_FECHA_INGRESO = has('--split-by-fecha-ingreso');
+const FECHA_INGRESO_PREFER_MDY = !has('--fecha-ingreso-dmy');
 
 if (!process.env.DATABASE_URL) {
   console.error('Falta DATABASE_URL en apps/api/.env');
@@ -96,7 +98,8 @@ function parseNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function toIsoDate(raw) {
+function toIsoDate(raw, options = {}) {
+  const { preferMDY = false } = options;
   const s = String(raw || '').trim();
   if (!s) return '';
 
@@ -125,8 +128,13 @@ function toIsoDate(raw) {
       mo = a;
       d = b;
     } else {
-      d = a;
-      mo = b;
+      if (preferMDY) {
+        mo = a;
+        d = b;
+      } else {
+        d = a;
+        mo = b;
+      }
     }
   } else {
     return '';
@@ -136,6 +144,15 @@ function toIsoDate(raw) {
   return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+function normalizeHeaderKey(v) {
+  return String(v || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
 async function main() {
   const csvRaw = fs.readFileSync(CSV_PATH, 'utf8').replace(/^\uFEFF/, '');
   const sha1 = crypto.createHash('sha1').update(csvRaw).digest('hex');
@@ -143,11 +160,12 @@ async function main() {
   const rows = parseCsv(csvRaw);
   if (rows.length < 2) throw new Error('CSV sin datos');
 
-  const header = rows[0].map((h) => String(h || '').trim().toLowerCase());
+  const header = rows[0].map((h) => normalizeHeaderKey(h));
   const idx = {
     codigo: header.findIndex((h) => h === 'codigo_producto'),
     lote: header.findIndex((h) => h === 'lote'),
     vto: header.findIndex((h) => h === 'fecha_vencimiento'),
+    fechaIngreso: header.findIndex((h) => h === 'fecha de ingreso' || h === 'fecha_ingreso' || h === 'fecha ingreso'),
     total: header.findIndex((h) => h === 'cantidad_total'),
     porCaja: header.findIndex((h) => h === 'cantidad_por_caja' || h === 'sum de cantidad_total')
   };
@@ -159,19 +177,22 @@ async function main() {
   const qtyIdx = idx.total >= 0 ? idx.total : idx.porCaja;
   if (qtyIdx < 0) throw new Error('CSV inválido: falta cantidad_total o SUM de cantidad_total');
 
-  // Agrupar por codigo+lote+vto
+  // Agrupar por codigo+lote+vto(+fecha_ingreso cuando exista) para no mezclar movimientos historicos.
   const grouped = new Map();
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     const codigo = String(r[idx.codigo] || '').trim();
     const lote = String(r[idx.lote] || '').trim();
-    const vto = toIsoDate(r[idx.vto]);
+    const vto = toIsoDate(r[idx.vto], { preferMDY: false });
+    const fechaIngreso = idx.fechaIngreso >= 0
+      ? toIsoDate(r[idx.fechaIngreso], { preferMDY: FECHA_INGRESO_PREFER_MDY })
+      : '';
     const qty = parseNumber(r[qtyIdx]);
 
     if (!codigo || !lote || !vto || qty <= 0) continue;
 
-    const key = `${codigo}|||${lote}|||${vto}`;
-    const prev = grouped.get(key) || { codigo, lote, vto, qty: 0 };
+    const key = `${codigo}|||${lote}|||${vto}|||${fechaIngreso || '_'}`;
+    const prev = grouped.get(key) || { codigo, lote, vto, fechaIngreso, qty: 0 };
     prev.qty += qty;
     grouped.set(key, prev);
   }
@@ -282,6 +303,7 @@ async function main() {
       cantidad: item.qty,
       lote_numero: item.lote,
       fecha_vencimiento: item.vto,
+      fecha_ingreso: item.fechaIngreso || '',
       um: 'UND',
       cantidad_bultos: 1,
       cantidad_cajas: 1,
@@ -291,22 +313,56 @@ async function main() {
     });
   }
 
-  const payload = {
-    fecha: FECHA,
-    ruc_cliente: RUC,
-    observaciones: `Carga masiva por script via API | file=${path.basename(CSV_PATH)} | sha1=${sha1}`,
-    detalles: details
-  };
+  // Construye una o varias notas según fecha de ingreso, alineado al flujo operativo.
+  const notesMap = new Map();
+  for (const d of details) {
+    const noteDate = (SPLIT_BY_FECHA_INGRESO && d.fecha_ingreso) ? d.fecha_ingreso : FECHA;
+    const key = noteDate || FECHA;
+    if (!notesMap.has(key)) notesMap.set(key, []);
+    notesMap.get(key).push({
+      producto_id: d.producto_id,
+      cantidad: d.cantidad,
+      lote_numero: d.lote_numero,
+      fecha_vencimiento: d.fecha_vencimiento,
+      um: d.um,
+      cantidad_bultos: d.cantidad_bultos,
+      cantidad_cajas: d.cantidad_cajas,
+      cantidad_por_caja: d.cantidad_por_caja,
+      cantidad_fraccion: d.cantidad_fraccion,
+      cantidad_total: d.cantidad_total
+    });
+  }
+
+  const payloads = Array.from(notesMap.entries())
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+    .map(([fechaNota, detallesNota]) => ({
+      fecha: fechaNota,
+      ruc_cliente: RUC,
+      observaciones: `Carga masiva por script via API | file=${path.basename(CSV_PATH)} | sha1=${sha1} | fecha_ingreso=${fechaNota}`,
+      detalles: detallesNota
+    }));
+
+  const detallesTotales = payloads.reduce((acc, p) => acc + p.detalles.length, 0);
 
   console.log('Resumen preparación:');
+  const groupedConFechaIngreso = Array.from(grouped.values()).filter((x) => x.fechaIngreso).length;
   console.log({
     source_rows: rows.length - 1,
     grouped_rows: grouped.size,
-    detalles_listos: details.length,
+    grouped_with_fecha_ingreso: groupedConFechaIngreso,
+    detalles_listos: detallesTotales,
+    notas_planificadas: payloads.length,
     unresolved: unresolved.length,
     auto_create_products: AUTO_CREATE_PRODUCTS,
+    split_by_fecha_ingreso: SPLIT_BY_FECHA_INGRESO,
     dry_run: DRY_RUN
   });
+
+  if (payloads.length > 1) {
+    const resumenNotas = payloads.map((p) => ({ fecha: p.fecha, detalles: p.detalles.length }));
+    console.log('Notas planificadas (fecha/detalles):');
+    console.log(resumenNotas);
+  }
 
   if (unresolved.length > 0) {
     console.log('Unresolved preview (primeros 20):');
@@ -318,28 +374,47 @@ async function main() {
     return;
   }
 
-  if (details.length === 0) {
+  if (detallesTotales === 0) {
     await client.end();
     throw new Error('No hay detalles listos para insertar');
   }
 
-  const res = await fetch(`${API_BASE}/api/ingresos`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  const resultados = [];
+  for (const payload of payloads) {
+    const res = await fetch(`${API_BASE}/api/ingresos`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
 
-  const body = await res.json().catch(() => ({}));
-  console.log('API status:', res.status);
-  console.log('API response:', body);
+    const body = await res.json().catch(() => ({}));
+    resultados.push({
+      fecha: payload.fecha,
+      detalles: payload.detalles.length,
+      status: res.status,
+      body
+    });
+
+    if (!res.ok) {
+      console.log('API status:', res.status);
+      console.log('API response:', body);
+      await client.end();
+      process.exit(1);
+    }
+  }
+
+  console.log('Resultado inserción por nota:');
+  console.log(resultados.map((r) => ({
+    fecha: r.fecha,
+    detalles: r.detalles,
+    status: r.status,
+    numero_ingreso: r.body?.data?.numero_ingreso,
+    id: r.body?.data?.id
+  })));
 
   await client.end();
-
-  if (!res.ok) {
-    process.exit(1);
-  }
 }
 
 main().catch((e) => {
