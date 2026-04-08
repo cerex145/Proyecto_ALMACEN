@@ -95,6 +95,7 @@ export const NotaIngresoForm = () => {
     const [filtroProductosMasivos, setFiltroProductosMasivos] = useState('');
     const [productosBusquedaModal, setProductosBusquedaModal] = useState([]);
     const [buscandoProductos, setBuscandoProductos] = useState(false);
+    const [lotesPorProductoModal, setLotesPorProductoModal] = useState({});
     const [productoDetalleModal, setProductoDetalleModal] = useState(null);
     const [mostrarModalDetalleProducto, setMostrarModalDetalleProducto] = useState(false);
     const [detalleProductoDraft, setDetalleProductoDraft] = useState({
@@ -172,6 +173,7 @@ export const NotaIngresoForm = () => {
     useEffect(() => {
         if (!mostrarModalMasivo) {
             setProductosBusquedaModal([]);
+            setLotesPorProductoModal({});
             return;
         }
 
@@ -194,10 +196,61 @@ export const NotaIngresoForm = () => {
                 }
 
                 const response = await productService.getProducts(filtros);
-                setProductosBusquedaModal(Array.isArray(response) ? response : []);
+                const productos = Array.isArray(response) ? response : [];
+                setProductosBusquedaModal(productos);
+
+                const filtrosLotes = {
+                    page: 1,
+                    limit: 2000
+                };
+
+                if (!showAllProducts && selectedClient) {
+                    if (selectedClientRuc) {
+                        filtrosLotes.cliente_ruc = selectedClientRuc;
+                    } else {
+                        filtrosLotes.cliente_id = Number(selectedClient);
+                    }
+                }
+
+                const lotes = await productService.getLotes(filtrosLotes);
+                const lotesArray = Array.isArray(lotes) ? lotes : [];
+
+                const porProducto = lotesArray.reduce((acc, loteItem) => {
+                    const productoId = Number(loteItem?.producto_id);
+                    if (!Number.isFinite(productoId)) {
+                        return acc;
+                    }
+
+                    if (!acc[productoId]) {
+                        acc[productoId] = [];
+                    }
+
+                    acc[productoId].push(loteItem);
+                    return acc;
+                }, {});
+
+                const loteRepresentativo = Object.entries(porProducto).reduce((acc, [productoId, lista]) => {
+                    const ordenados = [...lista].sort((a, b) => {
+                        const aDisp = Number(a?.cantidad_disponible || 0) > 0 ? 1 : 0;
+                        const bDisp = Number(b?.cantidad_disponible || 0) > 0 ? 1 : 0;
+                        if (aDisp !== bDisp) {
+                            return bDisp - aDisp;
+                        }
+
+                        const aFecha = new Date(a?.fecha_vencimiento || '2999-12-31').getTime();
+                        const bFecha = new Date(b?.fecha_vencimiento || '2999-12-31').getTime();
+                        return aFecha - bFecha;
+                    });
+
+                    acc[Number(productoId)] = ordenados[0];
+                    return acc;
+                }, {});
+
+                setLotesPorProductoModal(loteRepresentativo);
             } catch (error) {
                 console.error('Error cargando productos para selector:', error);
                 setProductosBusquedaModal([]);
+                setLotesPorProductoModal({});
                 showError('No se pudo cargar el listado de productos. Intente nuevamente.');
             } finally {
                 setBuscandoProductos(false);
@@ -681,6 +734,19 @@ export const NotaIngresoForm = () => {
         const codigo = normalizarTexto(producto?.codigo || '');
         const nombre = normalizarTexto(producto?.descripcion || producto?.nombre || '');
         return codigo.includes(terminoBusquedaProductos) || nombre.includes(terminoBusquedaProductos);
+    }).map((producto) => {
+        const loteRef = lotesPorProductoModal[Number(producto?.id)] || null;
+        return {
+            ...producto,
+            lote: producto?.lote || loteRef?.numero_lote || '',
+            fecha_vencimiento: producto?.fecha_vencimiento || loteRef?.fecha_vencimiento || null,
+            um: producto?.um || producto?.unidad || loteRef?.producto?.um || '',
+            fabricante: producto?.fabricante || loteRef?.producto?.fabricante || '',
+            cantidad_total: producto?.cantidad_total
+                ?? loteRef?.cantidad_disponible
+                ?? loteRef?.cantidad_ingresada
+                ?? 0
+        };
     });
 
     const productoSeleccionado = products.find((p) => String(p.id) === String(selectedProduct));
