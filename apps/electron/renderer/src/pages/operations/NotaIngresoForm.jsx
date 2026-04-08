@@ -22,6 +22,23 @@ import {
     parseNumber
 } from './notaIngreso.utils';
 
+const buildNuevoProductoState = (defaults = {}) => ({
+    codigo: defaults.codigo || '',
+    descripcion: defaults.descripcion || '',
+    fecha_ingreso: defaults.fecha_ingreso || new Date().toISOString().split('T')[0],
+    lote: defaults.lote || '',
+    fecha_vencimiento: defaults.fecha_vencimiento || '',
+    tipo_documento: defaults.tipo_documento || '',
+    numero_documento: defaults.numero_documento || '',
+    categoria_ingreso: defaults.categoria_ingreso || '',
+    fabricante: defaults.fabricante || '',
+    procedencia: defaults.procedencia || '',
+    unidad: defaults.unidad || 'UND',
+    um: defaults.um || 'UND',
+    temperatura: defaults.temperatura || '25',
+    observaciones: defaults.observaciones || ''
+});
+
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, setValue, getValues, formState: { isSubmitting } } = useForm({
         defaultValues: {
@@ -93,6 +110,9 @@ export const NotaIngresoForm = () => {
         cantidad_total: 1
     });
     const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
+    const [mostrarModalNuevoProducto, setMostrarModalNuevoProducto] = useState(false);
+    const [guardandoNuevoProducto, setGuardandoNuevoProducto] = useState(false);
+    const [nuevoProductoForm, setNuevoProductoForm] = useState(buildNuevoProductoState());
     const [uiError, setUiError] = useState('');
     const [uiSuccess, setUiSuccess] = useState('');
     const selectedClientRuc = normalizarRuc(clienteRuc);
@@ -155,19 +175,14 @@ export const NotaIngresoForm = () => {
             return;
         }
 
-        const termino = filtroProductosMasivos.trim();
-        if (termino.length < 2) {
-            setProductosBusquedaModal([]);
-            return;
-        }
-
-        const timeout = setTimeout(async () => {
+        const cargarListadoModal = async () => {
             try {
                 setBuscandoProductos(true);
                 const filtros = {
-                    busqueda: termino,
                     page: 1,
-                    limit: 100
+                    limit: 1000,
+                    orderBy: 'descripcion',
+                    order: 'ASC'
                 };
 
                 if (!showAllProducts && selectedClient) {
@@ -181,16 +196,16 @@ export const NotaIngresoForm = () => {
                 const response = await productService.getProducts(filtros);
                 setProductosBusquedaModal(Array.isArray(response) ? response : []);
             } catch (error) {
-                console.error('Error buscando productos:', error);
+                console.error('Error cargando productos para selector:', error);
                 setProductosBusquedaModal([]);
-                showError('No se pudo buscar productos. Intente nuevamente.');
+                showError('No se pudo cargar el listado de productos. Intente nuevamente.');
             } finally {
                 setBuscandoProductos(false);
             }
-        }, 300);
+        };
 
-        return () => clearTimeout(timeout);
-    }, [mostrarModalMasivo, filtroProductosMasivos, showAllProducts, selectedClient, selectedClientRuc]);
+        cargarListadoModal();
+    }, [mostrarModalMasivo, showAllProducts, selectedClient, selectedClientRuc]);
 
     useEffect(() => {
         if (!selectedClient) {
@@ -306,6 +321,100 @@ export const NotaIngresoForm = () => {
         } catch (error) {
             console.error('Error cargando productos:', error);
             showError('Error al cargar la lista de productos. Verifique la conexión con el servidor.');
+        }
+    };
+
+    const abrirModalNuevoProducto = () => {
+        if (!selectedClient) {
+            showError('Seleccione primero el cliente para registrar un producto nuevo.');
+            return;
+        }
+
+        const tipoDocumentoActual = getValues('tipo_documento') || '';
+        const numeroDocumentoActual = getValues('numero_documento') || '';
+        setNuevoProductoForm(buildNuevoProductoState({
+            lote,
+            fecha_vencimiento: vencimiento,
+            fabricante,
+            um: um || 'UND',
+            temperatura: String(temperatura || '25'),
+            tipo_documento: tipoDocumentoActual,
+            numero_documento: numeroDocumentoActual
+        }));
+        setMostrarModalNuevoProducto(true);
+    };
+
+    const cerrarModalNuevoProducto = () => {
+        setMostrarModalNuevoProducto(false);
+        setGuardandoNuevoProducto(false);
+    };
+
+    const handleNuevoProductoChange = (field, value) => {
+        setNuevoProductoForm((prev) => ({
+            ...prev,
+            [field]: value
+        }));
+    };
+
+    const guardarNuevoProducto = async () => {
+        const codigo = String(nuevoProductoForm.codigo || '').trim();
+        const descripcion = String(nuevoProductoForm.descripcion || '').trim();
+
+        if (!codigo || !descripcion) {
+            showError('Código y descripción son obligatorios para crear el producto.');
+            return;
+        }
+
+        const temperaturaNumero = Number(nuevoProductoForm.temperatura || 25);
+        if (!Number.isFinite(temperaturaNumero)) {
+            showError('La temperatura debe ser un valor numérico válido.');
+            return;
+        }
+
+        try {
+            setGuardandoNuevoProducto(true);
+            const payload = {
+                codigo,
+                descripcion,
+                cliente_id: Number(selectedClient),
+                cliente_ruc: clienteRuc || null,
+                proveedor: proveedorNombre || null,
+                proveedor_ruc: clienteRuc || null,
+                fecha_ingreso: nuevoProductoForm.fecha_ingreso || null,
+                lote: String(nuevoProductoForm.lote || '').trim() || null,
+                tipo_documento: nuevoProductoForm.tipo_documento || null,
+                numero_documento: nuevoProductoForm.numero_documento || null,
+                categoria_ingreso: nuevoProductoForm.categoria_ingreso || null,
+                fabricante: String(nuevoProductoForm.fabricante || '').trim() || null,
+                procedencia: String(nuevoProductoForm.procedencia || '').trim() || null,
+                unidad: nuevoProductoForm.unidad || 'UND',
+                um: nuevoProductoForm.um || 'UND',
+                temperatura: temperaturaNumero,
+                observaciones: String(nuevoProductoForm.observaciones || '').trim() || null
+            };
+
+            const creado = await productService.createProduct(payload);
+            await loadProducts();
+
+            const nuevoId = creado?.id;
+            if (nuevoId) {
+                setSelectedProduct(String(nuevoId));
+            }
+
+            setSelectedLoteId(payload.lote ? 'PRODUCTO_LOTE' : 'OTRO');
+            setLote(payload.lote || '');
+            setVencimiento(normalizarFechaInput(nuevoProductoForm.fecha_vencimiento) || '');
+            setUm(payload.um || 'UND');
+            setFabricante(payload.fabricante || '');
+            setTemperatura(String(temperaturaNumero));
+            setMostrarModalNuevoProducto(false);
+            showSuccess('Producto creado y listo para agregarlo al detalle de la nota.');
+        } catch (error) {
+            console.error('Error creando producto desde ingreso:', error);
+            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'No se pudo crear el producto.';
+            showError(mensaje);
+        } finally {
+            setGuardandoNuevoProducto(false);
         }
     };
 
@@ -563,15 +672,21 @@ export const NotaIngresoForm = () => {
         showSuccess('Producto guardado con éxito.');
     };
 
-    const productosSeleccionablesModal = filtroProductosMasivos.trim().length >= 2
-        ? productosBusquedaModal
-        : [];
+    const terminoBusquedaProductos = normalizarTexto(filtroProductosMasivos || '');
+    const productosSeleccionablesModal = (productosBusquedaModal || []).filter((producto) => {
+        if (!terminoBusquedaProductos) {
+            return true;
+        }
+
+        const codigo = normalizarTexto(producto?.codigo || '');
+        const nombre = normalizarTexto(producto?.descripcion || producto?.nombre || '');
+        return codigo.includes(terminoBusquedaProductos) || nombre.includes(terminoBusquedaProductos);
+    });
 
     const productoSeleccionado = products.find((p) => String(p.id) === String(selectedProduct));
 
     const abrirModalBusquedaProductos = () => {
         setFiltroProductosMasivos('');
-        setProductosBusquedaModal([]);
         setMostrarModalMasivo(true);
     };
 
@@ -1364,6 +1479,14 @@ export const NotaIngresoForm = () => {
                                 >
                                     Seleccionar productos
                                 </Button>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={abrirModalNuevoProducto}
+                                    className="w-full"
+                                >
+                                    + Nuevo producto
+                                </Button>
                             </div>
                         </div>
                         <div>
@@ -1453,6 +1576,13 @@ export const NotaIngresoForm = () => {
                                 className="bg-purple-600 hover:bg-purple-700"
                             >
                                 Seleccionar productos
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={abrirModalNuevoProducto}
+                                variant="secondary"
+                            >
+                                + Nuevo producto
                             </Button>
                             <Button
                                 type="button"
@@ -1763,6 +1893,189 @@ export const NotaIngresoForm = () => {
                 </div>
             </form>
 
+            {mostrarModalNuevoProducto && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={cerrarModalNuevoProducto}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-blue-700 to-cyan-700 px-6 py-4 text-white flex items-center justify-between rounded-t-2xl">
+                            <div>
+                                <h3 className="text-xl font-bold">Nuevo producto para esta Nota de Ingreso</h3>
+                                <p className="text-sm text-cyan-100">Se crea el producto y queda disponible para agregarlo al detalle.</p>
+                            </div>
+                            <button type="button" onClick={cerrarModalNuevoProducto} className="text-white hover:text-cyan-100">✕</button>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="label-premium">Código de producto *</label>
+                                <input
+                                    type="text"
+                                    value={nuevoProductoForm.codigo}
+                                    onChange={(e) => handleNuevoProductoChange('codigo', e.target.value)}
+                                    className="input-premium"
+                                    placeholder="Ej: PROD-0001"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Descripción *</label>
+                                <input
+                                    type="text"
+                                    value={nuevoProductoForm.descripcion}
+                                    onChange={(e) => handleNuevoProductoChange('descripcion', e.target.value)}
+                                    className="input-premium"
+                                    placeholder="Nombre del producto"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Fecha de ingreso</label>
+                                <input
+                                    type="date"
+                                    value={nuevoProductoForm.fecha_ingreso}
+                                    onChange={(e) => handleNuevoProductoChange('fecha_ingreso', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Lote</label>
+                                <input
+                                    type="text"
+                                    value={nuevoProductoForm.lote}
+                                    onChange={(e) => handleNuevoProductoChange('lote', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Fecha de vencimiento (referencial)</label>
+                                <input
+                                    type="date"
+                                    value={nuevoProductoForm.fecha_vencimiento}
+                                    onChange={(e) => handleNuevoProductoChange('fecha_vencimiento', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Fabricante</label>
+                                <input
+                                    type="text"
+                                    value={nuevoProductoForm.fabricante}
+                                    onChange={(e) => handleNuevoProductoChange('fabricante', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Tipo de documento</label>
+                                <select
+                                    value={nuevoProductoForm.tipo_documento}
+                                    onChange={(e) => handleNuevoProductoChange('tipo_documento', e.target.value)}
+                                    className="input-premium"
+                                >
+                                    <option value="">Seleccione...</option>
+                                    <option value="Factura">Factura</option>
+                                    <option value="Invoice">Invoice</option>
+                                    <option value="Boleta de Venta">Boleta de Venta</option>
+                                    <option value="Guía de Remisión Remitente">Guía de Remisión Remitente</option>
+                                    <option value="Guía de Remisión Transportista">Guía de Remisión Transportista</option>
+                                    <option value="Orden de Compra">Orden de Compra</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label-premium">Número de documento</label>
+                                <input
+                                    type="text"
+                                    value={nuevoProductoForm.numero_documento}
+                                    onChange={(e) => handleNuevoProductoChange('numero_documento', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Categoría ingreso</label>
+                                <select
+                                    value={nuevoProductoForm.categoria_ingreso}
+                                    onChange={(e) => handleNuevoProductoChange('categoria_ingreso', e.target.value)}
+                                    className="input-premium"
+                                >
+                                    <option value="">Seleccione...</option>
+                                    <option value="IMPORTACION">IMPORTACION</option>
+                                    <option value="COMPRA_LOCAL">COMPRA LOCAL</option>
+                                    <option value="TRASLADO">TRASLADO</option>
+                                    <option value="DEVOLUCION">DEVOLUCION</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label-premium">Procedencia</label>
+                                <input
+                                    type="text"
+                                    value={nuevoProductoForm.procedencia}
+                                    onChange={(e) => handleNuevoProductoChange('procedencia', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Unidad</label>
+                                <select
+                                    value={nuevoProductoForm.unidad}
+                                    onChange={(e) => handleNuevoProductoChange('unidad', e.target.value)}
+                                    className="input-premium"
+                                >
+                                    <option value="UND">UND</option>
+                                    <option value="OTRO">OTRO</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label-premium">UM</label>
+                                <select
+                                    value={nuevoProductoForm.um}
+                                    onChange={(e) => handleNuevoProductoChange('um', e.target.value)}
+                                    className="input-premium"
+                                >
+                                    <option value=""></option>
+                                    <option value="AMP">AMP</option>
+                                    <option value="FRS">FRS</option>
+                                    <option value="BLT">BLT</option>
+                                    <option value="TUB">TUB</option>
+                                    <option value="SOB">SOB</option>
+                                    <option value="CJ">CJ</option>
+                                    <option value="KG">KG</option>
+                                    <option value="G">G</option>
+                                    <option value="UND">UND</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label-premium">Temperatura maxima (°C)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={nuevoProductoForm.temperatura}
+                                    onChange={(e) => handleNuevoProductoChange('temperatura', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Observaciones</label>
+                                <textarea
+                                    value={nuevoProductoForm.observaciones}
+                                    onChange={(e) => handleNuevoProductoChange('observaciones', e.target.value)}
+                                    className="input-premium min-h-24"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 border-t flex flex-wrap justify-end gap-3">
+                            <Button type="button" variant="secondary" onClick={cerrarModalNuevoProducto}>
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={guardarNuevoProducto}
+                                isLoading={guardandoNuevoProducto}
+                                className="btn-gradient-primary"
+                            >
+                                Guardar producto y continuar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Modal de Importación CSV - Simplificado */}
             {mostrarModalImportacion && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setMostrarModalImportacion(false)}>
@@ -1784,7 +2097,7 @@ export const NotaIngresoForm = () => {
                             </div>
                         </div>
 
-                        <div className="p-6 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 140px)' }}>
+                        <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(85vh-140px)]">
                             {/* Instrucciones Compactas */}
                             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-lg">
                                 <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
@@ -1912,14 +2225,24 @@ export const NotaIngresoForm = () => {
                                 </svg>
                                 Selección de Productos ({productosSeleccionablesModal.length})
                             </h3>
-                            <button
-                                onClick={() => setMostrarModalMasivo(false)}
-                                className="text-white hover:text-purple-200 transition-colors"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    onClick={abrirModalNuevoProducto}
+                                    className="bg-white/20 hover:bg-white/30 text-white border border-white/30"
+                                >
+                                    + Agregar producto
+                                </Button>
+                                <button
+                                    onClick={() => setMostrarModalMasivo(false)}
+                                    className="text-white hover:text-purple-200 transition-colors"
+                                    title="Cerrar"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         <div className="p-6">
@@ -1932,7 +2255,7 @@ export const NotaIngresoForm = () => {
                                     value={filtroProductosMasivos}
                                     onChange={(e) => setFiltroProductosMasivos(e.target.value)}
                                     className="input-premium md:w-80"
-                                    placeholder="Buscar por código (mínimo 2 caracteres)"
+                                    placeholder="Filtrar por código o nombre"
                                 />
                             </div>
 
@@ -1977,10 +2300,10 @@ export const NotaIngresoForm = () => {
                                                 </td>
                                             </tr>
                                         ))}
-                                        {!buscandoProductos && filtroProductosMasivos.trim().length < 2 && (
+                                        {!buscandoProductos && productosSeleccionablesModal.length === 0 && (
                                             <tr>
                                                 <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                                                    Escriba al menos 2 caracteres para buscar productos.
+                                                    No se encontraron productos para el filtro ingresado.
                                                 </td>
                                             </tr>
                                         )}
@@ -1988,13 +2311,6 @@ export const NotaIngresoForm = () => {
                                             <tr>
                                                 <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
                                                     Buscando productos...
-                                                </td>
-                                            </tr>
-                                        )}
-                                        {!buscandoProductos && filtroProductosMasivos.trim().length >= 2 && productosSeleccionablesModal.length === 0 && (
-                                            <tr>
-                                                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                                                    No se encontraron productos para la búsqueda ingresada.
                                                 </td>
                                             </tr>
                                         )}

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 // Pages
-import ProductoList from './pages/inventory/ProductoList';
 import InventarioGeneral from './pages/inventory/InventarioGeneral';
 import { NotaIngresoForm } from './pages/operations/NotaIngresoForm';
 import { ActaRecepcionForm } from './pages/operations/ActaRecepcionForm';
@@ -27,7 +26,7 @@ function App() {
       <MainLayout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/productos" element={<ProductoList />} />
+          <Route path="/productos" element={<Navigate to="/ingresos/nuevo" replace />} />
           <Route path="/inventario" element={<InventarioGeneral />} />
           <Route path="/clientes/registro" element={<ClienteListForm />} />
 
