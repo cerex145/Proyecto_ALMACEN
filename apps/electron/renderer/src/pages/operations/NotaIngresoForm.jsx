@@ -111,6 +111,23 @@ export const NotaIngresoForm = () => {
         cantidad_total: 1
     });
     const [mostrarModalMasivo, setMostrarModalMasivo] = useState(false);
+    const [mostrarModalEditarCliente, setMostrarModalEditarCliente] = useState(false);
+    const [guardandoCliente, setGuardandoCliente] = useState(false);
+    const [clienteDraft, setClienteDraft] = useState({
+        id: null,
+        codigo: '',
+        razon_social: '',
+        cuit: '',
+        persona_contacto: '',
+        telefono: '',
+        email: '',
+        direccion: '',
+        distrito: '',
+        provincia: '',
+        departamento: '',
+        categoria_riesgo: 'Bajo',
+        estado: 'Activo'
+    });
     const [mostrarModalNuevoProducto, setMostrarModalNuevoProducto] = useState(false);
     const [guardandoNuevoProducto, setGuardandoNuevoProducto] = useState(false);
     const [nuevoProductoForm, setNuevoProductoForm] = useState(buildNuevoProductoState());
@@ -395,6 +412,80 @@ export const NotaIngresoForm = () => {
             numero_documento: numeroDocumentoActual
         }));
         setMostrarModalNuevoProducto(true);
+    };
+
+    const abrirModalEditarCliente = () => {
+        if (!selectedClient) {
+            showError('Seleccione un cliente para editar.');
+            return;
+        }
+
+        const cliente = clients.find((c) => String(c.id) === String(selectedClient));
+        if (!cliente) {
+            showError('No se encontró el cliente seleccionado.');
+            return;
+        }
+
+        setClienteDraft({
+            id: cliente.id,
+            codigo: cliente.codigo || '',
+            razon_social: cliente.razon_social || '',
+            cuit: cliente.cuit || '',
+            persona_contacto: cliente.persona_contacto || '',
+            telefono: cliente.telefono || '',
+            email: cliente.email || '',
+            direccion: cliente.direccion || '',
+            distrito: cliente.distrito || '',
+            provincia: cliente.provincia || '',
+            departamento: cliente.departamento || '',
+            categoria_riesgo: cliente.categoria_riesgo || 'Bajo',
+            estado: cliente.estado || 'Activo'
+        });
+        setMostrarModalEditarCliente(true);
+    };
+
+    const handleClienteDraftChange = (field, value) => {
+        setClienteDraft((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const guardarEdicionCliente = async () => {
+        if (!clienteDraft.id) {
+            showError('No se pudo identificar el cliente a editar.');
+            return;
+        }
+
+        if (!String(clienteDraft.codigo || '').trim() || !String(clienteDraft.razon_social || '').trim() || !String(clienteDraft.cuit || '').trim()) {
+            showError('Código, razón social y RUC son obligatorios para editar el cliente.');
+            return;
+        }
+
+        try {
+            setGuardandoCliente(true);
+            await clientesService.actualizar(clienteDraft.id, {
+                codigo: String(clienteDraft.codigo || '').trim(),
+                razon_social: String(clienteDraft.razon_social || '').trim(),
+                cuit: String(clienteDraft.cuit || '').trim(),
+                persona_contacto: String(clienteDraft.persona_contacto || '').trim() || null,
+                direccion: String(clienteDraft.direccion || '').trim() || null,
+                distrito: String(clienteDraft.distrito || '').trim() || null,
+                provincia: String(clienteDraft.provincia || '').trim() || null,
+                departamento: String(clienteDraft.departamento || '').trim() || null,
+                categoria_riesgo: clienteDraft.categoria_riesgo || 'Bajo',
+                estado: clienteDraft.estado || 'Activo',
+                telefono: String(clienteDraft.telefono || '').trim() || null,
+                email: String(clienteDraft.email || '').trim() || null
+            });
+
+            await loadData();
+            setMostrarModalEditarCliente(false);
+            showSuccess('Cliente actualizado correctamente.');
+        } catch (error) {
+            console.error('Error actualizando cliente:', error);
+            const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'No se pudo actualizar el cliente.';
+            showError(mensaje);
+        } finally {
+            setGuardandoCliente(false);
+        }
     };
 
     const cerrarModalNuevoProducto = () => {
@@ -1509,6 +1600,15 @@ export const NotaIngresoForm = () => {
                                     </option>
                                 ))}
                             </select>
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={abrirModalEditarCliente}
+                                disabled={!selectedClient}
+                                className="mt-2 w-full"
+                            >
+                                Editar cliente seleccionado
+                            </Button>
                         </div>
                         <div>
                             <label className="label-premium">RUC de Cliente</label>
@@ -2136,6 +2236,86 @@ export const NotaIngresoForm = () => {
                                 className="btn-gradient-primary"
                             >
                                 Guardar producto y continuar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {mostrarModalEditarCliente && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setMostrarModalEditarCliente(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-gradient-to-r from-emerald-700 to-teal-700 px-6 py-4 text-white flex items-center justify-between rounded-t-2xl">
+                            <h3 className="text-xl font-bold">Editar Cliente</h3>
+                            <button type="button" onClick={() => setMostrarModalEditarCliente(false)} className="text-white hover:text-emerald-100">✕</button>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="label-premium">Código *</label>
+                                <input type="text" value={clienteDraft.codigo} onChange={(e) => handleClienteDraftChange('codigo', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">RUC *</label>
+                                <input type="text" value={clienteDraft.cuit} onChange={(e) => handleClienteDraftChange('cuit', e.target.value)} className="input-premium" />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Razón social *</label>
+                                <input type="text" value={clienteDraft.razon_social} onChange={(e) => handleClienteDraftChange('razon_social', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Contacto</label>
+                                <input type="text" value={clienteDraft.persona_contacto} onChange={(e) => handleClienteDraftChange('persona_contacto', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Teléfono</label>
+                                <input type="text" value={clienteDraft.telefono} onChange={(e) => handleClienteDraftChange('telefono', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Email</label>
+                                <input type="email" value={clienteDraft.email} onChange={(e) => handleClienteDraftChange('email', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Dirección</label>
+                                <input type="text" value={clienteDraft.direccion} onChange={(e) => handleClienteDraftChange('direccion', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Distrito</label>
+                                <input type="text" value={clienteDraft.distrito} onChange={(e) => handleClienteDraftChange('distrito', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Provincia</label>
+                                <input type="text" value={clienteDraft.provincia} onChange={(e) => handleClienteDraftChange('provincia', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Departamento</label>
+                                <input type="text" value={clienteDraft.departamento} onChange={(e) => handleClienteDraftChange('departamento', e.target.value)} className="input-premium" />
+                            </div>
+                            <div>
+                                <label className="label-premium">Categoría riesgo</label>
+                                <select value={clienteDraft.categoria_riesgo} onChange={(e) => handleClienteDraftChange('categoria_riesgo', e.target.value)} className="input-premium">
+                                    <option value="Bajo">Bajo</option>
+                                    <option value="Alto">Alto</option>
+                                    <option value="No verificado">No verificado</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label-premium">Estado</label>
+                                <select value={clienteDraft.estado} onChange={(e) => handleClienteDraftChange('estado', e.target.value)} className="input-premium">
+                                    <option value="Activo">Activo</option>
+                                    <option value="Inactivo">Inactivo</option>
+                                    <option value="Potencial">Potencial</option>
+                                    <option value="Bloqueado">Bloqueado</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="px-6 py-4 border-t flex flex-wrap justify-end gap-3">
+                            <Button type="button" variant="secondary" onClick={() => setMostrarModalEditarCliente(false)}>
+                                Cancelar
+                            </Button>
+                            <Button type="button" onClick={guardarEdicionCliente} isLoading={guardandoCliente} className="btn-gradient-primary">
+                                Guardar cambios
                             </Button>
                         </div>
                     </div>
