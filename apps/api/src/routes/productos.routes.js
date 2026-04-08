@@ -489,15 +489,6 @@ async function productoRoutes(fastify, options) {
             });
         }
 
-        // Verificar código único
-        const existente = await productoRepo.findOneBy({ codigo });
-        if (existente) {
-            return reply.status(400).send({
-                success: false,
-                error: 'El código ya existe'
-            });
-        }
-
         // Validar categoría si se proporciona
         const categoriasValidas = categoriaIngresoValues;
         if (categoria_ingreso && !categoriasValidas.includes(categoria_ingreso)) {

@@ -12,11 +12,9 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
 
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [codigoExistente, setCodigoExistente] = useState(null);
     const [mensajeFormulario, setMensajeFormulario] = useState('');
 
     const unidadSeleccionada = watch('unidad');
-    const codigoProducto = watch('codigo');
 
     const normalizarTexto = (valor = '') =>
         String(valor)
@@ -97,57 +95,8 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
         }
     }, [productToEdit, clients, setValue]);
 
-    useEffect(() => {
-        if (productToEdit?.id) {
-            setCodigoExistente(null);
-            setMensajeFormulario('');
-            return;
-        }
-
-        const codigo = String(codigoProducto || '').trim();
-        if (!codigo) {
-            setCodigoExistente(null);
-            setMensajeFormulario('');
-            return;
-        }
-
-        const timer = setTimeout(async () => {
-            try {
-                const productos = await productService.getProducts({ busqueda: codigo, limit: 20, page: 1 });
-                const existente = (productos || []).find(
-                    (p) => String(p.codigo || '').toLowerCase() === codigo.toLowerCase()
-                );
-
-                if (existente) {
-                    setCodigoExistente(existente);
-                    setMensajeFormulario('Este código ya existe. Se autocompletaron datos base del producto; registra otro código para crear uno nuevo.');
-
-                    if (!String(getValues('descripcion') || '').trim()) setValue('descripcion', existente.descripcion || '');
-                    if (!String(getValues('proveedor') || '').trim()) setValue('proveedor', existente.proveedor || '');
-                    if (!String(getValues('fabricante') || '').trim()) setValue('fabricante', existente.fabricante || '');
-                    if (!String(getValues('procedencia') || '').trim()) setValue('procedencia', existente.procedencia || '');
-                    if (!String(getValues('unidad') || '').trim()) setValue('unidad', existente.unidad || 'UND');
-                    if (!String(getValues('um') || '').trim()) setValue('um', existente.um || '');
-                } else {
-                    setCodigoExistente(null);
-                    setMensajeFormulario('');
-                }
-            } catch (error) {
-                console.error('Error validando código de producto:', error);
-            }
-        }, 350);
-
-        return () => clearTimeout(timer);
-    }, [codigoProducto, productToEdit?.id, getValues, setValue]);
-
-
     const onSubmit = async (data) => {
         try {
-            if (!productToEdit?.id && codigoExistente) {
-                alert('El código de producto ya existe. Usa otro código para crear uno nuevo.');
-                return;
-            }
-
             const payload = {
                 ...data,
                 cliente_id: data.cliente_id ? Number(data.cliente_id) : null,
@@ -179,11 +128,7 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
         } catch (error) {
             console.error(error);
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'Error al guardar producto';
-            if (String(mensaje).toLowerCase().includes('código ya existe') || String(mensaje).toLowerCase().includes('codigo ya existe')) {
-                alert('Dicho producto ya existe (código duplicado). Usa otro código.');
-            } else {
-                alert(mensaje);
-            }
+            alert(mensaje);
         }
     };
 
