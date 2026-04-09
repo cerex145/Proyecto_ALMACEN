@@ -39,6 +39,23 @@ const buildNuevoProductoState = (defaults = {}) => ({
     observaciones: defaults.observaciones || ''
 });
 
+const getProductoNombreVisible = (producto) => (
+    (() => {
+        const descripcion = String(producto?.descripcion || producto?.nombre || producto?.producto_nombre || '').trim();
+        const codigo = String(producto?.codigo || producto?.producto_codigo || '').trim();
+        if (descripcion && codigo && descripcion.toUpperCase() === codigo.toUpperCase()) {
+            return '';
+        }
+        return descripcion || '';
+    })()
+);
+
+const getProductoCodigoVisible = (producto) => (
+    producto?.codigo
+    || producto?.producto_codigo
+    || '-'
+);
+
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, setValue, getValues, formState: { isSubmitting } } = useForm({
         defaultValues: {
@@ -302,7 +319,7 @@ export const NotaIngresoForm = () => {
         setFabricante(product?.fabricante || '');
         setTemperatura(String(product?.temperatura ?? product?.temperatura_min_c ?? 25));
         setLote(product?.lote || '');
-        setVencimiento(normalizarFechaInput(product?.fecha_vencimiento));
+        setVencimiento(normalizarFechaInput(product?.fecha_vencimiento || product?.proximo_vencimiento));
         setBultos(product?.cantidad_bultos ?? 1);
         setCajas(product?.cantidad_cajas ?? 1);
         setUnidadesCaja(product?.cantidad_por_caja ?? 1);
@@ -344,12 +361,23 @@ export const NotaIngresoForm = () => {
                         normalized.unshift({
                             id: 'PRODUCTO_LOTE',
                             numero_lote: product.lote,
-                            fecha_vencimiento: product.fecha_vencimiento || null,
+                            fecha_vencimiento: product.fecha_vencimiento || product.proximo_vencimiento || null,
                             cantidad_ingresada: product.cantidad_total ?? null,
                             cantidad_disponible: product.stock_actual ?? null
                         });
                     }
                 }
+
+                const loteCoincidente = normalized.find((l) => String(l.numero_lote || '').trim() === String(product?.lote || '').trim())
+                    || (normalized.length === 1 ? normalized[0] : null);
+
+                if (loteCoincidente) {
+                    setSelectedLoteId(String(loteCoincidente.id));
+                    setLote(loteCoincidente.numero_lote || '');
+                    setVencimiento(normalizarFechaInput(loteCoincidente.fecha_vencimiento || product?.fecha_vencimiento || product?.proximo_vencimiento));
+                    setFabricante(product?.fabricante || loteCoincidente.producto?.fabricante || '');
+                }
+
                 setLotesDisponibles(normalized);
             } catch (error) {
                 console.error('Error cargando lotes:', error);
@@ -817,6 +845,29 @@ export const NotaIngresoForm = () => {
     };
 
     const terminoBusquedaProductos = normalizarTexto(filtroProductosMasivos || '');
+    const canonicoPorCodigoModal = (productosBusquedaModal || []).reduce((acc, item) => {
+        const codigo = String(item?.codigo || '').trim();
+        if (!codigo) return acc;
+
+        const descripcion = String(item?.descripcion || item?.nombre || '').trim();
+        const fabricante = String(item?.fabricante || '').trim();
+        const umValor = String(item?.um || item?.unidad || '').trim();
+        const nombreValido = descripcion && descripcion.toUpperCase() !== codigo.toUpperCase();
+
+        const score = (nombreValido ? 50 : 0) + (fabricante ? 20 : 0) + (umValor ? 10 : 0) + (descripcion.length > codigo.length ? 10 : 0);
+        const current = acc[codigo];
+        if (!current || score > current._score) {
+            acc[codigo] = {
+                descripcion,
+                fabricante,
+                um: umValor,
+                _score: score
+            };
+        }
+
+        return acc;
+    }, {});
+
     const productosSeleccionablesModal = (productosBusquedaModal || []).filter((producto) => {
         if (!terminoBusquedaProductos) {
             return true;
@@ -827,18 +878,26 @@ export const NotaIngresoForm = () => {
         return codigo.includes(terminoBusquedaProductos) || nombre.includes(terminoBusquedaProductos);
     }).map((producto) => {
         const loteRef = lotesPorProductoModal[Number(producto?.id)] || null;
+        const loteVisible = String(producto?.lote || loteRef?.numero_lote || '').trim();
+        const codigo = String(producto?.codigo || '').trim();
+        const canonico = canonicoPorCodigoModal[codigo] || {};
+        const nombreVisible = getProductoNombreVisible(producto) || canonico.descripcion || codigo || '-';
+        const fabricanteVisible = producto?.fabricante || loteRef?.producto?.fabricante || canonico.fabricante || '';
+        const umVisible = producto?.um || producto?.unidad || loteRef?.producto?.um || canonico.um || '';
         return {
             ...producto,
-            lote: producto?.lote || loteRef?.numero_lote || '',
-            fecha_vencimiento: producto?.fecha_vencimiento || loteRef?.fecha_vencimiento || null,
-            um: producto?.um || producto?.unidad || loteRef?.producto?.um || '',
-            fabricante: producto?.fabricante || loteRef?.producto?.fabricante || '',
+            nombre_visible: nombreVisible,
+            codigo_visible: getProductoCodigoVisible(producto),
+            lote: loteVisible,
+            fecha_vencimiento: loteRef?.fecha_vencimiento || producto?.fecha_vencimiento || null,
+            um: umVisible,
+            fabricante: fabricanteVisible,
             cantidad_total: producto?.cantidad_total
                 ?? loteRef?.cantidad_disponible
                 ?? loteRef?.cantidad_ingresada
                 ?? 0
         };
-    });
+    }).filter((producto) => Boolean(String(producto.lote || '').trim()));
 
     const productoSeleccionado = products.find((p) => String(p.id) === String(selectedProduct));
 
@@ -1632,7 +1691,7 @@ export const NotaIngresoForm = () => {
                             <label className="label-premium">Producto</label>
                             <div className="space-y-2">
                                 <input
-                                    value={productoSeleccionado ? `${productoSeleccionado.codigo} - ${productoSeleccionado.descripcion}` : ''}
+                                    value={productoSeleccionado ? `${getProductoNombreVisible(productoSeleccionado)} - ${getProductoCodigoVisible(productoSeleccionado)}` : ''}
                                     readOnly
                                     className="input-premium"
                                     placeholder="Buscar y seleccionar producto"
@@ -1666,7 +1725,7 @@ export const NotaIngresoForm = () => {
                                 <option value="">Seleccione lote...</option>
                                 {lotesDisponibles.map((l) => (
                                     <option key={l.id} value={l.id}>
-                                        {l.numero_lote}
+                                        {l.numero_lote}{l.fecha_vencimiento ? ` - ${new Date(l.fecha_vencimiento).toLocaleDateString('es-PE')}` : ''}
                                     </option>
                                 ))}
                                 <option value="OTRO">Otro (manual)</option>
@@ -2525,8 +2584,8 @@ export const NotaIngresoForm = () => {
                                                 key={producto.id}
                                                 className="border-b hover:bg-purple-50 transition-colors"
                                             >
-                                                <td className="px-4 py-3 font-mono text-xs">{producto.codigo}</td>
-                                                <td className="px-4 py-3">{producto.descripcion}</td>
+                                                <td className="px-4 py-3 font-mono text-xs">{producto.codigo_visible || producto.codigo}</td>
+                                                <td className="px-4 py-3">{producto.nombre_visible || producto.descripcion}</td>
                                                 <td className="px-4 py-3 font-mono text-xs">{producto.lote || '-'}</td>
                                                 <td className="px-4 py-3 text-xs">
                                                     {producto.fecha_vencimiento ? new Date(producto.fecha_vencimiento).toLocaleDateString() : '-'}

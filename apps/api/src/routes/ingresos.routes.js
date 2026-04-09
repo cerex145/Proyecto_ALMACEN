@@ -173,6 +173,151 @@ async function ingresosRoutes(fastify, options) {
         return `guia-${String(siguienteNumero).padStart(7, '0')}`;
     };
 
+    const enriquecerDetallesConLotes = async (notaId, detalles = []) => {
+        if (!Array.isArray(detalles) || detalles.length === 0) {
+            return [];
+        }
+
+        const norm = (value) => String(value || '').trim();
+        const productoCodes = [...new Set(
+            detalles
+                .map((d) => norm(d?.producto?.codigo || d?.producto_codigo))
+                .filter(Boolean)
+        )];
+
+        const productosCanonicosRows = productoCodes.length > 0
+            ? await productoRepo
+                .createQueryBuilder('p')
+                .select([
+                    'p.id AS id',
+                    'p.codigo AS codigo',
+                    'p.descripcion AS descripcion',
+                    'p.fabricante AS fabricante',
+                    'p.um AS um',
+                    'p.unidad_medida AS unidad_medida',
+                    'p.updated_at AS updated_at',
+                    'p.created_at AS created_at'
+                ])
+                .where('p.codigo IN (:...codes)', { codes: productoCodes })
+                .getRawMany()
+            : [];
+
+        const qualityScore = (row) => {
+            const code = norm(row?.codigo);
+            const desc = norm(row?.descripcion);
+            const fab = norm(row?.fabricante);
+            const unidad = norm(row?.um || row?.unidad_medida);
+            let score = 0;
+
+            if (desc && desc.toUpperCase() !== code.toUpperCase()) score += 50;
+            if (desc.length > code.length) score += 10;
+            if (fab) score += 20;
+            if (unidad) score += 10;
+            return score;
+        };
+
+        const canonicoPorCodigo = new Map();
+        for (const row of productosCanonicosRows) {
+            const code = norm(row?.codigo);
+            if (!code) continue;
+
+            const current = canonicoPorCodigo.get(code);
+            if (!current) {
+                canonicoPorCodigo.set(code, row);
+                continue;
+            }
+
+            const currentScore = qualityScore(current);
+            const nextScore = qualityScore(row);
+            const currentDate = new Date(current.updated_at || current.created_at || 0).getTime();
+            const nextDate = new Date(row.updated_at || row.created_at || 0).getTime();
+
+            if (nextScore > currentScore || (nextScore === currentScore && nextDate > currentDate)) {
+                canonicoPorCodigo.set(code, row);
+            }
+        }
+
+        const lotesPorNotaRaw = await loteRepo
+            .createQueryBuilder('lote')
+            .select('lote.producto_id', 'producto_id')
+            .addSelect('lote.numero_lote', 'numero_lote')
+            .addSelect('MAX(lote.id)', 'lote_id')
+            .addSelect('MAX(lote.fecha_vencimiento)', 'fecha_vencimiento')
+            .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
+            .where('lote.nota_ingreso_id = :notaId', { notaId: Number(notaId) })
+            .groupBy('lote.producto_id')
+            .addGroupBy('lote.numero_lote')
+            .getRawMany();
+
+        const productoIds = [...new Set(detalles.map((d) => Number(d.producto_id)).filter(Number.isFinite))];
+        const lotesNumeros = [...new Set(detalles.map((d) => String(d.lote_numero || '')).filter((v) => v !== ''))];
+
+        const lotesFallbackRaw = (productoIds.length > 0 && lotesNumeros.length > 0)
+            ? await loteRepo
+                .createQueryBuilder('lote')
+                .select('lote.producto_id', 'producto_id')
+                .addSelect('lote.numero_lote', 'numero_lote')
+                .addSelect('MAX(lote.id)', 'lote_id')
+                .addSelect('MAX(lote.fecha_vencimiento)', 'fecha_vencimiento')
+                .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
+                .where('lote.producto_id IN (:...productoIds)', { productoIds })
+                .andWhere('lote.numero_lote IN (:...lotes)', { lotes: lotesNumeros })
+                .groupBy('lote.producto_id')
+                .addGroupBy('lote.numero_lote')
+                .getRawMany()
+            : [];
+
+        const mapNota = new Map();
+        for (const row of lotesPorNotaRaw) {
+            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
+            mapNota.set(key, {
+                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
+                fecha_vencimiento: row.fecha_vencimiento || null,
+                cantidad_disponible: Number(row.cantidad_disponible || 0)
+            });
+        }
+
+        const mapFallback = new Map();
+        for (const row of lotesFallbackRaw) {
+            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
+            mapFallback.set(key, {
+                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
+                fecha_vencimiento: row.fecha_vencimiento || null,
+                cantidad_disponible: Number(row.cantidad_disponible || 0)
+            });
+        }
+
+        return detalles.map((det) => {
+            const key = `${Number(det.producto_id)}__${String(det.lote_numero || '')}`;
+            const referencia = mapNota.get(key) || mapFallback.get(key);
+            const cantidadInicial = Number(det.cantidad_total || det.cantidad || 0);
+            const producto = det.producto || {};
+            const codigo = norm(det.producto_codigo || producto.codigo);
+            const canonico = canonicoPorCodigo.get(codigo);
+            const nombreActual = norm(det.producto_nombre || producto.descripcion || producto.nombre);
+            const codigoUpper = codigo.toUpperCase();
+            const nombreEsCodigo = nombreActual && codigo && nombreActual.toUpperCase() === codigoUpper;
+            const nombreCanonico = norm(canonico?.descripcion);
+            const fabricanteCanonico = norm(canonico?.fabricante);
+            const umCanonico = norm(canonico?.um || canonico?.unidad_medida);
+
+            return {
+                ...det,
+                producto_codigo: codigo || null,
+                producto_nombre: nombreEsCodigo
+                    ? (nombreCanonico && nombreCanonico.toUpperCase() !== codigoUpper ? nombreCanonico : nombreActual || null)
+                    : (nombreActual || (nombreCanonico && nombreCanonico.toUpperCase() !== codigoUpper ? nombreCanonico : null)),
+                fabricante: det.fabricante || producto.fabricante || fabricanteCanonico || null,
+                um: det.um || producto.um || producto.unidad_medida || producto.unidad || umCanonico || null,
+                fecha_vencimiento: det.fecha_vencimiento || referencia?.fecha_vencimiento || null,
+                nota_ingreso_id: Number(notaId),
+                lote_id: referencia?.lote_id || null,
+                cantidad_inicial: cantidadInicial,
+                cantidad_disponible: Math.max(0, Number(referencia?.cantidad_disponible || 0))
+            };
+        });
+    };
+
 
     // GET /api/ingresos - Listar notas de ingreso
     fastify.get('/api/ingresos', {
@@ -303,6 +448,14 @@ async function ingresosRoutes(fastify, options) {
 
         const [notas, total] = await queryBuilder.getManyAndCount();
 
+        if (include_detalles) {
+            for (const nota of notas) {
+                if (Array.isArray(nota.detalles) && nota.detalles.length > 0) {
+                    nota.detalles = await enriquecerDetallesConLotes(nota.id, nota.detalles);
+                }
+            }
+        }
+
         return {
             success: true,
             data: notas,
@@ -353,69 +506,7 @@ async function ingresosRoutes(fastify, options) {
             };
         }
 
-        // Mapa de lotes por nota (preferido) y fallback por producto+lote (datos históricos sin nota_ingreso_id)
-        const lotesPorNotaRaw = await loteRepo
-            .createQueryBuilder('lote')
-            .select('lote.producto_id', 'producto_id')
-            .addSelect('lote.numero_lote', 'numero_lote')
-            .addSelect('MAX(lote.id)', 'lote_id')
-            .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
-            .where('lote.nota_ingreso_id = :notaId', { notaId: Number(id) })
-            .groupBy('lote.producto_id')
-            .addGroupBy('lote.numero_lote')
-            .getRawMany();
-
-        const productoIds = [...new Set(detalles.map((d) => Number(d.producto_id)).filter(Number.isFinite))];
-        const lotesNumeros = [...new Set(detalles.map((d) => String(d.lote_numero || '')).filter((v) => v !== ''))];
-
-        const lotesFallbackRaw = (productoIds.length > 0 && lotesNumeros.length > 0)
-            ? await loteRepo
-                .createQueryBuilder('lote')
-                .select('lote.producto_id', 'producto_id')
-                .addSelect('lote.numero_lote', 'numero_lote')
-                .addSelect('MAX(lote.id)', 'lote_id')
-                .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
-                .where('lote.producto_id IN (:...productoIds)', { productoIds })
-                .andWhere('lote.numero_lote IN (:...lotes)', { lotes: lotesNumeros })
-                .groupBy('lote.producto_id')
-                .addGroupBy('lote.numero_lote')
-                .getRawMany()
-            : [];
-
-        const mapNota = new Map();
-        for (const row of lotesPorNotaRaw) {
-            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
-            mapNota.set(key, {
-                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
-                cantidad_disponible: Number(row.cantidad_disponible || 0)
-            });
-        }
-
-        const mapFallback = new Map();
-        for (const row of lotesFallbackRaw) {
-            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
-            mapFallback.set(key, {
-                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
-                cantidad_disponible: Number(row.cantidad_disponible || 0)
-            });
-        }
-
-        // Enriquecer detalle con stock real (sin inflar disponible con cantidad inicial)
-        const detallesEnriquecidos = detalles.map((det) => {
-            const key = `${Number(det.producto_id)}__${String(det.lote_numero || '')}`;
-            const preferido = mapNota.get(key);
-            const fallback = mapFallback.get(key);
-            const referencia = preferido || fallback;
-            const cantidadInicial = Number(det.cantidad_total || det.cantidad || 0);
-
-            return {
-                ...det,
-                nota_ingreso_id: Number(id),
-                lote_id: referencia?.lote_id || null,
-                cantidad_inicial: cantidadInicial,
-                cantidad_disponible: Math.max(0, Number(referencia?.cantidad_disponible || 0))
-            };
-        });
+        const detallesEnriquecidos = await enriquecerDetallesConLotes(id, detalles);
 
         return {
             success: true,

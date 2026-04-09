@@ -1,0 +1,1832 @@
+=== RESUMEN POR CODIGO ===
+[
+  {
+    "codigo": "1011834HJ",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 8,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 8,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "11510002",
+    "productos_con_ese_codigo": 3,
+    "filas_desc_igual_codigo": 2,
+    "filas_sin_vencimiento": 2,
+    "filas_sin_fabricante_detalle": 2,
+    "filas_sin_um_detalle": 2,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "11510005",
+    "productos_con_ese_codigo": 4,
+    "filas_desc_igual_codigo": 3,
+    "filas_sin_vencimiento": 3,
+    "filas_sin_fabricante_detalle": 3,
+    "filas_sin_um_detalle": 3,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "26402804",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 4,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 4,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "300200350",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 3,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 3,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "41275150",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 1,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 1,
+    "filas_sin_um_detalle": 1,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "41300150",
+    "productos_con_ese_codigo": 3,
+    "filas_desc_igual_codigo": 2,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 2,
+    "filas_sin_um_detalle": 2,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "41350150",
+    "productos_con_ese_codigo": 3,
+    "filas_desc_igual_codigo": 2,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 2,
+    "filas_sin_um_detalle": 2,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "41400150",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 2,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 2,
+    "filas_sin_um_detalle": 1,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "50200150",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 3,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 3,
+    "filas_sin_um_detalle": 1,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "50225150",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 2,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 2,
+    "filas_sin_um_detalle": 1,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "53610002",
+    "productos_con_ese_codigo": 5,
+    "filas_desc_igual_codigo": 6,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 6,
+    "filas_sin_um_detalle": 4,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "53610009",
+    "productos_con_ese_codigo": 3,
+    "filas_desc_igual_codigo": 1,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 1,
+    "filas_sin_um_detalle": 2,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "7521-13",
+    "productos_con_ese_codigo": 4,
+    "filas_desc_igual_codigo": 3,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 3,
+    "filas_sin_um_detalle": 3,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "7523-13",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 6,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 6,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "97888EINTD",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 0,
+    "filas_sin_um_detalle": 1,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "BNMA/CB-1-3.0(1G )/150",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 1,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "OB0810T",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 1,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 6,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "OB1110T",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 1,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 5,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "OB1310T",
+    "productos_con_ese_codigo": 2,
+    "filas_desc_igual_codigo": 1,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 7,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "SF5040TC",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 1,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "SF5050TC",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 2,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "SF5060TC",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 1,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "SFD5480HCS",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 3,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  },
+  {
+    "codigo": "SFD5480HTS",
+    "productos_con_ese_codigo": 1,
+    "filas_desc_igual_codigo": 0,
+    "filas_sin_vencimiento": 0,
+    "filas_sin_fabricante_detalle": 4,
+    "filas_sin_um_detalle": 0,
+    "filas_sin_cantidad": 0
+  }
+]
+
+=== MAESTRO PRODUCTOS (lista codigos) ===
+[
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5431
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5326
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5221
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5116
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4974
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4906
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "1011834HJ",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4879
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "GUIA CORONARIA 014 WHISPER EXTRA SUPPORT 190CM X\n01UND",
+    "fabricante": "CARDIO PERFUSION EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3861
+  },
+  {
+    "codigo": "1011834HJ",
+    "descripcion": "GUIA CORONARIA 014 WHISPER EXTRA SUPPORT 190CM X 01 UND.",
+    "fabricante": "CARDIO PERFUSION EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3848
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5419
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5314
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5209
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5104
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4951
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4894
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "11510002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4867
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA JUDKINS JR4 DE 5 FRENCH",
+    "fabricante": "AFECORP PERU S.A.C",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4039
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA JUDKINS JR4 DE 5 FRENCH",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3471
+  },
+  {
+    "codigo": "11510002",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA \nJUDKINS JR4 DE 5 FRENCH",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3445
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5420
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5315
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5210
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5105
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4953
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4895
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "11510005",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4868
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA JUDKINS IZQUIERDA JL3.5 DE 5 FRENCH X 100 CM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3993
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA JUDKINS IZQUIERDA JL3.5 DE 5 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3441
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA JUDKINS IZQUIERDA JL3.5 DE 5 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL ERIL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3440
+  },
+  {
+    "codigo": "11510005",
+    "descripcion": "CATÉTER PARA DIAGNÓSTICO CORONARIO CURVA JUDKINS IZQUIERDA JL3.5 DE 5 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3439
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5421
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5316
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5211
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5106
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4954
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4896
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "26402804",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4869
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "CATETER GUIA CORONARIO JR4 S-AGUJER 6F",
+    "fabricante": "PHS PERUVIAN HOSPITAL SUPPLY E.I.R.L.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4045
+  },
+  {
+    "codigo": "26402804",
+    "descripcion": "CATETER GUIA CORONARIO JR4 S-AGUJER 6F",
+    "fabricante": "PHS PERUVIAN HOSPITAL SUPPLY E.I.R.L.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4000
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5430
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5325
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5220
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5115
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4972
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4905
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "300200350",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4878
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "CATETER DILATACION PTCA ACROSS HP 3.0x20mm",
+    "fabricante": "MULTI MED PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4037
+  },
+  {
+    "codigo": "300200350",
+    "descripcion": "CATETER DILATACION PTCA ACROSS HP 3.0x20mm",
+    "fabricante": "MULTI MED PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3986
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5422
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5317
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5212
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5107
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4956
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4897
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "41275150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4870
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 2.75 MM DE LONGITUD 15 MM",
+    "fabricante": "AFECORP PERU S.A.C",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4040
+  },
+  {
+    "codigo": "41275150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE\nDIÁMETRO 2.75 MM DE LONGITUD 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3472
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5423
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5318
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5213
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5108
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4958
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4898
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "41300150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4871
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.0 MM DE LONGITUD 15 MM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3994
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.0 MM DE LONGITUD 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3462
+  },
+  {
+    "codigo": "41300150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.0 MM DE LONGITUD 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3443
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5424
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5319
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5214
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5109
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4960
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4899
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "41350150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4872
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.5 MM DE LONGITUD 15 MM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3995
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.5 MM DE LONGITUD 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3463
+  },
+  {
+    "codigo": "41350150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.5 MM DE LONGITUD 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3444
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5425
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5320
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5215
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5110
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4962
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4900
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "41400150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4873
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 4.0 MM DE LONGITUD 15 MM\n",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3996
+  },
+  {
+    "codigo": "41400150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 4.0 MM DE LONGITUD 15 MM\n",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3446
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5426
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5321
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5216
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5111
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4964
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4901
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "50200150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4874
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA SEMICOMPLACIENTE DE DIÁMETRO 2 MM X 15 MM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3998
+  },
+  {
+    "codigo": "50200150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA SEMICOMPLACIENTE DE DIÁMETRO 2 MM X 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3465
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5427
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5322
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5217
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5112
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4966
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4902
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "50225150",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4875
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA SEMICOMPLACIENTE DE DIÁMETRO 2.25 MM X 15 MM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3997
+  },
+  {
+    "codigo": "50225150",
+    "descripcion": "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA SEMICOMPLACIENTE DE DIÁMETRO 2.25 MM X 15 MM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3464
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5428
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5323
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5218
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5113
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4968
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4903
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "53610002",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4876
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "CATETER GUIA PARA ANGIOPLASTIA CORONARIA EXTRA BACK UP (XB) 3.5 DE 6 FRENCH X 100 CM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4025
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA EXTRA BACK UP (XB) 3.5 DE 6 FRENCH X 100 CM",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3992
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "CATETER GUIA PARA ANGIOPLASTIA CORONARIA EXTRA BACK UP (XB) 3.5 DE 6 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3476
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA EXTRA BACK UP (XB) 3.5 DE 6 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3461
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA EXTRA BACK UP (XB) 3.5 DE 6 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3442
+  },
+  {
+    "codigo": "53610002",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA EXTRA BACK UP (XB) 3.5 DE 6 FRENCH X 100 CM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3437
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5429
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5324
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5219
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5114
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4970
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4904
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "53610009",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4877
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA TIPO JUDKINS DERECHA JR4 DE\n6 FRENCH X 100 CCM",
+    "fabricante": "AFECORP PERU S.A.C",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4096
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA TIPO JUDKINS DERECHA JR4 DE\n6 FRENCH X 100 CCM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3483
+  },
+  {
+    "codigo": "53610009",
+    "descripcion": "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA TIPO JUDKINS DERECHA JR4 DE 6 FRENCH X 100 CCM",
+    "fabricante": "JOSSON MEDICAL EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3438
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5432
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5327
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5222
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5117
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4976
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4907
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "7521-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4880
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JL 3.5 X 01 UND.",
+    "fabricante": "AFECORP PERU S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4099
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JL3.5 X 01 UND.",
+    "fabricante": "AFECORP PERU S.A.C",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4095
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JL3.5 X 01 UND.",
+    "fabricante": "AFECORP PERU S.A.C",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4093
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JL 3.5 X 01 UND.",
+    "fabricante": "CARDIO PERFUSION E.I.R.L",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3486
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JL3.5 X 01 UND.",
+    "fabricante": "CARDIO PERFUSION E.I.R.L",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3482
+  },
+  {
+    "codigo": "7521-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JL3.5 X 01 UND.",
+    "fabricante": "CARDIO PERFUSION E.I.R.L",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3480
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5433
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5328
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5223
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5118
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4978
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4908
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "7523-13",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4881
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JR 3.5 X 01 UND.",
+    "fabricante": "CARDIO PERFUSION EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3852
+  },
+  {
+    "codigo": "7523-13",
+    "descripcion": "CATETER PERFORMA JUDKINS 5F JR 3.5 X 01 UND.",
+    "fabricante": "CARDIO PERFUSION EIRL",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3851
+  },
+  {
+    "codigo": "97888EINTD",
+    "descripcion": "ACAI BERRY HARD WAX BEADS (KIT) X 01 und.",
+    "fabricante": "AMERICAN INTERNATIONAL INDUSTRIES",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3436
+  },
+  {
+    "codigo": "BNMA/CB-1-3.0(1G )/150",
+    "descripcion": "AGUJA DE BIOPSIA DE HUESO 11G X 15CM",
+    "fabricante": "INCARMED S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4443
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "OB0810T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5514
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "OB0810T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5409
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "OB0810T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5304
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "OB0810T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5199
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "OB0810T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5094
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "OB0810T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5030
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA BIOPSIA DE MEDULA OSEA DESCARTABLE 08G X 100MM",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4600
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA BIOPSIA DE MEDULA OSEA DESCARTABLE 08G X 100MM",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4528
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n08GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4148
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 08GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4147
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 08GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4146
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n08GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4145
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 08GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4144
+  },
+  {
+    "codigo": "OB0810T",
+    "descripcion": "AGUJA PARA BIOPSIA DE MEDULA OSEA DESCARTABLE 08G X 100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3953
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "OB1110T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5515
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "OB1110T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5410
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "OB1110T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5305
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "OB1110T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5200
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "OB1110T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5095
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "OB1110T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5032
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA BX MEDULA OSEA 11G X 100MM BIOPSYBELL - UNDX1",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4601
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA BX MEDULA OSEA 11G X 100MM BIOPSYBELL - UNDX1",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4529
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 11GX100MM",
+    "fabricante": "G21 S.r.l.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4512
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 11GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4143
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 11GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4142
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T 11GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4141
+  },
+  {
+    "codigo": "OB1110T",
+    "descripcion": "AGUJA BX MEDULA OSEA 11G X 100MM BIOPSYBELL - UNDX1",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3954
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "OB1310T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5516
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "OB1310T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5411
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "OB1310T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5306
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "OB1310T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5201
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "OB1310T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5096
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "OB1310T",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 5034
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA BIOPSIA DE MEDULA OSEA DESCARTABLE 13G X 100MM",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4602
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA BIOPSIA DE MEDULA OSEA DESCARTABLE 13G X 100MM",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4530
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n13GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4154
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n13GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4153
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n13GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4152
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n13GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4151
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n13GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4150
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA ASPIRACIÓN DE MEDULA OSEA - OSTEOBELL T\n13GX100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4149
+  },
+  {
+    "codigo": "OB1310T",
+    "descripcion": "AGUJA PARA BIOPSIA DE MEDULA OSEA DESCARTABLE 13G X 100MM",
+    "fabricante": "AID HEALTH CARE S.A.C.",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 3955
+  },
+  {
+    "codigo": "SF5040TC",
+    "descripcion": "5.5mm Ti CURVED ROD - 40mm X UND",
+    "fabricante": "CG MedTech Co.,Ltd",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4404
+  },
+  {
+    "codigo": "SF5050TC",
+    "descripcion": "5.5mm Ti CURVED ROD - 50mm X UND",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4605
+  },
+  {
+    "codigo": "SF5050TC",
+    "descripcion": "5.5mm Ti CURVED ROD - 50mm X UND",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4533
+  },
+  {
+    "codigo": "SF5050TC",
+    "descripcion": "5.5mm Ti CURVED ROD - 50mm X UND",
+    "fabricante": "CG MedTech Co.,Ltd",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4406
+  },
+  {
+    "codigo": "SF5050TC",
+    "descripcion": "5.5mm Ti CURVED ROD - 50mm X UND",
+    "fabricante": "CG MedTech Co.,Ltd",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4405
+  },
+  {
+    "codigo": "SF5060TC",
+    "descripcion": "5.5mm Ti CURVED ROD - 60mm X UND",
+    "fabricante": "CG MedTech Co.,Ltd",
+    "um": "UND",
+    "unidad_medida": "",
+    "id": 4407
+  },
+  {
+    "codigo": "SFD5480HCS",
+    "descripcion": "5.5mm SINGLE HEX ENDED CoCr S-ROD-480mm X UND",
+    "fabricante": null,
+    "um": "UND",
+    "unidad_medida": null,
+    "id": 4618
+  }
+]

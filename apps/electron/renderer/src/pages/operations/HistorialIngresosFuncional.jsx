@@ -8,6 +8,61 @@ import { API_ORIGIN } from '../../services/api';
 import RegistrarIngreso from './RegistrarIngreso';
 import { clientesService } from '../../services/clientes.service';
 
+const getDetalleProductoNombre = (detalle) => (
+    (() => {
+        const descripcion = String(
+            detalle?.producto_nombre
+            || detalle?.producto?.descripcion
+            || detalle?.producto?.nombre
+            || ''
+        ).trim();
+        const codigo = String(detalle?.producto?.codigo || detalle?.producto_codigo || '').trim();
+
+        if (descripcion && codigo && descripcion.toUpperCase() === codigo.toUpperCase()) {
+            return 'Sin descripcion';
+        }
+
+        return descripcion || codigo || '-';
+    })()
+);
+
+const getDetalleProductoCodigo = (detalle) => (
+    detalle?.producto?.codigo
+    || detalle?.producto_codigo
+    || '-'
+);
+
+const getDetalleLote = (detalle) => (
+    detalle?.lote_numero
+    || detalle?.lote?.numero_lote
+    || detalle?.lote_numero_texto
+    || '-'
+);
+
+const getDetalleVencimiento = (detalle) => {
+    const fecha = detalle?.fecha_vencimiento || detalle?.lote?.fecha_vencimiento;
+    return fecha ? new Date(fecha).toLocaleDateString('es-PE') : '-';
+};
+
+const getDetalleFabricante = (detalle) => (
+    detalle?.fabricante
+    || detalle?.producto?.fabricante
+    || '-'
+);
+
+const getDetalleUm = (detalle) => (
+    detalle?.um
+    || detalle?.producto?.unidad_medida
+    || detalle?.producto?.um
+    || 'UND'
+);
+
+const toNumberSafe = (value, fallback = 0) => {
+    const normalized = String(value ?? '').replace(',', '.').trim();
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export const HistorialIngresosFuncional = () => {
     const [, setIngresos] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -119,18 +174,18 @@ export const HistorialIngresosFuncional = () => {
                     rows.push({
                         key: `${nota.id}-${d.id ?? index}`,
                         ingresoId: nota.id,
-                        codigo: d.producto?.codigo || '-',
-                        producto: d.producto?.descripcion || '-',
-                        lote: d.lote_numero || '-',
-                        vencimiento: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-',
-                        um: d.um || d.producto?.unidad_medida || '-',
-                        fabricante: d.fabricante || d.producto?.fabricante || '-',
+                        codigo: getDetalleProductoCodigo(d),
+                        producto: getDetalleProductoNombre(d),
+                        lote: getDetalleLote(d),
+                        vencimiento: getDetalleVencimiento(d),
+                        um: getDetalleUm(d),
+                        fabricante: getDetalleFabricante(d),
                         temperatura: (min != null || max != null) ? `${min ?? '-'} a ${max ?? '-'}` : '-',
-                        cantBulto: Number(d.cantidad_bultos || 0).toFixed(0),
-                        cantCajas: Number(d.cantidad_cajas || 0).toFixed(0),
-                        cantPorCaja: Number(d.cantidad_por_caja || 0).toFixed(0),
-                        cantFraccion: Number(d.cantidad_fraccion || 0).toFixed(0),
-                        cantTotal: Number(d.cantidad_total ?? d.cantidad ?? 0).toFixed(2),
+                        cantBulto: toNumberSafe(d.cantidad_bultos).toFixed(0),
+                        cantCajas: toNumberSafe(d.cantidad_cajas).toFixed(0),
+                        cantPorCaja: toNumberSafe(d.cantidad_por_caja).toFixed(0),
+                        cantFraccion: toNumberSafe(d.cantidad_fraccion).toFixed(0),
+                        cantTotal: toNumberSafe(d.cantidad_total ?? d.cantidad ?? d.cantidad_inicial ?? d.cantidad_disponible).toFixed(2),
                         fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
                         mes,
                         dia,
