@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { productService } from '../../services/product.service';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent } from '../../components/common/Card';
@@ -225,6 +226,52 @@ export const InventarioGeneral = () => {
     const stockTotal = inventario.reduce((sum, p) => sum + p.stock_calculado, 0);
     const productosConStock = inventario.filter(p => p.stock_calculado > 0).length;
 
+    const mapProductoToExcel = (p) => ({
+        'Código': p.codigo || '-',
+        'Descripción': p.descripcion,
+        'Registro Sanitario': p.registro_sanitario || '-',
+        'Proveedor': p.proveedor || '-',
+        'Categoría': p.categoria_ingreso?.replace(/_/g, ' ') || '-',
+        'Unidad': p.um || p.unidad || 'UND',
+        'Lotes Activos': p.total_lotes || 0,
+        'Próximo Vencimiento': p.proximo_vencimiento ? formatDatePE(p.proximo_vencimiento) : 'Sin lotes',
+        'Stock Actual': Number(p.stock_calculado).toFixed(2),
+        'Estado': getStockStatus(p.stock_calculado, p.stock_minimo).label
+    });
+
+    const exportarExcel = () => {
+        if (inventario.length === 0) return;
+        
+        // Determinar qué base de datos usar (si hay búsqueda, usar filtrado, sino todo)
+        const baseDatos = inventarioFiltrado.length > 0 ? inventarioFiltrado : inventario;
+        
+        // 1. Datos para cada hoja
+        const dataGeneral = baseDatos.map(mapProductoToExcel);
+        const dataConStock = baseDatos.filter(p => p.stock_calculado > p.stock_minimo).map(mapProductoToExcel);
+        const dataStockBajo = baseDatos.filter(p => p.stock_calculado > 0 && p.stock_calculado <= p.stock_minimo).map(mapProductoToExcel);
+        const dataSinStock = baseDatos.filter(p => p.stock_calculado <= 0).map(mapProductoToExcel);
+
+        const wb = XLSX.utils.book_new();
+
+        // 2. Función helper para agregar hoja con autofiltro
+        const agregarHoja = (datos, nombre) => {
+            if (datos.length === 0) return;
+            const ws = XLSX.utils.json_to_sheet(datos);
+            // Agregar Autofilter (flechitas de filtrado en excel) a todas las columnas usadas
+            ws['!autofilter'] = { ref: `A1:J${datos.length + 1}` };
+            XLSX.utils.book_append_sheet(wb, ws, nombre);
+        };
+
+        // 3. Crear las hojas separadas
+        agregarHoja(dataGeneral, "General");
+        agregarHoja(dataConStock, "Con Stock");
+        agregarHoja(dataStockBajo, "Stock Bajo");
+        agregarHoja(dataSinStock, "Sin Stock");
+
+        // 4. Escribir y descargar el archivo
+        XLSX.writeFile(wb, `Reporte_Stock_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -232,6 +279,17 @@ export const InventarioGeneral = () => {
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800 font-display">Stock de Inventario</h1>
                     <p className="text-slate-500 mt-1">Stock real calculado en tiempo real — se actualiza con cada Nota de Ingreso y Salida</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={exportarExcel}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-colors text-sm font-medium"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Exportar a Excel
+                    </button>
                 </div>
             </div>
 
