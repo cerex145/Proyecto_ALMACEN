@@ -1027,6 +1027,249 @@ async function productoRoutes(fastify, options) {
         });
     });
 
+    // POST /api/productos/resolver-o-crear - Resolver productos por código y crear faltantes
+    fastify.post('/api/productos/resolver-o-crear', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Resuelve productos por código y crea los que no existan aún',
+            body: {
+                type: 'object',
+                required: ['productos'],
+                properties: {
+                    cliente_id: { type: 'integer', nullable: true },
+                    cliente_ruc: { type: 'string', nullable: true },
+                    proveedor: { type: 'string', nullable: true },
+                    proveedor_ruc: { type: 'string', nullable: true },
+                    productos: {
+                        type: 'array',
+                        minItems: 1,
+                        items: {
+                            type: 'object',
+                            required: ['codigo'],
+                            properties: {
+                                codigo: { type: 'string' },
+                                descripcion: { type: 'string', nullable: true },
+                                nombre: { type: 'string', nullable: true },
+                                lote: { type: 'string', nullable: true },
+                                fabricante: { type: 'string', nullable: true },
+                                um: { type: 'string', nullable: true },
+                                temperatura: { type: 'number', nullable: true },
+                                procedencia: { type: 'string', nullable: true },
+                                registro_sanitario: { type: 'string', nullable: true },
+                                categoria_ingreso: { type: 'string', nullable: true },
+                                tipo_documento: { type: 'string', nullable: true },
+                                numero_documento: { type: 'string', nullable: true }
+                            }
+                        }
+                    }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        creados: { type: 'integer' },
+                        existentes: { type: 'integer' },
+                        data: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'integer' },
+                                    codigo: { type: 'string' },
+                                    descripcion: { type: 'string' },
+                                    fabricante: { type: 'string', nullable: true },
+                                    um: { type: 'string', nullable: true },
+                                    status: { type: 'string' }
+                                }
+                            }
+                        }
+                    }
+                },
+                400: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
+        const {
+            cliente_id,
+            cliente_ruc,
+            proveedor,
+            proveedor_ruc,
+            productos = []
+        } = request.body || {};
+
+        if (!Array.isArray(productos) || productos.length === 0) {
+            return reply.status(400).send({ success: false, error: 'Debe enviar productos para resolver o crear' });
+        }
+
+        const norm = (v) => String(v || '').trim();
+        const normRuc = (v) => String(v || '').replace(/[^0-9]/g, '').trim();
+
+        const porCodigo = new Map();
+        for (const item of productos) {
+            const codigo = norm(item?.codigo);
+            if (!codigo) continue;
+
+            if (!porCodigo.has(codigo)) {
+                porCodigo.set(codigo, {
+                    codigo,
+                    descripcion: norm(item?.descripcion || item?.nombre),
+                    lote: norm(item?.lote),
+                    fabricante: norm(item?.fabricante),
+                    um: norm(item?.um),
+                    temperatura: item?.temperatura,
+                    procedencia: norm(item?.procedencia),
+                    registro_sanitario: norm(item?.registro_sanitario),
+                    categoria_ingreso: norm(item?.categoria_ingreso),
+                    tipo_documento: norm(item?.tipo_documento),
+                    numero_documento: norm(item?.numero_documento)
+                });
+                continue;
+            }
+
+            const current = porCodigo.get(codigo);
+            const merged = {
+                ...current,
+                descripcion: current.descripcion || norm(item?.descripcion || item?.nombre),
+                lote: current.lote || norm(item?.lote),
+                fabricante: current.fabricante || norm(item?.fabricante),
+                um: current.um || norm(item?.um),
+                procedencia: current.procedencia || norm(item?.procedencia),
+                registro_sanitario: current.registro_sanitario || norm(item?.registro_sanitario),
+                categoria_ingreso: current.categoria_ingreso || norm(item?.categoria_ingreso),
+                tipo_documento: current.tipo_documento || norm(item?.tipo_documento),
+                numero_documento: current.numero_documento || norm(item?.numero_documento)
+            };
+            if (merged.temperatura === undefined || merged.temperatura === null) {
+                merged.temperatura = item?.temperatura;
+            }
+            porCodigo.set(codigo, merged);
+        }
+
+        const codigos = [...porCodigo.keys()];
+        if (codigos.length === 0) {
+            return reply.status(400).send({ success: false, error: 'No se encontraron códigos válidos para procesar' });
+        }
+
+        const existentes = await productoRepo
+            .createQueryBuilder('p')
+            .where('p.codigo IN (:...codigos)', { codigos })
+            .orderBy('p.updated_at', 'DESC')
+            .addOrderBy('p.id', 'DESC')
+            .getMany();
+
+        const agrupados = new Map();
+        for (const p of existentes) {
+            const codigo = norm(p.codigo);
+            if (!agrupados.has(codigo)) agrupados.set(codigo, []);
+            agrupados.get(codigo).push(p);
+        }
+
+        const clienteIdNum = cliente_id != null && cliente_id !== '' ? Number(cliente_id) : null;
+        const clienteRucNorm = normRuc(cliente_ruc);
+
+        const scoreExistente = (p) => {
+            let score = 0;
+            if (clienteIdNum != null && Number(p.cliente_id) === clienteIdNum) score += 50;
+            if (clienteRucNorm && normRuc(p.cliente_ruc) === clienteRucNorm) score += 35;
+            const desc = norm(p.descripcion);
+            const code = norm(p.codigo);
+            if (desc && desc.toUpperCase() !== code.toUpperCase()) score += 25;
+            if (norm(p.fabricante)) score += 10;
+            if (norm(p.um) || norm(p.unidad_medida)) score += 5;
+            return score;
+        };
+
+        const resultado = [];
+        let creados = 0;
+        let existentesCount = 0;
+
+        for (const codigo of codigos) {
+            const payload = porCodigo.get(codigo);
+            const lista = agrupados.get(codigo) || [];
+
+            if (lista.length > 0) {
+                const elegido = [...lista].sort((a, b) => {
+                    const aScore = scoreExistente(a);
+                    const bScore = scoreExistente(b);
+                    if (aScore !== bScore) return bScore - aScore;
+                    return Number(b.id || 0) - Number(a.id || 0);
+                })[0];
+
+                let changed = false;
+                const descElegido = norm(elegido.descripcion);
+                const codeUpper = norm(elegido.codigo).toUpperCase();
+                const payloadDesc = norm(payload.descripcion);
+                if (payloadDesc && (!descElegido || descElegido.toUpperCase() === codeUpper)) {
+                    elegido.descripcion = payloadDesc;
+                    changed = true;
+                }
+                if (!norm(elegido.fabricante) && norm(payload.fabricante)) {
+                    elegido.fabricante = norm(payload.fabricante);
+                    changed = true;
+                }
+                if (!norm(elegido.um) && norm(payload.um)) {
+                    elegido.um = norm(payload.um);
+                    changed = true;
+                }
+
+                if (changed) {
+                    await productoRepo.save(elegido);
+                }
+
+                resultado.push({
+                    id: Number(elegido.id),
+                    codigo: elegido.codigo,
+                    descripcion: elegido.descripcion,
+                    fabricante: elegido.fabricante || null,
+                    um: elegido.um || elegido.unidad_medida || null,
+                    status: 'existing'
+                });
+                existentesCount += 1;
+                continue;
+            }
+
+            const descripcion = norm(payload.descripcion) || codigo;
+            const nuevo = productoRepo.create({
+                codigo,
+                descripcion,
+                cliente_id: clienteIdNum,
+                cliente_ruc: clienteRucNorm || null,
+                proveedor: norm(proveedor) || null,
+                proveedor_ruc: norm(proveedor_ruc) || clienteRucNorm || null,
+                lote: norm(payload.lote) || null,
+                fabricante: norm(payload.fabricante) || null,
+                procedencia: norm(payload.procedencia) || null,
+                registro_sanitario: norm(payload.registro_sanitario) || null,
+                categoria_ingreso: norm(payload.categoria_ingreso) || null,
+                tipo_documento: norm(payload.tipo_documento) || null,
+                numero_documento: norm(payload.numero_documento) || null,
+                um: norm(payload.um) || null,
+                ...mapTemperaturaEntrada(payload.temperatura),
+                activo: toActivoSmallint(true)
+            });
+
+            const guardado = await productoRepo.save(nuevo);
+            resultado.push({
+                id: Number(guardado.id),
+                codigo: guardado.codigo,
+                descripcion: guardado.descripcion,
+                fabricante: guardado.fabricante || null,
+                um: guardado.um || guardado.unidad_medida || null,
+                status: 'created'
+            });
+            creados += 1;
+        }
+
+        return {
+            success: true,
+            creados,
+            existentes: existentesCount,
+            data: resultado
+        };
+    });
+
     // GET /api/productos/inventario - Stock real calculado desde los lotes
     fastify.get('/api/productos/inventario', {
         schema: {

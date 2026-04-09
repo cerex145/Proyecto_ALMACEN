@@ -173,6 +173,7 @@ export const NotaIngresoForm = () => {
     const [nuevoProductoForm, setNuevoProductoForm] = useState(buildNuevoProductoState());
     const [uiError, setUiError] = useState('');
     const [uiSuccess, setUiSuccess] = useState('');
+    const [resumenImportacionProductos, setResumenImportacionProductos] = useState(null);
     const selectedClientRuc = normalizarRuc(clienteRuc);
 
     const normalizarHeaderCSV = (header) => String(header || '')
@@ -1059,6 +1060,7 @@ export const NotaIngresoForm = () => {
         setProductoDetalleModal(null);
         setUiError('');
         setUiSuccess('');
+        setResumenImportacionProductos(null);
     };
 
     const handleUpdateDetalle = (index, field, value) => {
@@ -1260,6 +1262,7 @@ export const NotaIngresoForm = () => {
         if (!file) return;
 
         setErroresImportacion([]);
+        setResumenImportacionProductos(null);
         const isExcel = file.name.match(/\.(xlsx|xls)$/i);
         const reader = new FileReader();
 
@@ -1294,6 +1297,9 @@ export const NotaIngresoForm = () => {
                 const errores = [];
                 const productosImportados = [];
                 const pendientes = [];
+                const codigosCreados = new Set();
+                const codigosExistentes = new Set();
+                const cacheProductosResueltos = new Map();
 
                 // Validar encabezados requeridos
                 const requeridos = ['ruc_cliente', 'codigo_producto', 'lote', 'fecha_ingreso', 'cantidad_total'];
@@ -1385,27 +1391,6 @@ export const NotaIngresoForm = () => {
                     }
 
                     try {
-                        const codigoBuscado = normalizarCodigoProducto(row.codigo_producto);
-                        const loteBuscado = normalizarTexto(row.lote);
-                        const candidatosCodigo = deduplicarOpcionesCSV(products.filter(
-                            (p) => coincideCodigoProducto(p, codigoBuscado)
-                        ));
-
-                        if (candidatosCodigo.length === 0) {
-                            errores.push(`Fila ${i + 1}: Producto con código "${row.codigo_producto}" no encontrado`);
-                            continue;
-                        }
-
-                        const candidatosPorLote = loteBuscado
-                            ? candidatosCodigo.filter((p) => normalizarTexto(obtenerLoteProducto(p)) === loteBuscado)
-                            : candidatosCodigo;
-
-                        const { producto: productoSeleccionado, opciones: opcionesResolucion } = resolverProductoCSV({
-                            row,
-                            candidatosCodigo,
-                            candidatosPorLote
-                        });
-
                         let cantidadTotal = parseNumber(row.cantidad_total, NaN);
                         if (!Number.isFinite(cantidadTotal) || cantidadTotal <= 0) {
                             const posiblesCantidades = [
@@ -1427,11 +1412,87 @@ export const NotaIngresoForm = () => {
                             }
                         }
 
-                        // Validar cantidad_total
                         if (!Number.isFinite(cantidadTotal) || cantidadTotal <= 0) {
                             errores.push(`Fila ${i + 1}: Cantidad total inválida`);
                             continue;
                         }
+
+                        const codigoBuscado = normalizarCodigoProducto(row.codigo_producto);
+                        const loteBuscado = normalizarTexto(row.lote);
+                        let candidatosCodigo = deduplicarOpcionesCSV(products.filter(
+                            (p) => coincideCodigoProducto(p, codigoBuscado)
+                        ));
+
+                        if (candidatosCodigo.length === 0) {
+                            if (!cacheProductosResueltos.has(codigoBuscado)) {
+                                try {
+                                    const clienteFila = buscarClientePorRuc(rucFila);
+                                    const respuestaResolucion = await productService.resolveOrCreateProducts({
+                                        cliente_id: clienteFila ? Number(clienteFila.id) : null,
+                                        cliente_ruc: rucFila,
+                                        proveedor: String(proveedorNombre || clienteFila?.razon_social || '').trim() || null,
+                                        proveedor_ruc: rucFila,
+                                        productos: [{
+                                            codigo: codigoBuscado,
+                                            descripcion: row.nombre || row.descripcion || '',
+                                            lote: row.lote || '',
+                                            fabricante: row.fabricante || '',
+                                            um: row.um || '',
+                                            temperatura: parseTemperaturaCSV(row.temperatura, 25),
+                                            tipo_documento: row.tipo_documento || getValues('tipo_documento') || '',
+                                            numero_documento: row.numero_documento || getValues('numero_documento') || ''
+                                        }]
+                                    });
+
+                                    const resolucion = (respuestaResolucion?.data || []).find(
+                                        (item) => normalizarCodigoProducto(item?.codigo) === codigoBuscado
+                                    ) || null;
+
+                                    if (resolucion) {
+                                        cacheProductosResueltos.set(codigoBuscado, resolucion);
+                                        if (String(resolucion.status || '').toLowerCase() === 'created') {
+                                            codigosCreados.add(resolucion.codigo);
+                                        } else {
+                                            codigosExistentes.add(resolucion.codigo);
+                                        }
+                                    } else {
+                                        cacheProductosResueltos.set(codigoBuscado, null);
+                                    }
+                                } catch (resolveError) {
+                                    console.error('Error al resolver/crear producto en importación:', resolveError);
+                                    cacheProductosResueltos.set(codigoBuscado, null);
+                                }
+                            }
+
+                            const productoResuelto = cacheProductosResueltos.get(codigoBuscado);
+                            if (productoResuelto) {
+                                candidatosCodigo = deduplicarOpcionesCSV([
+                                    ...candidatosCodigo,
+                                    {
+                                        ...productoResuelto,
+                                        descripcion: productoResuelto.descripcion || row.nombre || codigoBuscado,
+                                        lote: row.lote || productoResuelto.lote || '',
+                                        fabricante: row.fabricante || productoResuelto.fabricante || '',
+                                        um: row.um || productoResuelto.um || productoResuelto.unidad || 'UND'
+                                    }
+                                ]);
+                            }
+                        }
+
+                        if (candidatosCodigo.length === 0) {
+                            errores.push(`Fila ${i + 1}: Producto con código "${row.codigo_producto}" no encontrado ni se pudo crear`);
+                            continue;
+                        }
+
+                        const candidatosPorLote = loteBuscado
+                            ? candidatosCodigo.filter((p) => normalizarTexto(obtenerLoteProducto(p)) === loteBuscado)
+                            : candidatosCodigo;
+
+                        const { producto: productoSeleccionado, opciones: opcionesResolucion } = resolverProductoCSV({
+                            row,
+                            candidatosCodigo,
+                            candidatosPorLote
+                        });
 
                         if (!productoSeleccionado) {
                             pendientes.push({
@@ -1476,10 +1537,24 @@ export const NotaIngresoForm = () => {
                     errores.push(`Se detectaron ${fechasIngresoDistintas.size} fechas de ingreso distintas en el archivo. Se aplicó ${fechaIngresoDetectada} en el formulario actual. Fechas detectadas: ${listaFechas.join(', ')}`);
                 }
 
+                const resumenCreado = Array.from(codigosCreados).sort();
+                const resumenExistente = Array.from(codigosExistentes).sort();
+                if (resumenCreado.length > 0 || resumenExistente.length > 0) {
+                    setResumenImportacionProductos({
+                        creados: resumenCreado,
+                        existentes: resumenExistente
+                    });
+                    await loadProducts();
+                }
+
                 // Agregar productos importados al formulario
                 if (productosImportados.length > 0) {
                     productosImportados.forEach((producto) => agregarDetalleImportado(producto));
-                    showSuccess(`${productosImportados.length} productos importados correctamente.`);
+                    if (resumenCreado.length > 0 || resumenExistente.length > 0) {
+                        showSuccess(`${productosImportados.length} productos importados correctamente. Resolución automática: ${resumenCreado.length} creado(s), ${resumenExistente.length} existente(s).`);
+                    } else {
+                        showSuccess(`${productosImportados.length} productos importados correctamente.`);
+                    }
                 }
 
                 if (pendientes.length > 0) {
@@ -1666,6 +1741,7 @@ export const NotaIngresoForm = () => {
                             variant="secondary"
                             onClick={() => {
                                 setErroresImportacion([]);
+                                setResumenImportacionProductos(null);
                                 setMostrarModalImportacion(true);
                             }}
                         >
@@ -1690,6 +1766,38 @@ export const NotaIngresoForm = () => {
             {uiSuccess && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                     {uiSuccess}
+                </div>
+            )}
+
+            {resumenImportacionProductos && (resumenImportacionProductos.creados.length > 0 || resumenImportacionProductos.existentes.length > 0) && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                    <div className="font-semibold mb-2">Resumen de productos resueltos en la importación</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <div className="font-medium text-emerald-700 mb-1">Creados ({resumenImportacionProductos.creados.length})</div>
+                            <div className="flex flex-wrap gap-1">
+                                {resumenImportacionProductos.creados.length > 0
+                                    ? resumenImportacionProductos.creados.map((codigo) => (
+                                        <span key={`creado-${codigo}`} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-mono">
+                                            {codigo}
+                                        </span>
+                                    ))
+                                    : <span className="text-xs text-slate-500">Sin productos creados</span>}
+                            </div>
+                        </div>
+                        <div>
+                            <div className="font-medium text-blue-700 mb-1">Existentes reutilizados ({resumenImportacionProductos.existentes.length})</div>
+                            <div className="flex flex-wrap gap-1">
+                                {resumenImportacionProductos.existentes.length > 0
+                                    ? resumenImportacionProductos.existentes.map((codigo) => (
+                                        <span key={`existente-${codigo}`} className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs font-mono">
+                                            {codigo}
+                                        </span>
+                                    ))
+                                    : <span className="text-xs text-slate-500">Sin productos existentes reutilizados</span>}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -1876,6 +1984,7 @@ export const NotaIngresoForm = () => {
                                 type="button"
                                 onClick={() => {
                                     setErroresImportacion([]);
+                                    setResumenImportacionProductos(null);
                                     setMostrarModalImportacion(true);
                                 }}
                                 variant="secondary"
@@ -2547,6 +2656,30 @@ export const NotaIngresoForm = () => {
                                             <li key={idx}>{error}</li>
                                         ))}
                                     </ul>
+                                </div>
+                            )}
+
+                            {resumenImportacionProductos && (resumenImportacionProductos.creados.length > 0 || resumenImportacionProductos.existentes.length > 0) && (
+                                <div className="bg-sky-50 border-l-4 border-sky-500 p-4 rounded">
+                                    <h3 className="font-bold text-sky-900 mb-2">Productos resueltos automáticamente</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                            <p className="font-semibold text-emerald-700 mb-1">Creados ({resumenImportacionProductos.creados.length})</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {resumenImportacionProductos.creados.map((codigo) => (
+                                                    <span key={`modal-creado-${codigo}`} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-mono">{codigo}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-blue-700 mb-1">Existentes reutilizados ({resumenImportacionProductos.existentes.length})</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {resumenImportacionProductos.existentes.map((codigo) => (
+                                                    <span key={`modal-existente-${codigo}`} className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs font-mono">{codigo}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

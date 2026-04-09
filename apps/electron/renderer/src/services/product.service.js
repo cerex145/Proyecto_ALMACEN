@@ -58,6 +58,11 @@ export const productService = {
         return response.data;
     },
 
+    resolveOrCreateProducts: async (data) => {
+        const response = await api.post('/productos/resolver-o-crear', data);
+        return response.data;
+    },
+
     exportProducts: async () => {
         const response = await api.get('/productos/exportar', {
             responseType: 'blob'
