@@ -56,6 +56,29 @@ const getProductoCodigoVisible = (producto) => (
     || '-'
 );
 
+const PLANTILLA_INGRESO_HEADERS = [
+    'ruc_cliente',
+    'codigo_producto',
+    'nombre',
+    'lote',
+    'fecha_vencimiento',
+    'fecha de ingreso',
+    'cantidad_bultos',
+    'cantidad_cajas',
+    'cantidad_por_caja',
+    'cantidad_fraccion',
+    'cantidad_total',
+    'um',
+    'fabricante',
+    'temperatura'
+];
+
+const PLANTILLA_INGRESO_EJEMPLOS = [
+    ['20123456789', 'MED-003', 'PARACETAMOL 500MG', 'LOTE-2024-001', '2025-12-31', '2026-03-30', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
+    ['20123456789', 'MED-007', 'AMOXICILINA 500MG', 'LOTE-2024-002', '2026-06-15', '2026-03-30', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
+    ['20123456789', 'INS-004', 'GUANTES LATEX TALLA M', 'LOTE-2024-003', '2027-03-20', '2026-03-30', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
+];
+
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, setValue, getValues, formState: { isSubmitting } } = useForm({
         defaultValues: {
@@ -1489,42 +1512,43 @@ export const NotaIngresoForm = () => {
         }
     };
 
-    const descargarPlantillaCSV = () => {
-        const headers = [
-            'ruc_cliente',
-            'codigo_producto',
-            'nombre',
-            'lote',
-            'fecha_vencimiento',
-            'fecha de ingreso',
-            'cantidad_bultos',
-            'cantidad_cajas',
-            'cantidad_por_caja',
-            'cantidad_fraccion',
-            'cantidad_total',
-            'um',
-            'fabricante',
-            'temperatura'
+    const descargarPlantillaExcel = () => {
+        const wb = XLSX.utils.book_new();
+        const aoa = [PLANTILLA_INGRESO_HEADERS, ...PLANTILLA_INGRESO_EJEMPLOS];
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+        ws['!cols'] = [
+            { wch: 14 }, { wch: 18 }, { wch: 42 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
+            { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 10 },
+            { wch: 28 }, { wch: 14 }
         ];
 
-        // Usar códigos reales del sistema
-        const ejemplos = [
-            ['20123456789', 'MED-003', 'PARACETAMOL 500MG', 'LOTE-2024-001', '2025-12-31', '2026-03-30', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
-            ['20123456789', 'MED-007', 'AMOXICILINA 500MG', 'LOTE-2024-002', '2026-06-15', '2026-03-30', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
-            ['20123456789', 'INS-004', 'GUANTES LATEX TALLA M', 'LOTE-2024-003', '2027-03-20', '2026-03-30', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
-        ];
+        XLSX.utils.book_append_sheet(wb, ws, 'IngresoMasivo');
 
-        const csvContent = headers.join(',') + '\n' + ejemplos.map(e => e.join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
+        const manual = [
+            ['INSTRUCCIONES', ''],
+            ['1) Complete las filas en la hoja IngresoMasivo.', ''],
+            ['2) Use una sola fecha de ingreso por archivo.', ''],
+            ['3) ruc_cliente, codigo_producto, lote y cantidad_total son obligatorios.', ''],
+            ['4) Formato de fecha recomendado: YYYY-MM-DD.', ''],
+            ['5) Puede importar este archivo directamente desde el botón Importar Excel/CSV.', '']
+        ];
+        const wsManual = XLSX.utils.aoa_to_sheet(manual);
+        wsManual['!cols'] = [{ wch: 80 }, { wch: 10 }];
+        XLSX.utils.book_append_sheet(wb, wsManual, 'Instrucciones');
+
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
 
-        link.setAttribute('href', url);
-        link.setAttribute('download', 'plantilla_nota_ingreso.csv');
-        link.style.visibility = 'hidden';
+        link.href = url;
+        link.download = 'plantilla_ingreso_masivo.xlsx';
+        link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     const resolverPendienteCSV = (productoSeleccionado) => {
@@ -1617,6 +1641,45 @@ export const NotaIngresoForm = () => {
                     <p className="text-slate-500">Recepción de mercadería y alta de lotes</p>
                 </div>
             </div>
+
+            <Card className="p-6 border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+                    <div>
+                        <h3 className="text-lg font-bold text-emerald-900">Portada De Carga Masiva De Notas De Ingreso</h3>
+                        <p className="text-sm text-emerald-800 mt-1">
+                            Descargue la plantilla Excel, complete los campos requeridos y cargue el archivo para importar productos en lote.
+                        </p>
+                        <p className="text-xs text-emerald-700 mt-2">
+                            Campos obligatorios: ruc_cliente, codigo_producto, lote, fecha de ingreso, cantidad_total.
+                        </p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        <Button
+                            type="button"
+                            onClick={descargarPlantillaExcel}
+                            className="bg-emerald-700 hover:bg-emerald-800 text-white"
+                        >
+                            Descargar Plantilla Excel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => {
+                                setErroresImportacion([]);
+                                setMostrarModalImportacion(true);
+                            }}
+                        >
+                            Importar Excel/CSV
+                        </Button>
+                    </div>
+                </div>
+                <div className="mt-4 rounded-lg border border-emerald-200 bg-white/80 p-3 text-xs text-slate-700 overflow-x-auto">
+                    <div className="font-semibold text-slate-800 mb-1">Ejemplo de fila:</div>
+                    <div className="font-mono whitespace-nowrap">
+                        20123456789 | MED-003 | PARACETAMOL 500MG | LOTE-2024-001 | 2025-12-31 | 2026-03-30 | 2 | 10 | 50 | 5 | 505 | UND | Laboratorio ABC | 25
+                    </div>
+                </div>
+            </Card>
 
             {uiError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1817,11 +1880,11 @@ export const NotaIngresoForm = () => {
                                 }}
                                 variant="secondary"
                             >
-                                Importar CSV
+                                Importar Excel/CSV
                             </Button>
                         </div>
                         <p className="text-xs text-purple-600 mt-2">
-                            💡 Busca por código, abre el detalle del producto y agrégalo con sus cantidades.
+                            💡 Busca por código, abre el detalle del producto y agrégalo con sus cantidades, o usa Importar Excel/CSV.
                         </p>
                     </div>
 
@@ -2388,7 +2451,7 @@ export const NotaIngresoForm = () => {
                         <div className="bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 text-white p-6">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h2 className="text-2xl font-bold">📊 Importar desde CSV</h2>
+                                    <h2 className="text-2xl font-bold">📊 Carga masiva por Excel/CSV</h2>
                                     <p className="text-white/90 text-sm mt-1">Carga múltiples productos de una vez</p>
                                 </div>
                                 <button
@@ -2410,9 +2473,9 @@ export const NotaIngresoForm = () => {
                                     Pasos Rápidos
                                 </h3>
                                 <ol className="list-decimal list-inside space-y-1.5 text-sm text-blue-800">
-                                    <li>Descarga la plantilla CSV</li>
+                                    <li>Descarga la plantilla Excel</li>
                                     <li>Ábrela con Excel y completa los datos</li>
-                                    <li>Guarda como CSV y selecciona el archivo</li>
+                                    <li>Guarda y selecciona el archivo (.xlsx, .xls o .csv)</li>
                                 </ol>
                             </div>
 
@@ -2463,7 +2526,7 @@ export const NotaIngresoForm = () => {
                             <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-300">
                                 <h3 className="font-bold text-green-900 mb-2 flex items-center gap-2">
                                     <span className="text-xl">✅</span>
-                                    Ejemplo CSV Mínimo
+                                    Ejemplo de Formato Mínimo
                                 </h3>
                                 <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
                                     <pre className="text-xs font-mono text-green-400">
@@ -2491,10 +2554,10 @@ export const NotaIngresoForm = () => {
                             <div className="flex gap-3 pt-4">
                                 <Button
                                     type="button"
-                                    onClick={descargarPlantillaCSV}
+                                    onClick={descargarPlantillaExcel}
                                     className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg font-semibold"
                                 >
-                                    📥 Descargar Plantilla
+                                    📥 Descargar Plantilla Excel
                                 </Button>
                                 <label className="flex-1">
                                     <input
