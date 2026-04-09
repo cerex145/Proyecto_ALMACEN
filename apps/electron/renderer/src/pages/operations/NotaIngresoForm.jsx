@@ -1736,17 +1736,6 @@ export const NotaIngresoForm = () => {
                         >
                             Descargar Plantilla Excel
                         </Button>
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => {
-                                setErroresImportacion([]);
-                                setResumenImportacionProductos(null);
-                                setMostrarModalImportacion(true);
-                            }}
-                        >
-                            Importar Excel/CSV
-                        </Button>
                     </div>
                 </div>
                 <div className="mt-4 rounded-lg border border-emerald-200 bg-white/80 p-3 text-xs text-slate-700 overflow-x-auto">
@@ -1804,7 +1793,7 @@ export const NotaIngresoForm = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                 {/* Datos Generales */}
                 <Card className="p-6">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Ingreso Individual</h3>
+                    <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos de la Nota</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                             <label className="label-premium">Código de Cliente</label>
@@ -1858,60 +1847,8 @@ export const NotaIngresoForm = () => {
                                 </label>
                             </div>
                         </div>
-                        <div>
-                            <label className="label-premium">Producto</label>
-                            <div className="space-y-2">
-                                <input
-                                    value={productoSeleccionado ? `${getProductoNombreVisible(productoSeleccionado)} - ${getProductoCodigoVisible(productoSeleccionado)}` : ''}
-                                    readOnly
-                                    className="input-premium"
-                                    placeholder="Buscar y seleccionar producto"
-                                />
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    onClick={() => abrirModalBusquedaProductos()}
-                                    className="w-full"
-                                >
-                                    Seleccionar productos
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    onClick={abrirModalNuevoProducto}
-                                    className="w-full"
-                                >
-                                    + Nuevo producto
-                                </Button>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="label-premium">Lote existente</label>
-                            <select
-                                value={selectedLoteId}
-                                onChange={(e) => handleSelectLote(e.target.value)}
-                                className="input-premium"
-                                disabled={!selectedProduct}
-                            >
-                                <option value="">Seleccione lote...</option>
-                                {lotesDisponibles.map((l) => (
-                                    <option key={l.id} value={l.id}>
-                                        {l.numero_lote}{l.fecha_vencimiento ? ` - ${new Date(l.fecha_vencimiento).toLocaleDateString('es-PE')}` : ''}
-                                    </option>
-                                ))}
-                                <option value="OTRO">Otro (manual)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="label-premium">Lote</label>
-                            <input
-                                value={lote}
-                                onChange={(e) => setLote(e.target.value)}
-                                type="text"
-                                className="input-premium"
-                                placeholder="Ingrese lote..."
-                                readOnly={selectedLoteId !== 'OTRO' && selectedLoteId !== ''}
-                            />
+                        <div className="md:col-span-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            Agregue los productos en la sección <span className="font-semibold text-slate-700">Agregar productos</span> (manual, búsqueda o Excel/CSV) para evitar duplicidad de pasos.
                         </div>
                     </div>
                 </Card>
@@ -1997,119 +1934,129 @@ export const NotaIngresoForm = () => {
                         </p>
                     </div>
 
-                    <h3 className="text-lg font-semibold text-blue-800 mb-4">Detalle de Productos (Lotes)</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                        <div className="md:col-span-2">
-                            <label className="label-premium">Vencimiento</label>
-                            <input
-                                value={vencimiento}
-                                onChange={(e) => setVencimiento(e.target.value)}
-                                type="date"
-                                className="input-premium"
-                            />
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <label className="label-premium">UM</label>
-                            <select
-                                value={um}
-                                onChange={(e) => setUm(e.target.value)}
-                                className="input-premium"
-                            >
-                                <option value=""></option>
-                                <option value="AMP">AMP</option>
-                                <option value="FRS">FRS</option>
-                                <option value="BLT">BLT</option>
-                                <option value="TUB">TUB</option>
-                                <option value="SOB">SOB</option>
-                                <option value="CJ">CJ</option>
-                                <option value="KG">KG</option>
-                                <option value="G">G</option>
-                                <option value="UND">UND</option>
-                            </select>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="label-premium">Fabricante</label>
-                            <input
-                                value={fabricante}
-                                onChange={(e) => setFabricante(e.target.value)}
-                                type="text"
-                                className="input-premium"
-                            />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="label-premium">Temperatura (°C)</label>
-                            <input
-                                value={temperatura}
-                                onChange={(e) => setTemperatura(e.target.value)}
-                                type="number"
-                                step="0.01"
-                                className="input-premium"
-                            />
-                        </div>
-
-                        {/* Calculator Section */}
-                        <div className="md:col-span-6 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
-                                <input
-                                    type="number"
-                                    value={bultos}
-                                    onChange={handleCalcChange(setBultos)}
-                                    className="input-premium h-8 text-sm p-1"
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
-                                <input
-                                    type="number"
-                                    value={cajas}
-                                    onChange={handleCalcChange(setCajas)}
-                                    className="input-premium h-8 text-sm p-1"
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
-                                <input
-                                    type="number"
-                                    value={unidadesCaja}
-                                    onChange={handleCalcChange(setUnidadesCaja)}
-                                    className="input-premium h-8 text-sm p-1"
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
-                                <input
-                                    type="number"
-                                    value={fraccion}
-                                    onChange={handleCalcChange(setFraccion)}
-                                    className="input-premium h-8 text-sm p-1"
-                                    placeholder="0"
-                                />
-                            </div>
-                            <div className="col-span-3 flex justify-between items-center pt-1 border-t border-slate-100 mt-1">
-                                <span className="text-xs text-slate-400 font-medium">Total Unidades:</span>
-                                <input
-                                    type="number"
-                                    value={quantity}
-                                    onChange={(e) => {
-                                        setQuantity(Number(e.target.value));
-                                        setQuantityManual(true);
-                                    }}
-                                    className="input-premium h-8 text-sm p-1 w-24 text-right"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="md:col-span-12 flex justify-end">
-                            <Button type="button" onClick={handleAddProduct} variant="primary" className="w-full md:w-auto">
-                                + Agregar Item
-                            </Button>
-                        </div>
+                    <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                        El flujo principal es: <span className="font-semibold">Seleccionar productos</span> o <span className="font-semibold">Importar Excel/CSV</span>.
                     </div>
+
+                    <details className="rounded-lg border border-slate-200 bg-white p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                            Modo avanzado: agregar item manual
+                        </summary>
+                        <p className="mt-2 text-xs text-slate-500">
+                            Use este modo solo si desea ingresar un item individual fuera del flujo principal.
+                        </p>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Vencimiento</label>
+                                <input
+                                    value={vencimiento}
+                                    onChange={(e) => setVencimiento(e.target.value)}
+                                    type="date"
+                                    className="input-premium"
+                                />
+                            </div>
+
+                            <div className="md:col-span-2">
+                                <label className="label-premium">UM</label>
+                                <select
+                                    value={um}
+                                    onChange={(e) => setUm(e.target.value)}
+                                    className="input-premium"
+                                >
+                                    <option value=""></option>
+                                    <option value="AMP">AMP</option>
+                                    <option value="FRS">FRS</option>
+                                    <option value="BLT">BLT</option>
+                                    <option value="TUB">TUB</option>
+                                    <option value="SOB">SOB</option>
+                                    <option value="CJ">CJ</option>
+                                    <option value="KG">KG</option>
+                                    <option value="G">G</option>
+                                    <option value="UND">UND</option>
+                                </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Fabricante</label>
+                                <input
+                                    value={fabricante}
+                                    onChange={(e) => setFabricante(e.target.value)}
+                                    type="text"
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="label-premium">Temperatura (°C)</label>
+                                <input
+                                    value={temperatura}
+                                    onChange={(e) => setTemperatura(e.target.value)}
+                                    type="number"
+                                    step="0.01"
+                                    className="input-premium"
+                                />
+                            </div>
+
+                            <div className="md:col-span-6 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
+                                    <input
+                                        type="number"
+                                        value={bultos}
+                                        onChange={handleCalcChange(setBultos)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
+                                    <input
+                                        type="number"
+                                        value={cajas}
+                                        onChange={handleCalcChange(setCajas)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
+                                    <input
+                                        type="number"
+                                        value={unidadesCaja}
+                                        onChange={handleCalcChange(setUnidadesCaja)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
+                                    <input
+                                        type="number"
+                                        value={fraccion}
+                                        onChange={handleCalcChange(setFraccion)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div className="col-span-3 flex justify-between items-center pt-1 border-t border-slate-100 mt-1">
+                                    <span className="text-xs text-slate-400 font-medium">Total Unidades:</span>
+                                    <input
+                                        type="number"
+                                        value={quantity}
+                                        onChange={(e) => {
+                                            setQuantity(Number(e.target.value));
+                                            setQuantityManual(true);
+                                        }}
+                                        className="input-premium h-8 text-sm p-1 w-24 text-right"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="md:col-span-12 flex justify-end">
+                                <Button type="button" onClick={handleAddProduct} variant="primary" className="w-full md:w-auto">
+                                    + Agregar Item Manual
+                                </Button>
+                            </div>
+                        </div>
+                    </details>
                 </Card>
 
                 {/* Tabla de Items */}
