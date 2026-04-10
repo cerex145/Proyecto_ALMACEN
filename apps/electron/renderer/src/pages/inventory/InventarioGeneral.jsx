@@ -238,6 +238,8 @@ export const InventarioGeneral = () => {
 
     // ─── Filtrado cliente ──────────────────────────────────────────────────────
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalizar a inicio del día
+
     const inventarioFiltrado = inventario.filter(p => {
         // Filtro por estado de stock
         if (stockFiltro === 'con_stock' && p.stock_calculado <= 0) return false;
@@ -249,10 +251,20 @@ export const InventarioGeneral = () => {
         if (vencimientoFiltro) {
             const fv = p.proximo_vencimiento ? new Date(p.proximo_vencimiento + 'T00:00:00') : null;
             const diasHastaVenc = fv ? Math.floor((fv - today) / 86400000) : null;
-            if (vencimientoFiltro === 'vencido' && (diasHastaVenc === null || diasHastaVenc >= 0)) return false;
-            if (vencimientoFiltro === 'prox30' && (diasHastaVenc === null || diasHastaVenc < 0 || diasHastaVenc > 30)) return false;
-            if (vencimientoFiltro === 'prox90' && (diasHastaVenc === null || diasHastaVenc < 0 || diasHastaVenc > 90)) return false;
-            if (vencimientoFiltro === 'sin_fecha' && fv !== null) return false;
+
+            if (vencimientoFiltro === 'vencido') {
+                // Vencidos: solo los que ya vencieron (fecha < hoy)
+                if (diasHastaVenc === null || diasHastaVenc >= 0) return false;
+            } else if (vencimientoFiltro === 'prox30') {
+                // Próximos 30 días: 0 <= dias <= 30 (vencen hoy o en los próximos 30 días)
+                if (diasHastaVenc === null || diasHastaVenc < 0 || diasHastaVenc > 30) return false;
+            } else if (vencimientoFiltro === 'prox90') {
+                // Próximos 90 días: 0 <= dias <= 90 (vencen hoy o en los próximos 90 días)
+                if (diasHastaVenc === null || diasHastaVenc < 0 || diasHastaVenc > 90) return false;
+            } else if (vencimientoFiltro === 'sin_fecha') {
+                // Sin fecha: sin vencimiento registrado
+                if (fv !== null) return false;
+            }
         }
         return true;
     }).sort((a, b) => {
@@ -265,14 +277,8 @@ export const InventarioGeneral = () => {
         if (!fechaA) return 1;
         if (!fechaB) return -1;
 
-        const diff = fechaA.getTime() - fechaB.getTime();
-
-        // Para próximos 30/90 y vencidos: primero los más cercanos a hoy.
-        if (vencimientoFiltro === 'prox30' || vencimientoFiltro === 'prox90' || vencimientoFiltro === 'vencido') {
-            return diff;
-        }
-
-        return 0;
+        // Ordenar por fecha de vencimiento ascendente (los más próximos primero)
+        return fechaA.getTime() - fechaB.getTime();
     });
 
     // Stats siempre sobre el total (no sobre el filtro)
