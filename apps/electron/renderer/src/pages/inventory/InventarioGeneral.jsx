@@ -255,6 +255,24 @@ export const InventarioGeneral = () => {
             if (vencimientoFiltro === 'sin_fecha' && fv !== null) return false;
         }
         return true;
+    }).sort((a, b) => {
+        if (!vencimientoFiltro) return 0;
+
+        const fechaA = parseSafeDate(a.proximo_vencimiento);
+        const fechaB = parseSafeDate(b.proximo_vencimiento);
+
+        if (!fechaA && !fechaB) return 0;
+        if (!fechaA) return 1;
+        if (!fechaB) return -1;
+
+        const diff = fechaA.getTime() - fechaB.getTime();
+
+        // Para próximos 30/90 y vencidos: primero los más cercanos a hoy.
+        if (vencimientoFiltro === 'prox30' || vencimientoFiltro === 'prox90' || vencimientoFiltro === 'vencido') {
+            return diff;
+        }
+
+        return 0;
     });
 
     // Stats siempre sobre el total (no sobre el filtro)
