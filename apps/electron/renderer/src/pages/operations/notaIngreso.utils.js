@@ -106,24 +106,112 @@ export const parseNumber = (value, fallback = 0) => {
     return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const isValidDateParts = (year, month, day) => {
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+        return false;
+    }
+
+    if (month < 1 || month > 12 || day < 1 || day > 31) {
+        return false;
+    }
+
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    return dt.getUTCFullYear() === year
+        && (dt.getUTCMonth() + 1) === month
+        && dt.getUTCDate() === day;
+};
+
+const buildIsoDate = (year, month, day) => {
+    if (!isValidDateParts(year, month, day)) {
+        return '';
+    }
+
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
+const parseExcelSerialDate = (serial) => {
+    if (!Number.isFinite(serial) || serial <= 0) {
+        return '';
+    }
+
+    const wholeDays = Math.floor(serial);
+    const excelEpochUtc = Date.UTC(1899, 11, 30);
+    const utcMs = excelEpochUtc + (wholeDays * 24 * 60 * 60 * 1000);
+    const dt = new Date(utcMs);
+
+    return buildIsoDate(
+        dt.getUTCFullYear(),
+        dt.getUTCMonth() + 1,
+        dt.getUTCDate()
+    );
+};
+
 export const normalizarFechaInput = (value) => {
-    if (!value) return '';
+    if (value === null || value === undefined || value === '') return '';
+
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+            return '';
+        }
+
+        return buildIsoDate(
+            value.getFullYear(),
+            value.getMonth() + 1,
+            value.getDate()
+        );
+    }
+
+    if (typeof value === 'number') {
+        return parseExcelSerialDate(value);
+    }
 
     const raw = String(value).trim();
     if (!raw) return '';
+
+    if (/^\d{5,}$/.test(raw)) {
+        const asSerial = Number(raw);
+        const fromSerial = parseExcelSerialDate(asSerial);
+        if (fromSerial) {
+            return fromSerial;
+        }
+    }
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
         return raw;
     }
 
-    const matchDMY = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    const ymd = raw.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (ymd) {
+        return buildIsoDate(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
+    }
+
+    const matchDMY = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
     if (matchDMY) {
         const day = Number(matchDMY[1]);
         const month = Number(matchDMY[2]);
         const year = Number(matchDMY[3]);
 
-        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        return buildIsoDate(year, month, day);
+    }
+
+    const matchDMY2 = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+    if (matchDMY2) {
+        const day = Number(matchDMY2[1]);
+        const month = Number(matchDMY2[2]);
+        const year2 = Number(matchDMY2[3]);
+        const year = year2 >= 70 ? 1900 + year2 : 2000 + year2;
+        return buildIsoDate(year, month, day);
+    }
+
+    const isoLikeDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+    if (isoLikeDate) {
+        const parsedIso = buildIsoDate(
+            Number(isoLikeDate[1]),
+            Number(isoLikeDate[2]),
+            Number(isoLikeDate[3])
+        );
+        if (parsedIso) {
+            return parsedIso;
         }
     }
 
@@ -132,10 +220,11 @@ export const normalizarFechaInput = (value) => {
         return '';
     }
 
-    const year = parsed.getFullYear();
-    const month = String(parsed.getMonth() + 1).padStart(2, '0');
-    const day = String(parsed.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return buildIsoDate(
+        parsed.getFullYear(),
+        parsed.getMonth() + 1,
+        parsed.getDate()
+    );
 };
 
 export const normalizarTexto = (value) => String(value || '').trim().toLowerCase();

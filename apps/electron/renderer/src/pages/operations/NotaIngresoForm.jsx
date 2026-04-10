@@ -981,6 +981,7 @@ export const NotaIngresoForm = () => {
 
             const payload = {
                 fecha: data.fecha,
+                cliente_id: selectedClient ? Number(selectedClient) : undefined,
                 ruc_cliente: clienteRuc,
                 proveedor: proveedorNombre || clienteRuc || String(selectedClient),
                 tipo_documento: data.tipo_documento || null,

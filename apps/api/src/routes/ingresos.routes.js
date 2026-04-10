@@ -107,6 +107,101 @@ async function ingresosRoutes(fastify, options) {
 
     const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
 
+    const isValidDateParts = (year, month, day) => {
+        if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+            return false;
+        }
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+            return false;
+        }
+
+        const dt = new Date(Date.UTC(year, month - 1, day));
+        return dt.getUTCFullYear() === year
+            && (dt.getUTCMonth() + 1) === month
+            && dt.getUTCDate() === day;
+    };
+
+    const toIsoDate = (year, month, day) => {
+        if (!isValidDateParts(year, month, day)) {
+            return null;
+        }
+        return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    };
+
+    const parseExcelSerialDate = (serial) => {
+        if (!Number.isFinite(serial) || serial <= 0) {
+            return null;
+        }
+
+        const wholeDays = Math.floor(serial);
+        const excelEpochUtc = Date.UTC(1899, 11, 30);
+        const utcMs = excelEpochUtc + (wholeDays * 24 * 60 * 60 * 1000);
+        const dt = new Date(utcMs);
+
+        return toIsoDate(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+    };
+
+    const normalizarFecha = (value) => {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+
+        if (value instanceof Date) {
+            if (Number.isNaN(value.getTime())) {
+                return null;
+            }
+            return toIsoDate(value.getFullYear(), value.getMonth() + 1, value.getDate());
+        }
+
+        if (typeof value === 'number') {
+            return parseExcelSerialDate(value);
+        }
+
+        const raw = String(value).trim();
+        if (!raw) return null;
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            return raw;
+        }
+
+        if (/^\d{5,}$/.test(raw)) {
+            const asSerial = Number(raw);
+            const serialDate = parseExcelSerialDate(asSerial);
+            if (serialDate) {
+                return serialDate;
+            }
+        }
+
+        const ymd = raw.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+        if (ymd) {
+            return toIsoDate(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
+        }
+
+        const dmy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+        if (dmy) {
+            return toIsoDate(Number(dmy[3]), Number(dmy[2]), Number(dmy[1]));
+        }
+
+        const dmy2 = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+        if (dmy2) {
+            const yy = Number(dmy2[3]);
+            const year = yy >= 70 ? 1900 + yy : 2000 + yy;
+            return toIsoDate(year, Number(dmy2[2]), Number(dmy2[1]));
+        }
+
+        const isoLike = raw.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+        if (isoLike) {
+            return toIsoDate(Number(isoLike[1]), Number(isoLike[2]), Number(isoLike[3]));
+        }
+
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
+
+        return toIsoDate(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+    };
+
     // Generar número único de nota de ingreso
     const generarNumeroIngreso = async () => {
         const result = await notaIngresoRepo
@@ -526,7 +621,7 @@ async function ingresosRoutes(fastify, options) {
                 type: 'object',
                 required: ['fecha', 'detalles'],
                 properties: {
-                    fecha: { type: 'string', format: 'date' },
+                    fecha: { type: 'string' },
                     ruc_cliente: { type: 'string' },
                     cliente_id: { type: 'integer' },
                     proveedor: { type: 'string' },
@@ -545,7 +640,7 @@ async function ingresosRoutes(fastify, options) {
                                 lote_numero: { type: 'string' },
                                 fecha_vencimiento: {
                                     anyOf: [
-                                        { type: 'string', format: 'date' },
+                                        { type: 'string' },
                                         { type: 'null' }
                                     ]
                                 },
@@ -579,7 +674,7 @@ async function ingresosRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const {
-            fecha,
+            fecha: fechaRaw,
             ruc_cliente,
             cliente_id,
             proveedor,
@@ -589,6 +684,8 @@ async function ingresosRoutes(fastify, options) {
             detalles,
             observaciones
         } = request.body;
+
+        const fecha = normalizarFecha(fechaRaw);
 
         // Validaciones
         if (!fecha || !detalles || detalles.length === 0) {
@@ -649,13 +746,14 @@ async function ingresosRoutes(fastify, options) {
                     });
                 }
                 if (detalle.fecha_vencimiento) {
-                    const fechaVenc = new Date(detalle.fecha_vencimiento);
-                    if (Number.isNaN(fechaVenc.getTime())) {
+                    const fechaVenc = normalizarFecha(detalle.fecha_vencimiento);
+                    if (!fechaVenc) {
                         return reply.status(400).send({
                             success: false,
                             error: 'fecha_vencimiento no es válida'
                         });
                     }
+                    detalle.fecha_vencimiento = fechaVenc;
                 }
             }
 
