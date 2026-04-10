@@ -1280,7 +1280,9 @@ async function productoRoutes(fastify, options) {
                 properties: {
                     busqueda: { type: 'string' },
                     categoria_ingreso: { type: 'string' },
-                    activo: { type: 'string', enum: ['true', 'false'] }
+                    activo: { type: 'string', enum: ['true', 'false'] },
+                    cliente_id: { type: 'integer' },
+                    cliente_ruc: { type: 'string' }
                 }
             },
             response: {
@@ -1296,6 +1298,8 @@ async function productoRoutes(fastify, options) {
                                     id: { type: 'integer' },
                                     codigo: { type: 'string' },
                                     descripcion: { type: 'string' },
+                                    cliente_nombre: { type: 'string', nullable: true },
+                                    cliente_ruc: { type: 'string', nullable: true },
                                     proveedor: { type: 'string', nullable: true },
                                     categoria_ingreso: { type: 'string', nullable: true },
                                     um: { type: 'string', nullable: true },
@@ -1314,7 +1318,7 @@ async function productoRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { busqueda, categoria_ingreso, activo } = request.query;
+        const { busqueda, categoria_ingreso, activo, cliente_id, cliente_ruc } = request.query;
 
         const qb = productoRepo.createQueryBuilder('producto');
 
@@ -1332,12 +1336,45 @@ async function productoRoutes(fastify, options) {
             qb.andWhere('producto.activo = :activo', { activo: toActivoSmallint(activo) });
         }
 
+        if (cliente_id) {
+            const clienteIdNum = Number(cliente_id);
+            qb.andWhere(new Brackets((qbx) => {
+                qbx.where('producto.cliente_id = :cliente_id', { cliente_id: clienteIdNum });
+                qbx.orWhere(`EXISTS (
+                    SELECT 1
+                    FROM lotes l2
+                    INNER JOIN notas_ingreso ni2 ON ni2.id = l2.nota_ingreso_id
+                    WHERE l2.producto_id = producto.id
+                      AND ni2.cliente_id = :cliente_id
+                )`, { cliente_id: clienteIdNum });
+            }));
+        }
+
+        if (cliente_ruc) {
+            qb.andWhere(new Brackets((qbx) => {
+                qbx.where(
+                    "regexp_replace(upper(coalesce(producto.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')",
+                    { cliente_ruc }
+                );
+                qbx.orWhere(`EXISTS (
+                    SELECT 1
+                    FROM lotes l3
+                    INNER JOIN notas_ingreso ni3 ON ni3.id = l3.nota_ingreso_id
+                    WHERE l3.producto_id = producto.id
+                      AND regexp_replace(upper(coalesce(ni3.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')
+                )`, { cliente_ruc });
+            }));
+        }
+
         qb.leftJoin('lotes', 'lote', 'lote.producto_id = producto.id');
+        qb.leftJoin('clientes', 'cliente_directo', 'cliente_directo.id = producto.cliente_id');
 
         qb.select([
             'producto.id AS id',
             'producto.codigo AS codigo',
             'producto.descripcion AS descripcion',
+            'cliente_directo.razon_social AS cliente_nombre',
+            "COALESCE(NULLIF(producto.cliente_ruc, ''), cliente_directo.cuit) AS cliente_ruc",
             'producto.proveedor AS proveedor',
             'producto.categoria_ingreso AS categoria_ingreso',
             'producto.um AS um',
@@ -1352,6 +1389,9 @@ async function productoRoutes(fastify, options) {
         qb.groupBy('producto.id')
             .addGroupBy('producto.codigo')
             .addGroupBy('producto.descripcion')
+            .addGroupBy('cliente_directo.razon_social')
+            .addGroupBy('cliente_directo.cuit')
+            .addGroupBy('producto.cliente_ruc')
             .addGroupBy('producto.proveedor')
             .addGroupBy('producto.categoria_ingreso')
             .addGroupBy('producto.um')
@@ -1366,6 +1406,8 @@ async function productoRoutes(fastify, options) {
             id: Number(row.id),
             codigo: row.codigo,
             descripcion: row.descripcion,
+            cliente_nombre: row.cliente_nombre || null,
+            cliente_ruc: row.cliente_ruc || null,
             proveedor: row.proveedor || null,
             categoria_ingreso: row.categoria_ingreso || null,
             um: row.um || null,

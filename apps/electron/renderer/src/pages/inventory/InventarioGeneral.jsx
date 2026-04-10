@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { productService } from '../../services/product.service';
+import { clientesService } from '../../services/clientes.service';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent } from '../../components/common/Card';
 
@@ -26,21 +27,21 @@ const formatDatePE = (value) => {
 };
 
 // ─── Sub-componente: detalle de lotes de un producto ─────────────────────────
-const LotesDetalle = ({ productoId }) => {
+const LotesDetalle = ({ productoId, clienteId }) => {
     const [lotes, setLotes] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        productService.getLotesByProduct(productoId)
+        productService.getLotesByProduct(productoId, clienteId || null)
             .then(data => setLotes(data || []))
             .catch(() => setLotes([]))
             .finally(() => setLoading(false));
-    }, [productoId]);
+    }, [productoId, clienteId]);
 
     if (loading) {
         return (
             <tr>
-                <td colSpan={9} className="px-6 py-3 bg-slate-50">
+                <td colSpan={10} className="px-6 py-3 bg-slate-50">
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                         <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                         Cargando lotes...
@@ -53,7 +54,7 @@ const LotesDetalle = ({ productoId }) => {
     if (lotes.length === 0) {
         return (
             <tr>
-                <td colSpan={9} className="px-8 py-3 bg-slate-50 text-xs text-slate-400 italic">
+                <td colSpan={10} className="px-8 py-3 bg-slate-50 text-xs text-slate-400 italic">
                     Sin lotes registrados.
                 </td>
             </tr>
@@ -74,7 +75,7 @@ const LotesDetalle = ({ productoId }) => {
 
     return (
         <tr>
-            <td colSpan={9} className="px-0 bg-gradient-to-r from-blue-50/80 to-slate-50 border-b border-blue-100">
+            <td colSpan={10} className="px-0 bg-gradient-to-r from-blue-50/80 to-slate-50 border-b border-blue-100">
                 <div className="px-10 py-3">
                     <div className="flex items-center gap-2 mb-2">
                         <svg className="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -166,22 +167,29 @@ export const InventarioGeneral = () => {
     const [inventario, setInventario] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busqueda, setBusqueda] = useState('');
+    const [clientes, setClientes] = useState([]);
+    const [clienteFiltro, setClienteFiltro] = useState('');
     const [stockFiltro, setStockFiltro] = useState('');
     const [vencimientoFiltro, setVencimientoFiltro] = useState('');
-    const [expandedRows, setExpandedRows] = useState(new Set());
 
-    const toggleRow = useCallback((productoId) => {
-        setExpandedRows(prev => {
-            const next = new Set(prev);
-            if (next.has(productoId)) { next.delete(productoId); } else { next.add(productoId); }
-            return next;
-        });
+    useEffect(() => {
+        const cargarClientes = async () => {
+            try {
+                const response = await clientesService.listar({ limit: 1000, activo: 'true' });
+                setClientes(response?.data || []);
+            } catch {
+                setClientes([]);
+            }
+        };
+        cargarClientes();
     }, []);
 
     const loadInventario = async () => {
         try {
             setLoading(true);
-            const data = await productService.getInventario({ busqueda });
+            const filtros = { busqueda };
+            if (clienteFiltro) filtros.cliente_id = Number(clienteFiltro);
+            const data = await productService.getInventario(filtros);
             setInventario(data);
         } catch (error) {
             console.error('Error cargando inventario:', error);
@@ -190,7 +198,7 @@ export const InventarioGeneral = () => {
         }
     };
 
-    useEffect(() => { loadInventario(); }, [busqueda]);
+    useEffect(() => { loadInventario(); }, [busqueda, clienteFiltro]);
 
     const getStockStatus = (stock, min) => {
         if (stock <= 0) return { label: 'Sin Stock', variant: 'anulado' };
@@ -367,7 +375,7 @@ export const InventarioGeneral = () => {
             {/* Filtros */}
             <Card>
                 <CardContent className="p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 
                         {/* Búsqueda */}
                         <div>
@@ -419,16 +427,35 @@ export const InventarioGeneral = () => {
                             </select>
                         </div>
 
+                        {/* Cliente */}
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Cliente
+                            </label>
+                            <select
+                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                                value={clienteFiltro}
+                                onChange={(e) => setClienteFiltro(e.target.value)}
+                            >
+                                <option value="">Todos los clientes</option>
+                                {clientes.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {(c.razon_social || c.nombre || 'Cliente')} {c.cuit ? `- ${c.cuit}` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
                     </div>
 
                     {/* Resultados visibles + botón reset */}
-                    {(stockFiltro || vencimientoFiltro) && (
+                    {(stockFiltro || vencimientoFiltro || clienteFiltro) && (
                         <div className="mt-3 flex items-center justify-between">
                             <span className="text-xs text-slate-500">
                                 Mostrando <strong className="text-slate-700">{inventarioFiltrado.length}</strong> de {totalProductos} productos
                             </span>
                             <button
-                                onClick={() => { setStockFiltro(''); setVencimientoFiltro(''); }}
+                                onClick={() => { setStockFiltro(''); setVencimientoFiltro(''); setClienteFiltro(''); }}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
                             >
                                 Limpiar filtros
@@ -465,6 +492,9 @@ export const InventarioGeneral = () => {
                                             Descripción
                                         </th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                            Cliente
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                             Proveedor
                                         </th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
@@ -474,7 +504,7 @@ export const InventarioGeneral = () => {
                                             Unidad
                                         </th>
                                         <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                                            Lotes <span className="text-slate-400 font-normal normal-case">(clic)</span>
+                                            Lotes
                                         </th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                             Próx. Vencimiento
@@ -490,10 +520,9 @@ export const InventarioGeneral = () => {
                                 <tbody className="bg-white divide-y divide-slate-200">
                                     {inventarioFiltrado.map((producto) => {
                                         const status = getStockStatus(producto.stock_calculado, producto.stock_minimo);
-                                        const isExpanded = expandedRows.has(producto.id);
                                         return (
                                             <React.Fragment key={producto.id}>
-                                                <tr className={`transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}>
+                                                <tr className="transition-colors bg-blue-50/40">
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className="text-sm font-medium text-slate-900">
                                                             {producto.codigo || '-'}
@@ -508,6 +537,14 @@ export const InventarioGeneral = () => {
                                                                 RS: {producto.registro_sanitario}
                                                             </div>
                                                         )}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="text-sm text-slate-700">
+                                                            {producto.cliente_nombre || '-'}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1">
+                                                            {producto.cliente_ruc || '-'}
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <span className="text-sm text-slate-600">
@@ -525,25 +562,9 @@ export const InventarioGeneral = () => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                        {(producto.total_lotes || 0) > 0 ? (
-                                                            <button
-                                                                onClick={() => toggleRow(producto.id)}
-                                                                title={isExpanded ? 'Ocultar lotes' : 'Ver desglose por lote'}
-                                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all
-                                                                ${isExpanded
-                                                                        ? 'bg-blue-600 text-white shadow-md'
-                                                                        : 'bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700'}
-                                                            `}
-                                                            >
-                                                                {producto.total_lotes}
-                                                                <svg className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-                                                                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                                                </svg>
-                                                            </button>
-                                                        ) : (
-                                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-400 text-xs">0</span>
-                                                        )}
+                                                        <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                                                            {producto.total_lotes || 0}
+                                                        </span>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         {(() => {
@@ -579,7 +600,7 @@ export const InventarioGeneral = () => {
                                                         <Badge variant={status.variant}>{status.label}</Badge>
                                                     </td>
                                                 </tr>
-                                                {isExpanded && <LotesDetalle productoId={producto.id} />}
+                                                <LotesDetalle productoId={producto.id} clienteId={clienteFiltro ? Number(clienteFiltro) : null} />
                                             </React.Fragment>
                                         );
                                     })}
