@@ -173,6 +173,16 @@ export const InventarioGeneral = () => {
     const [vencimientoFiltro, setVencimientoFiltro] = useState('');
     const [expandedRows, setExpandedRows] = useState(new Set());
 
+    const normalizarRuc = (value) => String(value || '').replace(/\D/g, '');
+
+    const obtenerNombreCliente = (producto) => {
+        if (producto?.cliente_nombre) return producto.cliente_nombre;
+        const ruc = normalizarRuc(producto?.cliente_ruc);
+        if (!ruc) return '-';
+        const cliente = clientes.find((c) => normalizarRuc(c?.cuit) === ruc);
+        return cliente?.razon_social || '-';
+    };
+
     const toggleRow = (productoId) => {
         setExpandedRows((prev) => {
             const next = new Set(prev);
@@ -561,7 +571,7 @@ export const InventarioGeneral = () => {
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <div className="text-sm text-slate-700">
-                                                            {producto.cliente_nombre || '-'}
+                                                            {obtenerNombreCliente(producto)}
                                                         </div>
                                                         <div className="text-xs text-slate-500 mt-1">
                                                             {producto.cliente_ruc || '-'}
