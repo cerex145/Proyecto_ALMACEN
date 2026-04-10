@@ -1344,8 +1344,8 @@ async function productoRoutes(fastify, options) {
                 p.id AS id,
                 p.codigo AS codigo,
                 p.descripcion AS descripcion,
-                cd.razon_social AS cliente_nombre,
-                COALESCE(NULLIF(p.cliente_ruc, ''), cd.cuit) AS cliente_ruc,
+                COALESCE(cd.razon_social, cr.razon_social) AS cliente_nombre,
+                COALESCE(NULLIF(p.cliente_ruc, ''), cd.cuit, cr.cuit) AS cliente_ruc,
                 p.proveedor AS proveedor,
                 p.categoria_ingreso AS categoria_ingreso,
                 p.um AS um,
@@ -1385,6 +1385,12 @@ async function productoRoutes(fastify, options) {
                 GROUP BY l.producto_id
             ) ls ON ls.producto_id = p.id
             LEFT JOIN clientes cd ON cd.id = p.cliente_id
+            LEFT JOIN LATERAL (
+                SELECT c_match.razon_social, c_match.cuit
+                FROM clientes c_match
+                WHERE regexp_replace(coalesce(c_match.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(p.cliente_ruc, ''), '\\D', '', 'g')
+                LIMIT 1
+            ) cr ON true
             WHERE 1=1
         `;
 
