@@ -171,6 +171,19 @@ export const InventarioGeneral = () => {
     const [clienteFiltro, setClienteFiltro] = useState('');
     const [stockFiltro, setStockFiltro] = useState('');
     const [vencimientoFiltro, setVencimientoFiltro] = useState('');
+    const [expandedRows, setExpandedRows] = useState(new Set());
+
+    const toggleRow = (productoId) => {
+        setExpandedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(productoId)) {
+                next.delete(productoId);
+            } else {
+                next.add(productoId);
+            }
+            return next;
+        });
+    };
 
     useEffect(() => {
         const cargarClientes = async () => {
@@ -520,9 +533,10 @@ export const InventarioGeneral = () => {
                                 <tbody className="bg-white divide-y divide-slate-200">
                                     {inventarioFiltrado.map((producto) => {
                                         const status = getStockStatus(producto.stock_calculado, producto.stock_minimo);
+                                        const isExpanded = expandedRows.has(producto.id);
                                         return (
                                             <React.Fragment key={producto.id}>
-                                                <tr className="transition-colors bg-blue-50/40">
+                                                <tr className={`transition-colors ${isExpanded ? 'bg-blue-50/40' : 'hover:bg-slate-50'}`}>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         <span className="text-sm font-medium text-slate-900">
                                                             {producto.codigo || '-'}
@@ -562,9 +576,29 @@ export const InventarioGeneral = () => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                        <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
-                                                            {producto.total_lotes || 0}
-                                                        </span>
+                                                        {(producto.total_lotes || 0) > 0 ? (
+                                                            <button
+                                                                onClick={() => toggleRow(producto.id)}
+                                                                title={isExpanded ? 'Ocultar desglose de lotes' : 'Ver desglose de lotes'}
+                                                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                                                                    isExpanded
+                                                                        ? 'bg-blue-600 text-white shadow-md'
+                                                                        : 'bg-slate-100 text-slate-700 hover:bg-blue-100 hover:text-blue-700'
+                                                                }`}
+                                                            >
+                                                                {producto.total_lotes}
+                                                                <svg
+                                                                    className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                                                    fill="none"
+                                                                    viewBox="0 0 24 24"
+                                                                    stroke="currentColor"
+                                                                >
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                            </button>
+                                                        ) : (
+                                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-400 text-xs">0</span>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
                                                         {(() => {
@@ -600,7 +634,9 @@ export const InventarioGeneral = () => {
                                                         <Badge variant={status.variant}>{status.label}</Badge>
                                                     </td>
                                                 </tr>
-                                                <LotesDetalle productoId={producto.id} clienteId={clienteFiltro ? Number(clienteFiltro) : null} />
+                                                {isExpanded && (
+                                                    <LotesDetalle productoId={producto.id} clienteId={clienteFiltro ? Number(clienteFiltro) : null} />
+                                                )}
                                             </React.Fragment>
                                         );
                                     })}

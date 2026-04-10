@@ -1274,7 +1274,7 @@ async function productoRoutes(fastify, options) {
     fastify.get('/api/productos/inventario', {
         schema: {
             tags: ['Productos'],
-            description: 'Vista de inventario: stock real calculado desde la suma de lotes disponibles',
+            description: 'Vista de inventario: stock calculado con la misma base de movimientos del kardex',
             querystring: {
                 type: 'object',
                 properties: {
@@ -1319,88 +1319,166 @@ async function productoRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { busqueda, categoria_ingreso, activo, cliente_id, cliente_ruc } = request.query;
+        const connection = productoRepo.manager.connection;
+        const params = [];
+        let idx = 1;
 
-        const qb = productoRepo.createQueryBuilder('producto');
+        let clienteNombreFiltro = null;
+        let clienteRucFiltro = String(cliente_ruc || '').trim();
+        if (cliente_id) {
+            const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
+            if (!cliente) {
+                return { success: true, data: [] };
+            }
+            clienteNombreFiltro = String(cliente.razon_social || '').trim();
+            if (!clienteRucFiltro) {
+                clienteRucFiltro = String(cliente.cuit || '').trim();
+            }
+        }
+
+        let sql = `
+            SELECT
+                p.id AS id,
+                p.codigo AS codigo,
+                p.descripcion AS descripcion,
+                cd.razon_social AS cliente_nombre,
+                COALESCE(NULLIF(p.cliente_ruc, ''), cd.cuit) AS cliente_ruc,
+                p.proveedor AS proveedor,
+                p.categoria_ingreso AS categoria_ingreso,
+                p.um AS um,
+                p.unidad AS unidad,
+                p.registro_sanitario AS registro_sanitario,
+                COALESCE(ks.stock_calculado, 0) AS stock_calculado,
+                COALESCE(ls.total_lotes, 0) AS total_lotes,
+                ls.proximo_vencimiento AS proximo_vencimiento,
+                p.activo AS activo
+            FROM productos p
+            INNER JOIN (
+                SELECT
+                    k.producto_id,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN k.cantidad
+                            WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO') THEN -k.cantidad
+                            ELSE 0
+                        END
+                    ), 0) AS stock_calculado
+                FROM kardex k
+                GROUP BY k.producto_id
+            ) ks ON ks.producto_id = p.id
+            LEFT JOIN (
+                SELECT
+                    l.producto_id,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
+                    ) AS total_lotes,
+                    MIN(
+                        CASE
+                            WHEN COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
+                            THEN l.fecha_vencimiento
+                        END
+                    ) AS proximo_vencimiento
+                FROM lotes l
+                GROUP BY l.producto_id
+            ) ls ON ls.producto_id = p.id
+            LEFT JOIN clientes cd ON cd.id = p.cliente_id
+            WHERE 1=1
+        `;
 
         const busquedaTexto = (busqueda || '').trim();
         if (busquedaTexto) {
-            qb.andWhere(
-                '(producto.codigo LIKE :b OR producto.descripcion LIKE :b OR producto.proveedor LIKE :b OR producto.fabricante LIKE :b)',
-                { b: `%${busquedaTexto}%` }
-            );
+            sql += `
+                AND (
+                    p.codigo ILIKE $${idx}
+                    OR p.descripcion ILIKE $${idx}
+                    OR p.proveedor ILIKE $${idx}
+                    OR p.fabricante ILIKE $${idx}
+                )
+            `;
+            params.push(`%${busquedaTexto}%`);
+            idx += 1;
         }
+
         if (categoria_ingreso) {
-            qb.andWhere('producto.categoria_ingreso = :cat', { cat: categoria_ingreso });
+            sql += ` AND p.categoria_ingreso = $${idx}`;
+            params.push(categoria_ingreso);
+            idx += 1;
         }
+
         if (activo !== undefined) {
-            qb.andWhere('producto.activo = :activo', { activo: toActivoSmallint(activo) });
+            sql += ` AND p.activo = $${idx}`;
+            params.push(toActivoSmallint(activo));
+            idx += 1;
         }
 
-        if (cliente_id) {
-            const clienteIdNum = Number(cliente_id);
-            qb.andWhere(new Brackets((qbx) => {
-                qbx.where('producto.cliente_id = :cliente_id', { cliente_id: clienteIdNum });
-                qbx.orWhere(`EXISTS (
-                    SELECT 1
-                    FROM lotes l2
-                    INNER JOIN notas_ingreso ni2 ON ni2.id = l2.nota_ingreso_id
-                    WHERE l2.producto_id = producto.id
-                      AND ni2.cliente_id = :cliente_id
-                )`, { cliente_id: clienteIdNum });
-            }));
+        if (clienteNombreFiltro) {
+            sql += `
+                AND (
+                    p.cliente_id = $${idx}
+                    OR EXISTS (
+                        SELECT 1
+                        FROM kardex kf
+                        LEFT JOIN notas_ingreso ni
+                            ON kf.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
+                            AND kf.referencia_id = ni.id
+                            AND kf.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
+                        LEFT JOIN notas_salida ns
+                            ON kf.documento_tipo = 'NOTA_SALIDA'
+                            AND kf.referencia_id = ns.id
+                            AND kf.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+                        LEFT JOIN clientes c ON ns.cliente_id = c.id
+                        WHERE kf.producto_id = p.id
+                          AND (
+                            ni.proveedor ILIKE $${idx + 1}
+                            OR c.razon_social ILIKE $${idx + 1}
+                            OR EXISTS (
+                                SELECT 1
+                                FROM lotes lcf
+                                JOIN notas_ingreso nicf ON lcf.nota_ingreso_id = nicf.id
+                                WHERE lcf.producto_id = p.id
+                                  AND nicf.proveedor ILIKE $${idx + 1}
+                            )
+                          )
+                    )
+                )
+            `;
+            params.push(Number(cliente_id));
+            params.push(`%${clienteNombreFiltro}%`);
+            idx += 2;
         }
 
-        if (cliente_ruc) {
-            qb.andWhere(new Brackets((qbx) => {
-                qbx.where(
-                    "regexp_replace(upper(coalesce(producto.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')",
-                    { cliente_ruc }
-                );
-                qbx.orWhere(`EXISTS (
-                    SELECT 1
-                    FROM lotes l3
-                    INNER JOIN notas_ingreso ni3 ON ni3.id = l3.nota_ingreso_id
-                    WHERE l3.producto_id = producto.id
-                      AND regexp_replace(upper(coalesce(ni3.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper(:cliente_ruc), '[^A-Z0-9]', '', 'g')
-                )`, { cliente_ruc });
-            }));
+        if (clienteRucFiltro) {
+            sql += `
+                AND (
+                    regexp_replace(upper(coalesce(p.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                    OR regexp_replace(upper(coalesce(cd.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                    OR EXISTS (
+                        SELECT 1
+                        FROM kardex kf2
+                        LEFT JOIN notas_ingreso ni2
+                            ON kf2.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
+                            AND kf2.referencia_id = ni2.id
+                            AND kf2.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
+                        LEFT JOIN notas_salida ns2
+                            ON kf2.documento_tipo = 'NOTA_SALIDA'
+                            AND kf2.referencia_id = ns2.id
+                            AND kf2.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+                        LEFT JOIN clientes c2 ON ns2.cliente_id = c2.id
+                        WHERE kf2.producto_id = p.id
+                          AND (
+                            regexp_replace(upper(coalesce(ni2.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                            OR regexp_replace(upper(coalesce(c2.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                          )
+                    )
+                )
+            `;
+            params.push(clienteRucFiltro);
+            idx += 1;
         }
 
-        qb.leftJoin('lotes', 'lote', 'lote.producto_id = producto.id');
-        qb.leftJoin('clientes', 'cliente_directo', 'cliente_directo.id = producto.cliente_id');
+        sql += ` ORDER BY p.descripcion ASC`;
 
-        qb.select([
-            'producto.id AS id',
-            'producto.codigo AS codigo',
-            'producto.descripcion AS descripcion',
-            'cliente_directo.razon_social AS cliente_nombre',
-            "COALESCE(NULLIF(producto.cliente_ruc, ''), cliente_directo.cuit) AS cliente_ruc",
-            'producto.proveedor AS proveedor',
-            'producto.categoria_ingreso AS categoria_ingreso',
-            'producto.um AS um',
-            'producto.unidad AS unidad',
-            'producto.registro_sanitario AS registro_sanitario',
-            'COALESCE(SUM(COALESCE(NULLIF(lote.cantidad_disponible, 0), lote.cantidad_actual, lote.cantidad_inicial, 0)), 0) AS stock_calculado',
-            'COUNT(lote.id) AS total_lotes',
-            "MIN(CASE WHEN COALESCE(NULLIF(lote.cantidad_disponible, 0), lote.cantidad_actual, lote.cantidad_inicial, 0) > 0 THEN lote.fecha_vencimiento END) AS proximo_vencimiento",
-            'producto.activo AS activo'
-        ]);
-
-        qb.groupBy('producto.id')
-            .addGroupBy('producto.codigo')
-            .addGroupBy('producto.descripcion')
-            .addGroupBy('cliente_directo.razon_social')
-            .addGroupBy('cliente_directo.cuit')
-            .addGroupBy('producto.cliente_ruc')
-            .addGroupBy('producto.proveedor')
-            .addGroupBy('producto.categoria_ingreso')
-            .addGroupBy('producto.um')
-            .addGroupBy('producto.unidad')
-            .addGroupBy('producto.registro_sanitario')
-            .addGroupBy('producto.activo')
-            .orderBy('producto.descripcion', 'ASC');
-
-        const rows = await qb.getRawMany();
+        const rows = await connection.query(sql, params);
 
         const data = rows.map((row) => ({
             id: Number(row.id),
