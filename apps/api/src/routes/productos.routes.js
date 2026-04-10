@@ -1281,6 +1281,7 @@ async function productoRoutes(fastify, options) {
                     busqueda: { type: 'string' },
                     categoria_ingreso: { type: 'string' },
                     activo: { type: 'string', enum: ['true', 'false'] },
+                    cliente_nombre: { type: 'string' },
                     cliente_id: { type: 'integer' },
                     cliente_ruc: { type: 'string' }
                 }
@@ -1318,19 +1319,21 @@ async function productoRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { busqueda, categoria_ingreso, activo, cliente_id, cliente_ruc } = request.query;
+        const { busqueda, categoria_ingreso, activo, cliente_nombre, cliente_id, cliente_ruc } = request.query;
         const connection = productoRepo.manager.connection;
         const params = [];
         let idx = 1;
 
-        let clienteNombreFiltro = null;
+        let clienteNombreFiltro = String(cliente_nombre || '').trim();
         let clienteRucFiltro = String(cliente_ruc || '').trim();
         if (cliente_id) {
             const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
             if (!cliente) {
                 return { success: true, data: [] };
             }
-            clienteNombreFiltro = String(cliente.razon_social || '').trim();
+            if (!clienteNombreFiltro) {
+                clienteNombreFiltro = String(cliente.razon_social || '').trim();
+            }
             if (!clienteRucFiltro) {
                 clienteRucFiltro = String(cliente.cuit || '').trim();
             }
@@ -1414,8 +1417,7 @@ async function productoRoutes(fastify, options) {
         if (clienteNombreFiltro) {
             sql += `
                 AND (
-                    p.cliente_id = $${idx}
-                    OR EXISTS (
+                    EXISTS (
                         SELECT 1
                         FROM kardex kf
                         LEFT JOIN notas_ingreso ni
@@ -1429,22 +1431,21 @@ async function productoRoutes(fastify, options) {
                         LEFT JOIN clientes c ON ns.cliente_id = c.id
                         WHERE kf.producto_id = p.id
                           AND (
-                            ni.proveedor ILIKE $${idx + 1}
-                            OR c.razon_social ILIKE $${idx + 1}
+                                                        ni.proveedor ILIKE $${idx}
+                                                        OR c.razon_social ILIKE $${idx}
                             OR EXISTS (
                                 SELECT 1
                                 FROM lotes lcf
                                 JOIN notas_ingreso nicf ON lcf.nota_ingreso_id = nicf.id
                                 WHERE lcf.producto_id = p.id
-                                  AND nicf.proveedor ILIKE $${idx + 1}
+                                                                    AND nicf.proveedor ILIKE $${idx}
                             )
                           )
                     )
                 )
             `;
-            params.push(Number(cliente_id));
-            params.push(`%${clienteNombreFiltro}%`);
-            idx += 2;
+                        params.push(`%${clienteNombreFiltro}%`);
+                        idx += 1;
         }
 
         if (clienteRucFiltro) {

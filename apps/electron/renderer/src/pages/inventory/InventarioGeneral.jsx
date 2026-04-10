@@ -201,7 +201,14 @@ export const InventarioGeneral = () => {
         try {
             setLoading(true);
             const filtros = { busqueda };
-            if (clienteFiltro) filtros.cliente_id = Number(clienteFiltro);
+            if (clienteFiltro) {
+                const clienteIdNum = Number(clienteFiltro);
+                const clienteSel = clientes.find((c) => Number(c.id) === clienteIdNum);
+                filtros.cliente_id = clienteIdNum;
+                if (clienteSel?.razon_social) {
+                    filtros.cliente_nombre = clienteSel.razon_social;
+                }
+            }
             const data = await productService.getInventario(filtros);
             setInventario(data);
         } catch (error) {
@@ -211,7 +218,7 @@ export const InventarioGeneral = () => {
         }
     };
 
-    useEffect(() => { loadInventario(); }, [busqueda, clienteFiltro]);
+    useEffect(() => { loadInventario(); }, [busqueda, clienteFiltro, clientes]);
 
     const getStockStatus = (stock, min) => {
         if (stock <= 0) return { label: 'Sin Stock', variant: 'anulado' };
