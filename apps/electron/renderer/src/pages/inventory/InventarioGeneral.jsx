@@ -5,19 +5,37 @@ import { clientesService } from '../../services/clientes.service';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent } from '../../components/common/Card';
 
+const MS_PER_DAY = 86400000;
+
+const getStartOfDay = (value = new Date()) => {
+    const date = new Date(value);
+    date.setHours(0, 0, 0, 0);
+    return date;
+};
+
 const parseSafeDate = (value) => {
     if (!value) return null;
     if (value instanceof Date) {
-        return Number.isNaN(value.getTime()) ? null : value;
+        if (Number.isNaN(value.getTime())) return null;
+        return getStartOfDay(value);
     }
     const str = String(value).trim();
     if (!str) return null;
 
-    const candidate = /^\d{4}-\d{2}-\d{2}$/.test(str)
-        ? new Date(`${str}T00:00:00`)
+    const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const candidate = dateOnlyMatch
+        ? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
         : new Date(str);
 
-    return Number.isNaN(candidate.getTime()) ? null : candidate;
+    if (Number.isNaN(candidate.getTime())) return null;
+    return getStartOfDay(candidate);
+};
+
+const getDaysUntil = (value, baseDate = new Date()) => {
+    const target = parseSafeDate(value);
+    if (!target) return null;
+    const base = getStartOfDay(baseDate);
+    return Math.floor((target.getTime() - base.getTime()) / MS_PER_DAY);
 };
 
 const formatDatePE = (value) => {
@@ -61,12 +79,10 @@ const LotesDetalle = ({ productoId, clienteId }) => {
         );
     }
 
-    const today = new Date();
+    const today = getStartOfDay();
     const getVencimientoStyle = (fecha) => {
-        if (!fecha) return 'text-slate-400';
-        const d = parseSafeDate(fecha);
-        if (!d) return 'text-slate-400';
-        const dias = Math.floor((d - today) / 86400000);
+        const dias = getDaysUntil(fecha, today);
+        if (dias === null) return 'text-slate-400';
         if (dias < 0) return 'text-red-600 font-semibold';
         if (dias <= 30) return 'text-red-500';
         if (dias <= 90) return 'text-amber-500';
@@ -237,8 +253,7 @@ export const InventarioGeneral = () => {
     };
 
     // ─── Filtrado cliente ──────────────────────────────────────────────────────
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalizar a inicio del día
+    const today = getStartOfDay();
 
     const inventarioFiltrado = inventario.filter(p => {
         // Filtro por estado de stock
@@ -249,8 +264,8 @@ export const InventarioGeneral = () => {
 
         // Filtro por vencimiento
         if (vencimientoFiltro) {
-            const fv = p.proximo_vencimiento ? new Date(p.proximo_vencimiento + 'T00:00:00') : null;
-            const diasHastaVenc = fv ? Math.floor((fv - today) / 86400000) : null;
+            const fv = parseSafeDate(p.proximo_vencimiento);
+            const diasHastaVenc = getDaysUntil(fv, today);
 
             if (vencimientoFiltro === 'vencido') {
                 // Vencidos: solo los que ya vencieron (fecha < hoy)
@@ -681,11 +696,10 @@ export const InventarioGeneral = () => {
                                                             if (!proximo) {
                                                                 return <span className="text-xs text-slate-400">Sin lotes</span>;
                                                             }
-                                                            const now30 = new Date(Date.now() + 30 * 86400000);
-                                                            const now90 = new Date(Date.now() + 90 * 86400000);
-                                                            const colorClass = proximo < now30
+                                                            const diasHasta = getDaysUntil(proximo);
+                                                            const colorClass = diasHasta < 0 || diasHasta <= 30
                                                                 ? 'bg-red-100 text-red-700'
-                                                                : proximo < now90
+                                                                : diasHasta <= 90
                                                                     ? 'bg-amber-100 text-amber-700'
                                                                     : 'bg-green-100 text-green-700';
                                                             return (
