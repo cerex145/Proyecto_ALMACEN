@@ -1354,6 +1354,7 @@ async function productoRoutes(fastify, options) {
                 COALESCE(ks.stock_calculado, 0) AS stock_calculado,
                 COALESCE(ls.total_lotes, 0) AS total_lotes,
                 ls.proximo_vencimiento AS proximo_vencimiento,
+                ls.lotes_json AS lotes_json,
                 p.activo AS activo
             FROM productos p
             INNER JOIN (
@@ -1380,7 +1381,17 @@ async function productoRoutes(fastify, options) {
                             WHEN COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
                             THEN l.fecha_vencimiento
                         END
-                    ) AS proximo_vencimiento
+                    ) AS proximo_vencimiento,
+                    json_agg(
+                        json_build_object(
+                            'numero_lote', l.numero_lote,
+                            'fecha_vencimiento', l.fecha_vencimiento,
+                            'cantidad_ingresada', COALESCE(l.cantidad_ingresada, 0),
+                            'cantidad_disponible', COALESCE(l.cantidad_disponible, 0)
+                        )
+                    ) FILTER (
+                        WHERE COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
+                    ) AS lotes_json
                 FROM lotes l
                 GROUP BY l.producto_id
             ) ls ON ls.producto_id = p.id
@@ -1502,7 +1513,8 @@ async function productoRoutes(fastify, options) {
             stock_calculado: Number(row.stock_calculado || 0),
             total_lotes: Number(row.total_lotes || 0),
             proximo_vencimiento: row.proximo_vencimiento || null,
-            activo: Number(row.activo || 0) === 1
+            activo: Number(row.activo || 0) === 1,
+            lotes: Array.isArray(row.lotes_json) ? row.lotes_json : []
         }));
 
         return { success: true, data };

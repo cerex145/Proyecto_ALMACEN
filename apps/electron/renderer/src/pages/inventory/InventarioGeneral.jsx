@@ -288,30 +288,64 @@ export const InventarioGeneral = () => {
     const stockTotal = inventario.reduce((sum, p) => sum + p.stock_calculado, 0);
     const productosConStock = inventario.filter(p => p.stock_calculado > 0).length;
 
-    const mapProductoToExcel = (p) => ({
-        'Código': p.codigo || '-',
-        'Descripción': p.descripcion,
-        'Registro Sanitario': p.registro_sanitario || '-',
-        'Proveedor': p.proveedor || '-',
-        'Categoría': p.categoria_ingreso?.replace(/_/g, ' ') || '-',
-        'Unidad': p.um || p.unidad || 'UND',
-        'Lotes Activos': p.total_lotes || 0,
-        'Próximo Vencimiento': p.proximo_vencimiento ? formatDatePE(p.proximo_vencimiento) : 'Sin lotes',
-        'Stock Actual': Number(p.stock_calculado).toFixed(2),
-        'Estado': getStockStatus(p.stock_calculado, p.stock_minimo).label
-    });
+    const expandProductosParaExcel = (productosParam) => {
+        const rows = [];
+        productosParam.forEach(p => {
+            rows.push({
+                'Código': p.codigo || '-',
+                'Descripción': p.descripcion,
+                'Registro Sanitario': p.registro_sanitario || '-',
+                'Proveedor': p.proveedor || '-',
+                'Categoría': p.categoria_ingreso?.replace(/_/g, ' ') || '-',
+                'Unidad': p.um || p.unidad || 'UND',
+                'N° Lote': '-',
+                'Lotes Activos': p.total_lotes || 0,
+                'Vencimiento': p.proximo_vencimiento ? formatDatePE(p.proximo_vencimiento) : 'Sin lotes',
+                'Stock Actual': Number(p.stock_calculado).toFixed(2),
+                'Estado': getStockStatus(p.stock_calculado, p.stock_minimo).label
+            });
+
+            if (p.lotes && p.lotes.length > 0) {
+                // Ordenar lotes por fecha de vencimiento ascendente
+                const sortedLotes = [...p.lotes].sort((a, b) => {
+                    const d1 = parseSafeDate(a.fecha_vencimiento);
+                    const d2 = parseSafeDate(b.fecha_vencimiento);
+                    if (!d1 && !d2) return 0;
+                    if (!d1) return 1;
+                    if (!d2) return -1;
+                    return d1.getTime() - d2.getTime();
+                });
+
+                sortedLotes.forEach(lote => {
+                    rows.push({
+                        'Código': '',
+                        'Descripción': '  ↳ Lote:',
+                        'Registro Sanitario': '',
+                        'Proveedor': '',
+                        'Categoría': '',
+                        'Unidad': '',
+                        'N° Lote': lote.numero_lote || '-',
+                        'Lotes Activos': '',
+                        'Vencimiento': lote.fecha_vencimiento ? formatDatePE(lote.fecha_vencimiento) : '-',
+                        'Stock Actual': Number(lote.cantidad_disponible || 0).toFixed(2),
+                        'Estado': ''
+                    });
+                });
+            }
+        });
+        return rows;
+    };
 
     const exportarExcel = () => {
-        if (inventario.length === 0) return;
+        if (inventarioFiltrado.length === 0) return;
         
-        // Determinar qué base de datos usar (si hay búsqueda, usar filtrado, sino todo)
-        const baseDatos = inventarioFiltrado.length > 0 ? inventarioFiltrado : inventario;
+        const baseDatos = inventarioFiltrado;
         
         // 1. Datos para cada hoja
-        const dataGeneral = baseDatos.map(mapProductoToExcel);
-        const dataConStock = baseDatos.filter(p => p.stock_calculado > p.stock_minimo).map(mapProductoToExcel);
-        const dataStockBajo = baseDatos.filter(p => p.stock_calculado > 0 && p.stock_calculado <= p.stock_minimo).map(mapProductoToExcel);
-        const dataSinStock = baseDatos.filter(p => p.stock_calculado <= 0).map(mapProductoToExcel);
+        const dataGeneral = expandProductosParaExcel(baseDatos);
+        const dataConStock = expandProductosParaExcel(baseDatos.filter(p => p.stock_calculado > p.stock_minimo));
+        const dataStockBajo = expandProductosParaExcel(baseDatos.filter(p => p.stock_calculado > 0 && p.stock_calculado <= p.stock_minimo));
+        const dataSinStock = expandProductosParaExcel(baseDatos.filter(p => p.stock_calculado <= 0));
 
         const wb = XLSX.utils.book_new();
 
@@ -320,7 +354,7 @@ export const InventarioGeneral = () => {
             if (datos.length === 0) return;
             const ws = XLSX.utils.json_to_sheet(datos);
             // Agregar Autofilter (flechitas de filtrado en excel) a todas las columnas usadas
-            ws['!autofilter'] = { ref: `A1:J${datos.length + 1}` };
+            ws['!autofilter'] = { ref: `A1:K${datos.length + 1}` };
             XLSX.utils.book_append_sheet(wb, ws, nombre);
         };
 
