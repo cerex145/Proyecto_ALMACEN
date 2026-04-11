@@ -86,5 +86,5 @@ async function cleanupRUC(targetRUC) {
     }
 }
 
-// target RUC solicitado
-cleanupRUC('20605712241');
+// target RUC solicitado (HDM Capital)
+cleanupRUC('20605390332');

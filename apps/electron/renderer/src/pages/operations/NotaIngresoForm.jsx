@@ -136,6 +136,7 @@ export const NotaIngresoForm = () => {
     const [pendientesResolucionCSV, setPendientesResolucionCSV] = useState([]);
     const [indicePendienteCSV, setIndicePendienteCSV] = useState(0);
     const [mostrarModalResolucionCSV, setMostrarModalResolucionCSV] = useState(false);
+    const [importSummaryState, setImportSummaryState] = useState(null);
 
     // Estados para selector masivo de productos
     const [filtroProductosMasivos, setFiltroProductosMasivos] = useState('');
@@ -1596,30 +1597,23 @@ export const NotaIngresoForm = () => {
                     await loadProducts();
                 }
 
-                // Agregar productos importados al formulario
-                if (productosImportados.length > 0) {
-                    productosImportados.forEach((producto) => agregarDetalleImportado(producto));
-                    if (resumenCreado.length > 0 || resumenExistente.length > 0) {
-                        showSuccess(`${productosImportados.length} productos importados correctamente. Resolución automática: ${resumenCreado.length} creado(s), ${resumenExistente.length} existente(s).`);
-                    } else {
-                        showSuccess(`${productosImportados.length} productos importados correctamente.`);
-                    }
-                }
-
-                if (pendientes.length > 0) {
-                    setPendientesResolucionCSV(pendientes);
-                    setIndicePendienteCSV(0);
-                    setMostrarModalResolucionCSV(true);
-                    showError(`Hay ${pendientes.length} fila(s) con múltiples coincidencias de código. Seleccione la opción correcta para cada una.`);
-                }
-
-                // Mostrar errores si existen
+                // Mostrar errores iniciales si existieron, pero preparar confirmación
                 if (errores.length > 0) {
                     setErroresImportacion(errores);
-                    console.error('Errores de importación:', errores);
                 }
 
-                if (pendientes.length === 0) {
+                if (productosImportados.length > 0 || pendientes.length > 0) {
+                    // Retener en estado para confirmación manual antes de ingresarlos
+                    setImportSummaryState({
+                        productos: productosImportados,
+                        pendientes: pendientes,
+                        errores: errores,
+                        resumenCreado: resumenCreado,
+                        resumenExistente: resumenExistente
+                    });
+                } else if (errores.length > 0) {
+                    console.error('Errores de importación:', errores);
+                } else {
                     setMostrarModalImportacion(false);
                 }
                 event.target.value = ''; // Limpiar input file
@@ -1633,6 +1627,34 @@ export const NotaIngresoForm = () => {
             reader.readAsArrayBuffer(file);
         } else {
             reader.readAsText(file);
+        }
+    };
+
+    const handleConfirmarImportacionCSV = () => {
+        if (!importSummaryState) return;
+        const { productos, pendientes, errores, resumenCreado, resumenExistente } = importSummaryState;
+
+        if (productos.length > 0) {
+            productos.forEach((producto) => agregarDetalleImportado(producto));
+            if (resumenCreado.length > 0 || resumenExistente.length > 0) {
+                showSuccess(`${productos.length} productos importados correctamente. Resolución automática: ${resumenCreado.length} creado(s), ${resumenExistente.length} existente(s).`);
+            } else {
+                showSuccess(`${productos.length} productos ingresados correctamente al borrador.`);
+            }
+        }
+
+        if (pendientes.length > 0) {
+            setPendientesResolucionCSV(pendientes);
+            setIndicePendienteCSV(0);
+            setMostrarModalResolucionCSV(true);
+            showError(`Hay ${pendientes.length} fila(s) con múltiples opciones. Resuelva y se añadirán automáticamente.`);
+        }
+
+        if (pendientes.length === 0) {
+            setMostrarModalImportacion(false);
+            setImportSummaryState(null);
+        } else {
+            setImportSummaryState(null);
         }
     };
 
@@ -2510,140 +2532,162 @@ export const NotaIngresoForm = () => {
                         </div>
 
                         <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(85vh-140px)]">
-                            {/* Instrucciones Compactas */}
-                            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-lg">
-                                <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
-                                    <span className="text-xl">📋</span>
-                                    Pasos Rápidos
-                                </h3>
-                                <ol className="list-decimal list-inside space-y-1.5 text-sm text-blue-800">
-                                    <li>Descarga la plantilla Excel</li>
-                                    <li>Ábrela con Excel y completa los datos</li>
-                                    <li>Guarda y selecciona el archivo (.xlsx, .xls o .csv)</li>
-                                </ol>
-                            </div>
+                            {importSummaryState ? (
+                                <div className="bg-white py-4 rounded-lg text-center space-y-6">
+                                    <div className="flex flex-col items-center justify-center gap-2">
+                                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+                                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        </div>
+                                        <h3 className="text-2xl font-bold text-slate-800">Archivo analizado con éxito</h3>
+                                        <p className="text-slate-500">Revise las cantidades antes de confirmar el ingreso al borrador</p>
+                                    </div>
 
-                            {/* Columnas Requeridas - Vista Compacta */}
-                            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-lg border-2 border-amber-200">
-                                <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
-                                    <span className="text-xl">⚠️</span>
-                                    Columnas Obligatorias
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
-                                        <p className="font-mono font-bold text-sm text-slate-800">ruc_cliente</p>
-                                        <p className="text-xs text-slate-600 mt-1">RUC del cliente (una sola nota por archivo)</p>
-                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">20123456789</span></p>
+                                    <div className="flex flex-wrap justify-center gap-6 my-6">
+                                        <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex flex-col items-center min-w-[160px] shadow-sm transform transition-transform hover:scale-105">
+                                            <span className="text-4xl font-black text-blue-600">{importSummaryState.productos.length}</span>
+                                            <span className="font-semibold text-blue-800 text-sm mt-1">Líneas de producto</span>
+                                        </div>
+                                        <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 flex flex-col items-center min-w-[160px] shadow-sm transform transition-transform hover:scale-105">
+                                            <span className="text-4xl font-black text-emerald-600">
+                                                {importSummaryState.productos.reduce((acc, curr) => acc + (Number(curr.cantidad_total) || 0), 0)}
+                                            </span>
+                                            <span className="font-semibold text-emerald-800 text-sm mt-1">Unidades en total</span>
+                                        </div>
+                                        {importSummaryState.pendientes?.length > 0 && (
+                                            <div className="bg-amber-50 p-5 rounded-2xl border border-amber-100 flex flex-col items-center min-w-[160px] shadow-sm transform transition-transform hover:scale-105">
+                                                <span className="text-4xl font-black text-amber-600">{importSummaryState.pendientes.length}</span>
+                                                <span className="font-semibold text-amber-800 text-sm mt-1">Requieren revisión</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
-                                        <p className="font-mono font-bold text-sm text-slate-800">codigo_producto</p>
-                                        <p className="text-xs text-slate-600 mt-1">Código del producto en el sistema</p>
-                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">PROD001</span></p>
+                                    
+                                    <div className="text-sm bg-slate-50 p-4 rounded-xl text-slate-600">
+                                        💡 Al confirmar, estos productos se añadirán a la lista de detalles y podrás seguir editándolos si es necesario antes de grabar finalmente la Nota de Ingreso.
                                     </div>
-                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
-                                        <p className="font-mono font-bold text-sm text-slate-800">lote</p>
-                                        <p className="text-xs text-slate-600 mt-1">Número de lote</p>
-                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">LOTE-2024-001</span></p>
-                                    </div>
-                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
-                                        <p className="font-mono font-bold text-sm text-slate-800">fecha de ingreso</p>
-                                        <p className="text-xs text-slate-600 mt-1">Fecha única para la nota (YYYY-MM-DD o DD/MM/YYYY)</p>
-                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">2026-03-30</span></p>
-                                    </div>
-                                    <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
-                                        <p className="font-mono font-bold text-sm text-slate-800">cantidad_total</p>
-                                        <p className="text-xs text-slate-600 mt-1">Cantidad total de unidades</p>
-                                        <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">505</span></p>
+
+                                    <div className="flex gap-4 justify-center pt-4 border-t">
+                                        <Button variant="secondary" onClick={() => setImportSummaryState(null)} className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border-0">
+                                            Cancelar
+                                        </Button>
+                                        <Button onClick={handleConfirmarImportacionCSV} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold shadow-lg shadow-blue-500/30 transform transition-transform hover:scale-105">
+                                            Confirmar e Ingresar Total
+                                        </Button>
                                     </div>
                                 </div>
-                                <details className="mt-3">
-                                    <summary className="text-xs text-amber-800 cursor-pointer hover:text-amber-900 font-medium">
-                                        Ver formato completo compatible
-                                    </summary>
-                                    <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
-                                        <p className="font-mono">ruc_cliente, codigo_producto, nombre, lote, fecha_vencimiento, fecha de ingreso, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, cantidad_total, um, fabricante, temperatura</p>
+                            ) : (
+                                <>
+                                    {/* Instrucciones Compactas */}
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                                        <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+                                            <span className="text-xl">📋</span>
+                                            Pasos Rápidos
+                                        </h3>
+                                        <ol className="list-decimal list-inside space-y-1.5 text-sm text-blue-800">
+                                            <li>Descarga la plantilla Excel</li>
+                                            <li>Ábrela con Excel y completa los datos</li>
+                                            <li>Guarda y selecciona el archivo (.xlsx, .xls o .csv)</li>
+                                        </ol>
                                     </div>
-                                </details>
-                            </div>
 
-                            {/* Ejemplo Compacto */}
-                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-300">
-                                <h3 className="font-bold text-green-900 mb-2 flex items-center gap-2">
-                                    <span className="text-xl">✅</span>
-                                    Ejemplo de Formato Mínimo
-                                </h3>
-                                <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
-                                    <pre className="text-xs font-mono text-green-400">
-                                        {`ruc_cliente,codigo_producto,nombre,lote,fecha_vencimiento,fecha de ingreso,cantidad_bultos,cantidad_cajas,cantidad_por_caja,cantidad_fraccion,cantidad_total,um,fabricante,temperatura
+                                    {/* Columnas Requeridas - Vista Compacta */}
+                                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-lg border-2 border-amber-200">
+                                        <h3 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+                                            <span className="text-xl">⚠️</span>
+                                            Columnas Obligatorias
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                                <p className="font-mono font-bold text-sm text-slate-800">ruc_cliente</p>
+                                                <p className="text-xs text-slate-600 mt-1">RUC del cliente (una sola nota por archivo)</p>
+                                                <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">20123456789</span></p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                                <p className="font-mono font-bold text-sm text-slate-800">codigo_producto</p>
+                                                <p className="text-xs text-slate-600 mt-1">Código del producto en el sistema</p>
+                                                <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">PROD001</span></p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                                <p className="font-mono font-bold text-sm text-slate-800">lote</p>
+                                                <p className="text-xs text-slate-600 mt-1">Número de lote</p>
+                                                <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">LOTE-2024-001</span></p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                                <p className="font-mono font-bold text-sm text-slate-800">fecha de ingreso</p>
+                                                <p className="text-xs text-slate-600 mt-1">Fecha única para la nota (YYYY-MM-DD o DD/MM/YYYY)</p>
+                                                <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">2026-03-30</span></p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-500">
+                                                <p className="font-mono font-bold text-sm text-slate-800">cantidad_total</p>
+                                                <p className="text-xs text-slate-600 mt-1">Cantidad total de unidades</p>
+                                                <p className="text-xs text-slate-500 mt-1">Ej: <span className="font-mono bg-slate-100 px-1 rounded">505</span></p>
+                                            </div>
+                                        </div>
+                                        <details className="mt-3">
+                                            <summary className="text-xs text-amber-800 cursor-pointer hover:text-amber-900 font-medium">
+                                                Ver formato completo compatible
+                                            </summary>
+                                            <div className="mt-3 text-xs text-slate-600 bg-white p-3 rounded">
+                                                <p className="font-mono">ruc_cliente, codigo_producto, nombre, lote, fecha_vencimiento, fecha de ingreso, cantidad_bultos, cantidad_cajas, cantidad_por_caja, cantidad_fraccion, cantidad_total, um, fabricante, temperatura</p>
+                                            </div>
+                                        </details>
+                                    </div>
+
+                                    {/* Ejemplo Compacto */}
+                                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-300">
+                                        <h3 className="font-bold text-green-900 mb-2 flex items-center gap-2">
+                                            <span className="text-xl">✅</span>
+                                            Ejemplo de Formato Mínimo
+                                        </h3>
+                                        <div className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
+                                            <pre className="text-xs font-mono text-green-400">
+                                                {`ruc_cliente,codigo_producto,nombre,lote,fecha_vencimiento,fecha de ingreso,cantidad_bultos,cantidad_cajas,cantidad_por_caja,cantidad_fraccion,cantidad_total,um,fabricante,temperatura
 20123456789,PROD001,PARACETAMOL 500MG,LOTE-2024-001,2025-12-31,2026-03-30,2,10,50,5,505,UND,LAB ABC,25
 20123456789,PROD002,AMOXICILINA 500MG,LOTE-2024-002,2026-06-15,2026-03-30,1,5,100,0,500,UND,LAB XYZ,25`}
-                                    </pre>
-                                </div>
-                                <p className="text-xs text-green-800 mt-2">💡 También acepta separador por coma, punto y coma o tabulación.</p>
-                            </div>
-
-                            {/* Errores */}
-                            {erroresImportacion.length > 0 && (
-                                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
-                                    <h3 className="font-bold text-red-900 mb-2">⚠️ Errores Encontrados</h3>
-                                    <ul className="list-disc list-inside space-y-1 text-sm text-red-800 max-h-40 overflow-y-auto">
-                                        {erroresImportacion.map((error, idx) => (
-                                            <li key={idx}>{error}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-
-                            {resumenImportacionProductos && (resumenImportacionProductos.creados.length > 0 || resumenImportacionProductos.existentes.length > 0) && (
-                                <div className="bg-sky-50 border-l-4 border-sky-500 p-4 rounded">
-                                    <h3 className="font-bold text-sky-900 mb-2">Productos resueltos automáticamente</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                                        <div>
-                                            <p className="font-semibold text-emerald-700 mb-1">Creados ({resumenImportacionProductos.creados.length})</p>
-                                            <div className="flex flex-wrap gap-1">
-                                                {resumenImportacionProductos.creados.map((codigo) => (
-                                                    <span key={`modal-creado-${codigo}`} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-xs font-mono">{codigo}</span>
-                                                ))}
-                                            </div>
+                                            </pre>
                                         </div>
-                                        <div>
-                                            <p className="font-semibold text-blue-700 mb-1">Existentes reutilizados ({resumenImportacionProductos.existentes.length})</p>
-                                            <div className="flex flex-wrap gap-1">
-                                                {resumenImportacionProductos.existentes.map((codigo) => (
-                                                    <span key={`modal-existente-${codigo}`} className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 text-xs font-mono">{codigo}</span>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <p className="text-xs text-green-800 mt-2">💡 También acepta separador por coma, punto y coma o tabulación.</p>
                                     </div>
-                                </div>
-                            )}
 
-                            {/* Botones de acción */}
-                            <div className="flex gap-3 pt-4">
-                                <Button
-                                    type="button"
-                                    onClick={descargarPlantillaExcel}
-                                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg font-semibold"
-                                >
-                                    📥 Descargar Plantilla Excel
-                                </Button>
-                                <label className="flex-1">
-                                    <input
-                                        type="file"
-                                        accept=".csv, .xlsx, .xls"
-                                        onChange={handleImportarCSV}
-                                        className="hidden"
-                                    />
-                                    <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${selectedClient
-                                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
-                                        : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
-                                        }`}>
-                                        📂 Seleccionar Archivo
+                                    {/* Errores */}
+                                    {erroresImportacion.length > 0 && (
+                                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded mt-4">
+                                            <h3 className="font-bold text-red-900 mb-2">⚠️ Errores Encontrados</h3>
+                                            <ul className="list-disc list-inside space-y-1 text-sm text-red-800 max-h-40 overflow-y-auto">
+                                                {erroresImportacion.map((error, idx) => (
+                                                    <li key={idx}>{error}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {/* Botones de acción */}
+                                    <div className="flex gap-3 pt-4 mt-6">
+                                        <Button
+                                            type="button"
+                                            onClick={descargarPlantillaExcel}
+                                            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg font-semibold"
+                                        >
+                                            📥 Descargar Plantilla Excel
+                                        </Button>
+                                        <label className="flex-1">
+                                            <input
+                                                type="file"
+                                                accept=".csv, .xlsx, .xls"
+                                                onChange={handleImportarCSV}
+                                                className="hidden"
+                                            />
+                                            <div className={`w-full px-4 py-3 rounded-lg text-center font-semibold cursor-pointer transition-all duration-300 shadow-lg ${selectedClient
+                                                ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
+                                                : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:scale-105'
+                                                }`}>
+                                                📂 Seleccionar Archivo
+                                            </div>
+                                        </label>
                                     </div>
-                                </label>
-                            </div>
-                            {!selectedClient && (
-                                <p className="text-sm text-slate-600 text-center">ℹ️ El cliente se seleccionará automáticamente usando la columna ruc_cliente del CSV</p>
+                                    {!selectedClient && (
+                                        <p className="text-sm text-slate-600 text-center mt-2">ℹ️ El cliente se seleccionará automáticamente usando la columna ruc_cliente del CSV</p>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
