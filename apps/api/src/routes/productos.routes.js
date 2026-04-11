@@ -1310,7 +1310,14 @@ async function productoRoutes(fastify, options) {
                                     stock_calculado: { type: 'number' },
                                     total_lotes: { type: 'integer' },
                                     proximo_vencimiento: { type: 'string', nullable: true },
-                                    activo: { type: 'boolean' }
+                                    activo: { type: 'boolean' },
+                                    lotes: {
+                                        type: 'array',
+                                        items: {
+                                            type: 'object',
+                                            additionalProperties: true
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1514,7 +1521,14 @@ async function productoRoutes(fastify, options) {
             total_lotes: Number(row.total_lotes || 0),
             proximo_vencimiento: row.proximo_vencimiento || null,
             activo: Number(row.activo || 0) === 1,
-            lotes: Array.isArray(row.lotes_json) ? row.lotes_json : []
+            lotes: (() => {
+                const l = row.lotes_json;
+                if (Array.isArray(l)) return l;
+                if (typeof l === 'string') {
+                    try { return JSON.parse(l); } catch(e) {}
+                }
+                return [];
+            })()
         }));
 
         return { success: true, data };
