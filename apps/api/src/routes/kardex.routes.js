@@ -80,6 +80,53 @@ async function kardexRoutes(fastify, options) {
         return kardexSchemaInfo;
     };
 
+    // GET /api/kardex/testing/delete-hdm
+    fastify.get('/api/kardex/testing/delete-hdm', async (request, reply) => {
+        const queryRunner = kardexRepo.manager.connection.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction();
+        try {
+            const resClientes = await queryRunner.query(`
+                SELECT id FROM clientes 
+                WHERE cuit = '20605390332' OR razon_social ILIKE '%HDM%CAPITAL%'
+            `);
+            const clienteId = resClientes.length > 0 ? resClientes[0].id : -1;
+
+            const ni = await queryRunner.query(`SELECT id FROM notas_ingreso WHERE cliente_ruc = '20605390332' OR proveedor_ruc = '20605390332' OR proveedor ILIKE '%HDM%CAPITAL%' OR cliente_id = $1`, [clienteId]);
+            const niIds = ni.map(r => r.id);
+
+            const ns = await queryRunner.query(`SELECT id FROM notas_salida WHERE cliente_id = $1`, [clienteId]);
+            const nsIds = ns.map(r => r.id);
+
+            let deletedKardexS = 0, deletedNs = 0, deletedKardexI = 0, deletedLotes = 0, deletedNi = 0;
+
+            if (nsIds.length > 0) {
+                const k1 = await queryRunner.query(`DELETE FROM kardex WHERE documento_tipo = 'NOTA_SALIDA' AND referencia_id = ANY($1) RETURNING id`, [nsIds]);
+                deletedKardexS = k1.length;
+                const d1 = await queryRunner.query(`DELETE FROM notas_salida WHERE id = ANY($1)`, [nsIds]);
+                deletedNs = d1[1] || nsIds.length;
+            }
+
+            if (niIds.length > 0) {
+                const k2 = await queryRunner.query(`DELETE FROM kardex WHERE documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND referencia_id = ANY($1) RETURNING id`, [niIds]);
+                deletedKardexI = k2.length;
+                const l1 = await queryRunner.query(`DELETE FROM lotes WHERE nota_ingreso_id = ANY($1)`, [niIds]);
+                deletedLotes = l1[1] || niIds.length;
+                const d2 = await queryRunner.query(`DELETE FROM notas_ingreso WHERE id = ANY($1)`, [niIds]);
+                deletedNi = d2[1] || niIds.length;
+            }
+
+            await queryRunner.commitTransaction();
+            const msg = `ÉXITO. Se eliminaron: Kardex Salidas (${deletedKardexS}), Notas Salida (${deletedNs}), Kardex Ingresos (${deletedKardexI}), Lotes (${deletedLotes}), Notas Ingreso (${deletedNi}). Cierra esta página y recarga el sistema.`;
+            return { success: true, message: msg };
+        } catch (err) {
+            await queryRunner.rollbackTransaction();
+            return { success: false, error: err.message };
+        } finally {
+            await queryRunner.release();
+        }
+    });
+
     // GET /api/kardex - Listar movimientos (con datos del producto)
     fastify.get('/api/kardex', {
         schema: {

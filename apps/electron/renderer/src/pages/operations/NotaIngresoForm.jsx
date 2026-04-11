@@ -36,7 +36,13 @@ const buildNuevoProductoState = (defaults = {}) => ({
     unidad: defaults.unidad || 'UND',
     um: defaults.um || 'UND',
     temperatura: defaults.temperatura || '25',
-    observaciones: defaults.observaciones || ''
+    observaciones: defaults.observaciones || '',
+    cantidad_bultos: defaults.cantidad_bultos || 1,
+    cantidad_cajas: defaults.cantidad_cajas || 1,
+    cantidad_por_caja: defaults.cantidad_por_caja || 1,
+    cantidad_fraccion: defaults.cantidad_fraccion || 0,
+    cantidad_total: defaults.cantidad_total || 1,
+    quantityManual: defaults.quantityManual || false
 });
 
 const getProductoNombreVisible = (producto) => (
@@ -546,10 +552,23 @@ export const NotaIngresoForm = () => {
     };
 
     const handleNuevoProductoChange = (field, value) => {
-        setNuevoProductoForm((prev) => ({
-            ...prev,
-            [field]: value
-        }));
+        setNuevoProductoForm((prev) => {
+            const updated = { ...prev, [field]: value };
+            
+            if (['cantidad_bultos', 'cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion'].includes(field)) {
+                if (!updated.quantityManual) {
+                    const c = parseInt(updated.cantidad_cajas) || 0;
+                    const u = parseInt(updated.cantidad_por_caja) || 0;
+                    const f = parseInt(updated.cantidad_fraccion) || 0;
+                    updated.cantidad_total = (c * u) + f;
+                }
+            }
+            if (field === 'cantidad_total') {
+                updated.quantityManual = true;
+            }
+            
+            return updated;
+        });
     };
 
     const guardarNuevoProducto = async () => {
@@ -592,9 +611,39 @@ export const NotaIngresoForm = () => {
             const creado = await productService.createProduct(payload);
             await loadProducts();
 
-            const nuevoId = creado?.id;
+            const nuevoId = creado?.id || creado?.data?.id; // In case of standard API {success, data} response
             if (nuevoId) {
                 setSelectedProduct(String(nuevoId));
+            }
+
+            const cantidadTotal = Number(nuevoProductoForm.cantidad_total || 0);
+            if (cantidadTotal > 0 && nuevoId) {
+                append({
+                    producto_id: Number(nuevoId),
+                    producto_codigo: payload.codigo,
+                    producto_nombre: payload.descripcion,
+                    cantidad: Number(cantidadTotal),
+                    lote_numero: String(payload.lote || '').trim(),
+                    fecha_vencimiento: normalizarFechaInput(nuevoProductoForm.fecha_vencimiento) || null,
+                    um: payload.um || '',
+                    fabricante: payload.fabricante || '',
+                    temperatura_min: Number(temperaturaNumero),
+                    temperatura_max: Number(temperaturaNumero),
+                    cantidad_bultos: Number(nuevoProductoForm.cantidad_bultos || 0),
+                    cantidad_cajas: Number(nuevoProductoForm.cantidad_cajas || 0),
+                    cantidad_por_caja: Number(nuevoProductoForm.cantidad_por_caja || 0),
+                    cantidad_fraccion: Number(nuevoProductoForm.cantidad_fraccion || 0),
+                    cantidad_total: Number(cantidadTotal),
+                    detalle_calculo: buildDetalleCalculo({
+                        cantidad_bultos: nuevoProductoForm.cantidad_bultos,
+                        cantidad_cajas: nuevoProductoForm.cantidad_cajas,
+                        cantidad_por_caja: nuevoProductoForm.cantidad_por_caja,
+                        cantidad_fraccion: nuevoProductoForm.cantidad_fraccion
+                    })
+                });
+                showSuccess('Producto creado y agregado al detalle de la nota.');
+            } else {
+                showSuccess('Producto creado correctamente.');
             }
 
             setSelectedLoteId(payload.lote ? 'PRODUCTO_LOTE' : 'OTRO');
@@ -604,7 +653,6 @@ export const NotaIngresoForm = () => {
             setFabricante(payload.fabricante || '');
             setTemperatura(String(temperaturaNumero));
             setMostrarModalNuevoProducto(false);
-            showSuccess('Producto creado y listo para agregarlo al detalle de la nota.');
         } catch (error) {
             console.error('Error creando producto desde ingreso:', error);
             const mensaje = error?.response?.data?.error || error?.response?.data?.message || 'No se pudo crear el producto.';
@@ -1939,125 +1987,7 @@ export const NotaIngresoForm = () => {
                         El flujo principal es: <span className="font-semibold">Seleccionar productos</span> o <span className="font-semibold">Importar Excel/CSV</span>.
                     </div>
 
-                    <details className="rounded-lg border border-slate-200 bg-white p-4">
-                        <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-                            Modo avanzado: agregar item manual
-                        </summary>
-                        <p className="mt-2 text-xs text-slate-500">
-                            Use este modo solo si desea ingresar un item individual fuera del flujo principal.
-                        </p>
-                        <div className="mt-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                            <div className="md:col-span-2">
-                                <label className="label-premium">Vencimiento</label>
-                                <input
-                                    value={vencimiento}
-                                    onChange={(e) => setVencimiento(e.target.value)}
-                                    type="date"
-                                    className="input-premium"
-                                />
-                            </div>
-
-                            <div className="md:col-span-2">
-                                <label className="label-premium">UM</label>
-                                <select
-                                    value={um}
-                                    onChange={(e) => setUm(e.target.value)}
-                                    className="input-premium"
-                                >
-                                    <option value=""></option>
-                                    <option value="AMP">AMP</option>
-                                    <option value="FRS">FRS</option>
-                                    <option value="BLT">BLT</option>
-                                    <option value="TUB">TUB</option>
-                                    <option value="SOB">SOB</option>
-                                    <option value="CJ">CJ</option>
-                                    <option value="KG">KG</option>
-                                    <option value="G">G</option>
-                                    <option value="UND">UND</option>
-                                </select>
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="label-premium">Fabricante</label>
-                                <input
-                                    value={fabricante}
-                                    onChange={(e) => setFabricante(e.target.value)}
-                                    type="text"
-                                    className="input-premium"
-                                />
-                            </div>
-                            <div className="md:col-span-2">
-                                <label className="label-premium">Temperatura (°C)</label>
-                                <input
-                                    value={temperatura}
-                                    onChange={(e) => setTemperatura(e.target.value)}
-                                    type="number"
-                                    step="0.01"
-                                    className="input-premium"
-                                />
-                            </div>
-
-                            <div className="md:col-span-6 grid grid-cols-3 gap-2 p-2 bg-white rounded-lg border border-blue-200">
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
-                                    <input
-                                        type="number"
-                                        value={bultos}
-                                        onChange={handleCalcChange(setBultos)}
-                                        className="input-premium h-8 text-sm p-1"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
-                                    <input
-                                        type="number"
-                                        value={cajas}
-                                        onChange={handleCalcChange(setCajas)}
-                                        className="input-premium h-8 text-sm p-1"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
-                                    <input
-                                        type="number"
-                                        value={unidadesCaja}
-                                        onChange={handleCalcChange(setUnidadesCaja)}
-                                        className="input-premium h-8 text-sm p-1"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
-                                    <input
-                                        type="number"
-                                        value={fraccion}
-                                        onChange={handleCalcChange(setFraccion)}
-                                        className="input-premium h-8 text-sm p-1"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div className="col-span-3 flex justify-between items-center pt-1 border-t border-slate-100 mt-1">
-                                    <span className="text-xs text-slate-400 font-medium">Total Unidades:</span>
-                                    <input
-                                        type="number"
-                                        value={quantity}
-                                        onChange={(e) => {
-                                            setQuantity(Number(e.target.value));
-                                            setQuantityManual(true);
-                                        }}
-                                        className="input-premium h-8 text-sm p-1 w-24 text-right"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="md:col-span-12 flex justify-end">
-                                <Button type="button" onClick={handleAddProduct} variant="primary" className="w-full md:w-auto">
-                                    + Agregar Item Manual
-                                </Button>
-                            </div>
-                        </div>
-                    </details>
+                    {/* El Modo Avanzado manual ha sido fusionado dentro de Nuevo Producto */}
                 </Card>
 
                 {/* Tabla de Items */}
@@ -2394,6 +2324,63 @@ export const NotaIngresoForm = () => {
                                     className="input-premium"
                                 />
                             </div>
+
+                            {/* Section added for quantity calculation inside the Modal */}
+                            <div className="md:col-span-2 grid grid-cols-3 gap-3 p-3 bg-blue-50/50 rounded-lg border border-blue-200 mt-2">
+                                <div className="col-span-3 text-sm font-bold text-blue-800 mb-1 border-b border-blue-100 pb-1">
+                                    Cantidades para el ingreso
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Bulto</label>
+                                    <input
+                                        type="number"
+                                        value={nuevoProductoForm.cantidad_bultos}
+                                        onChange={(e) => handleNuevoProductoChange('cantidad_bultos', e.target.value)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cajas</label>
+                                    <input
+                                        type="number"
+                                        value={nuevoProductoForm.cantidad_cajas}
+                                        onChange={(e) => handleNuevoProductoChange('cantidad_cajas', e.target.value)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Und/Caja</label>
+                                    <input
+                                        type="number"
+                                        value={nuevoProductoForm.cantidad_por_caja}
+                                        onChange={(e) => handleNuevoProductoChange('cantidad_por_caja', e.target.value)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Cant. Fracción</label>
+                                    <input
+                                        type="number"
+                                        value={nuevoProductoForm.cantidad_fraccion}
+                                        onChange={(e) => handleNuevoProductoChange('cantidad_fraccion', e.target.value)}
+                                        className="input-premium h-8 text-sm p-1"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div className="col-span-2 flex justify-end items-center pt-1 mt-1">
+                                    <span className="text-xs text-slate-500 font-medium mr-2">Total Unidades:</span>
+                                    <input
+                                        type="number"
+                                        value={nuevoProductoForm.cantidad_total}
+                                        onChange={(e) => handleNuevoProductoChange('cantidad_total', e.target.value)}
+                                        className="input-premium h-8 text-sm p-1 w-24 text-right border-blue-300 font-bold text-blue-800"
+                                    />
+                                </div>
+                            </div>
+
                             <div className="md:col-span-2">
                                 <label className="label-premium">Observaciones</label>
                                 <textarea
