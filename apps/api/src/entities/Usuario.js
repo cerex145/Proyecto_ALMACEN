@@ -50,5 +50,14 @@ module.exports = new EntitySchema({
             type: 'timestamp',
             updateDate: true
         }
+    },
+    relations: {
+        rol: {
+            type: 'many-to-one',
+            target: 'Rol',
+            joinColumn: {
+                name: 'rol_id'
+            }
+        }
     }
 });
