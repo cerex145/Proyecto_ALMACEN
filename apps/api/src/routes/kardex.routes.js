@@ -199,11 +199,17 @@ async function kardexRoutes(fastify, options) {
             sql += ` AND (
                 ni.proveedor ILIKE $${paramIndex}
                 OR c.razon_social ILIKE $${paramIndex}
-                OR EXISTS (
-                    SELECT 1 FROM lotes l__cf
-                    JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
-                    WHERE l__cf.producto_id = k.producto_id
-                    AND ni__cf.proveedor ILIKE $${paramIndex}
+                OR (
+                    k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+                    AND k.lote_numero IS NOT NULL
+                    AND k.lote_numero != '-'
+                    AND EXISTS (
+                        SELECT 1 FROM lotes l__cf
+                        JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
+                        WHERE l__cf.producto_id = k.producto_id
+                        AND l__cf.numero_lote = k.lote_numero
+                        AND ni__cf.proveedor ILIKE $${paramIndex}
+                    )
                 )
             )`;
             params.push(`%${cliente_nombre}%`);
@@ -409,11 +415,17 @@ async function kardexRoutes(fastify, options) {
             sql += ` AND (
                 ni.proveedor ILIKE $${paramIndex}
                 OR c.razon_social ILIKE $${paramIndex}
-                OR EXISTS (
-                    SELECT 1 FROM lotes l__cf
-                    JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
-                    WHERE l__cf.producto_id = k.producto_id
-                    AND ni__cf.proveedor ILIKE $${paramIndex}
+                OR (
+                    k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+                    AND k.lote_numero IS NOT NULL
+                    AND k.lote_numero != '-'
+                    AND EXISTS (
+                        SELECT 1 FROM lotes l__cf
+                        JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
+                        WHERE l__cf.producto_id = k.producto_id
+                        AND l__cf.numero_lote = k.lote_numero
+                        AND ni__cf.proveedor ILIKE $${paramIndex}
+                    )
                 )
             )`;
             params.push(`%${cliente_nombre}%`);
