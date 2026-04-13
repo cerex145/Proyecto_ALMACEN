@@ -1516,7 +1516,7 @@ async function ingresosRoutes(fastify, options) {
                                 { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-', style: 'tableCell' },
                                 { text: d.producto?.unidad || 'UND', style: 'tableCell' },
                                 { text: d.producto?.fabricante || '-', style: 'tableCell' },
-                                { text: (d.producto?.temperatura_min_c != null) ? `${d.producto.temperatura_min_c}° ${d.producto.temperatura_max_c}°C` : '-', style: 'tableCell' },
+                                { text: '15°C a 25°C', style: 'tableCell' },
                                 { text: parseFloat(d.cantidad_bultos || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cantidad_cajas || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cantidad_por_caja || 0).toFixed(2), style: 'tableCell' },
