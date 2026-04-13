@@ -2013,7 +2013,7 @@ export const NotaIngresoForm = () => {
                 </Card>
 
                 {/* Tabla de Items */}
-                <div className="rounded-xl border border-slate-200 overflow-x-auto overflow-y-hidden bg-white shadow-sm">
+                <div className="table-scroll-top rounded-xl border border-slate-200 bg-white shadow-sm">
                     <table className="min-w-max w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
                             <tr>

@@ -228,7 +228,16 @@ export const KardexFuncional = () => {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             fontSize: '0.9rem', fontWeight: 600,
         },
-        tableScroll: { overflowX: 'auto' },
+        tableScroll: {
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            transform: 'rotateX(180deg)',
+            WebkitTransform: 'rotateX(180deg)',
+        },
+        tableScrollInner: {
+            transform: 'rotateX(180deg)',
+            WebkitTransform: 'rotateX(180deg)',
+        },
         table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' },
         th: {
             background: '#1e3a5f',
@@ -482,6 +491,7 @@ export const KardexFuncional = () => {
                     </div>
                 ) : (
                     <div style={s.tableScroll}>
+                        <div style={s.tableScrollInner}>
                         <table style={s.table}>
                             <thead>
                                 <tr>
@@ -640,6 +650,7 @@ export const KardexFuncional = () => {
                                 </tr>
                             </tfoot>
                         </table>
+                        </div>
                     </div>
                 )}
             </div>

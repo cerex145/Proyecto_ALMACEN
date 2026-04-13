@@ -151,7 +151,7 @@ export const HistorialSalidasFuncional = () => {
                     <div className="text-center py-12 text-slate-400">No hay registros de salida</div>
                 ) : (
                     <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-                        <div className="overflow-x-auto">
+                        <div className="table-scroll-top">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
                                     <tr>
