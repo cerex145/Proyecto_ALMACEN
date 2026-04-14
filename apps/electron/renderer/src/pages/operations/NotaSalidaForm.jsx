@@ -1541,6 +1541,83 @@ export const NotaSalidaForm = () => {
                     </div>
                 </Card>
 
+                {/* Cuadros de resumen de stock - inmediatamente debajo del cliente */}
+                {selectedClient && (
+                    <div className="space-y-3">
+                        {notasIngreso.length > 0 && (
+                            <div className="bg-white rounded-xl border border-purple-200 shadow-sm p-4">
+                                <p className="text-sm font-semibold text-purple-900 mb-2">Stock para descontar por Nota de Ingreso</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-purple-50">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-semibold text-purple-800">Nota Ingreso</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Añadido Inicial</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Stock Disponible</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">A Descontar</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {notasIngreso.map((nota) => {
+                                                const inicial = getNotaStockInicial(nota);
+                                                const disponible = getNotaStockDisponible(nota);
+                                                const descontar = getNotaStockSeleccionado(nota.id, nota.detalles || []);
+                                                const saldo = Math.max(disponible - descontar, 0);
+                                                return (
+                                                    <tr key={`resumen-${nota.id}`}>
+                                                        <td className="px-3 py-2 font-medium text-slate-800">{nota.numero_ingreso || `NI-${nota.id}`}</td>
+                                                        <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(inicial)}</td>
+                                                        <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(disponible)}</td>
+                                                        <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(descontar)}</td>
+                                                        <td className="px-3 py-2 text-right text-blue-700 font-semibold">{formatCantidad(saldo)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {stockPorProductoLote.length > 0 && (
+                            <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4">
+                                <p className="text-sm font-semibold text-blue-900 mb-2">Stock actualizado por Producto y Lote</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-blue-50">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Código</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Producto</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Lote</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">UM</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Inicial</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Disponible</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">A Descontar</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {stockPorProductoLote.map((item) => (
+                                                <tr key={`stock-lote-${item.key}`}>
+                                                    <td className="px-3 py-2 font-mono text-slate-700">{item.codigo}</td>
+                                                    <td className="px-3 py-2 text-slate-800">{item.producto}</td>
+                                                    <td className="px-3 py-2 text-slate-700">{item.lote}</td>
+                                                    <td className="px-3 py-2 text-slate-700">{item.um}</td>
+                                                    <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(item.inicial)}</td>
+                                                    <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(item.disponible)}</td>
+                                                    <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(item.descontar)}</td>
+                                                    <td className={`px-3 py-2 text-right font-semibold ${item.saldo <= 0 ? 'text-red-700' : 'text-blue-700'}`}>{formatCantidad(item.saldo)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Sección de Notas de Ingreso */}
                 {selectedClient && (
                     <Card className="p-6 bg-linear-to-br from-purple-50 to-blue-50 border-purple-200 border-2">
@@ -1557,77 +1634,6 @@ export const NotaSalidaForm = () => {
                         </h3>
 
                         <div className="space-y-3">
-                            {notasIngreso.length > 0 && (
-                                <div className="bg-white rounded-lg border border-purple-200 p-4">
-                                    <p className="text-sm font-semibold text-purple-900 mb-2">Stock para descontar por Nota de Ingreso</p>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs">
-                                            <thead className="bg-purple-50">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left font-semibold text-purple-800">Nota Ingreso</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">Añadido Inicial</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">Stock Disponible</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">A Descontar</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-purple-800">Saldo</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {notasIngreso.map((nota) => {
-                                                    const inicial = getNotaStockInicial(nota);
-                                                    const disponible = getNotaStockDisponible(nota);
-                                                    const descontar = getNotaStockSeleccionado(nota.id, nota.detalles || []);
-                                                    const saldo = Math.max(disponible - descontar, 0);
-                                                    return (
-                                                        <tr key={`resumen-${nota.id}`}>
-                                                            <td className="px-3 py-2 font-medium text-slate-800">{nota.numero_ingreso || `NI-${nota.id}`}</td>
-                                                            <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(inicial)}</td>
-                                                            <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(disponible)}</td>
-                                                            <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(descontar)}</td>
-                                                            <td className="px-3 py-2 text-right text-blue-700 font-semibold">{formatCantidad(saldo)}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
-
-                            {stockPorProductoLote.length > 0 && (
-                                <div className="bg-white rounded-lg border border-blue-200 p-4">
-                                    <p className="text-sm font-semibold text-blue-900 mb-2">Stock actualizado por Producto y Lote</p>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-xs">
-                                            <thead className="bg-blue-50">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">Código</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">Producto</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">Lote</th>
-                                                    <th className="px-3 py-2 text-left font-semibold text-blue-800">UM</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">Inicial</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">Disponible</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">A Descontar</th>
-                                                    <th className="px-3 py-2 text-right font-semibold text-blue-800">Saldo</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {stockPorProductoLote.map((item) => (
-                                                    <tr key={`stock-lote-${item.key}`}>
-                                                        <td className="px-3 py-2 font-mono text-slate-700">{item.codigo}</td>
-                                                        <td className="px-3 py-2 text-slate-800">{item.producto}</td>
-                                                        <td className="px-3 py-2 text-slate-700">{item.lote}</td>
-                                                        <td className="px-3 py-2 text-slate-700">{item.um}</td>
-                                                        <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(item.inicial)}</td>
-                                                        <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(item.disponible)}</td>
-                                                        <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(item.descontar)}</td>
-                                                        <td className={`px-3 py-2 text-right font-semibold ${item.saldo <= 0 ? 'text-red-700' : 'text-blue-700'}`}>{formatCantidad(item.saldo)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            )}
 
                             {cargandoNotas ? (
                                 <div className="text-center py-10 text-purple-600">
