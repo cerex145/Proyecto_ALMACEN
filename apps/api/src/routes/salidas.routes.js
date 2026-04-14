@@ -564,7 +564,12 @@ async function salidasRoutes(fastify, options) {
                                 lote_id: { type: 'integer' }
                             }
                         }
-                    }
+                    },
+                    tipo_documento: { type: 'string', nullable: true },
+                    numero_documento: { type: 'string', nullable: true },
+                    fecha_ingreso: { type: 'string', nullable: true },
+                    motivo_salida: { type: 'string', nullable: true },
+                    responsable_id: { type: 'integer', nullable: true }
                 }
             },
             response: {

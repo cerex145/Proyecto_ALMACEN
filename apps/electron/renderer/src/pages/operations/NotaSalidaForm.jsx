@@ -71,6 +71,7 @@ export const NotaSalidaForm = () => {
     const [cantidadesEditadas, setCantidadesEditadas] = useState({});
     const [cargandoNotas, setCargandoNotas] = useState(false);
     const [errorNotas, setErrorNotas] = useState('');
+    const [buscarNota, setBuscarNota] = useState('');
 
     // Toast
     const [toastMsg, setToastMsg] = useState('');
@@ -486,8 +487,9 @@ export const NotaSalidaForm = () => {
         // Recargar productos filtrados por cliente
         loadProducts(selectedClient);
 
-        // Cargar notas de ingreso del cliente
-        loadNotasIngreso(selectedClient);
+        // Las notas de ingreso se buscan bajo demanda por número
+        setNotasIngreso([]);
+        setBuscarNota('');
 
         // Limpiar selección de producto actual
         setSelectedProduct('');
@@ -577,23 +579,28 @@ export const NotaSalidaForm = () => {
         }
     };
 
-    const loadNotasIngreso = async (clienteId) => {
-        if (!clienteId) {
-            setNotasIngreso([]);
-            return;
-        }
+    const buscarNotaIngreso = async () => {
+        if (!buscarNota.trim()) return;
+        if (!selectedClient) return;
         setCargandoNotas(true);
         setErrorNotas('');
         try {
-            const client = clients.find(c => String(c.id) === String(clienteId));
+            const client = clients.find(c => String(c.id) === String(selectedClient));
             if (!client) { setCargandoNotas(false); return; }
 
-            // Buscar las notas de ingreso del cliente por proveedor (razon_social)
-            const response = await fetch(`${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}`);
+            const url = `${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}&numero_ingreso=${encodeURIComponent(buscarNota.trim())}&include_detalles=true`;
+            const response = await fetch(url);
             const result = await response.json();
             const notas = result.data || [];
 
-            // Cargar detalles de cada nota
+            if (notas.length === 0) {
+                setErrorNotas(`No se encontró ninguna nota con el número "${buscarNota.trim()}".`);
+                setNotasIngreso([]);
+                setCargandoNotas(false);
+                return;
+            }
+
+            // Cargar detalles de cada nota encontrada
             const notasConDetalles = await Promise.all(
                 notas.map(async (nota) => {
                     try {
@@ -616,19 +623,17 @@ export const NotaSalidaForm = () => {
             );
 
             const notasConSaldo = notasConDetalles.filter((nota) => (nota.detalles || []).length > 0);
-            
-            // Ordenar descendente por fecha (últimas primero)
-            const notasOrdenadas = notasConSaldo.sort((a, b) => {
-                const fechaA = new Date(a.fecha || 0).getTime();
-                const fechaB = new Date(b.fecha || 0).getTime();
-                return fechaB - fechaA;
-            });
-            
-            setNotasIngreso(notasOrdenadas);
+            if (notasConSaldo.length === 0) {
+                setErrorNotas(`La nota "${buscarNota.trim()}" no tiene stock disponible.`);
+                setNotasIngreso([]);
+            } else {
+                setErrorNotas('');
+                setNotasIngreso(notasConSaldo);
+            }
         } catch (error) {
-            console.error('Error loading notas de ingreso:', error);
+            console.error('Error buscando nota de ingreso:', error);
+            setErrorNotas('Error al buscar la nota. Intente de nuevo.');
             setNotasIngreso([]);
-            setErrorNotas('Error al cargar notas de ingreso. Intente de nuevo.');
         } finally {
             setCargandoNotas(false);
         }
@@ -1541,217 +1546,25 @@ export const NotaSalidaForm = () => {
                     </div>
                 </Card>
 
-                {/* Cuadros de resumen de stock - inmediatamente debajo del cliente */}
-                {selectedClient && (
-                    <div className="space-y-3">
-                        {notasIngreso.length > 0 && (
-                            <div className="bg-white rounded-xl border border-purple-200 shadow-sm p-4">
-                                <p className="text-sm font-semibold text-purple-900 mb-2">Stock para descontar por Nota de Ingreso</p>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-purple-50">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left font-semibold text-purple-800">Nota Ingreso</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Añadido Inicial</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Stock Disponible</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">A Descontar</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Saldo</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {notasIngreso.map((nota) => {
-                                                const inicial = getNotaStockInicial(nota);
-                                                const disponible = getNotaStockDisponible(nota);
-                                                const descontar = getNotaStockSeleccionado(nota.id, nota.detalles || []);
-                                                const saldo = Math.max(disponible - descontar, 0);
-                                                return (
-                                                    <tr key={`resumen-${nota.id}`}>
-                                                        <td className="px-3 py-2 font-medium text-slate-800">{nota.numero_ingreso || `NI-${nota.id}`}</td>
-                                                        <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(inicial)}</td>
-                                                        <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(disponible)}</td>
-                                                        <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(descontar)}</td>
-                                                        <td className="px-3 py-2 text-right text-blue-700 font-semibold">{formatCantidad(saldo)}</td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
 
-                        {stockPorProductoLote.length > 0 && (
-                            <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4">
-                                <p className="text-sm font-semibold text-blue-900 mb-2">Stock actualizado por Producto y Lote</p>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-blue-50">
-                                            <tr>
-                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Código</th>
-                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Producto</th>
-                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Lote</th>
-                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">UM</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Inicial</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Disponible</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">A Descontar</th>
-                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Saldo</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {stockPorProductoLote.map((item) => (
-                                                <tr key={`stock-lote-${item.key}`}>
-                                                    <td className="px-3 py-2 font-mono text-slate-700">{item.codigo}</td>
-                                                    <td className="px-3 py-2 text-slate-800">{item.producto}</td>
-                                                    <td className="px-3 py-2 text-slate-700">{item.lote}</td>
-                                                    <td className="px-3 py-2 text-slate-700">{item.um}</td>
-                                                    <td className="px-3 py-2 text-right text-slate-700 font-semibold">{formatCantidad(item.inicial)}</td>
-                                                    <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(item.disponible)}</td>
-                                                    <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(item.descontar)}</td>
-                                                    <td className={`px-3 py-2 text-right font-semibold ${item.saldo <= 0 ? 'text-red-700' : 'text-blue-700'}`}>{formatCantidad(item.saldo)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Sección de Notas de Ingreso */}
-                {selectedClient && (
-                    <Card className="p-6 bg-linear-to-br from-purple-50 to-blue-50 border-purple-200 border-2">
-                        <h3 className="text-xl font-bold text-purple-900 mb-5 flex items-center gap-3 pb-3 border-b-2 border-purple-200">
-                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Selecciona Nota de Ingreso
-                            {notasIngreso.length > 0 && (
-                                <span className="ml-auto bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                                    {notasIngreso.length} disponible(s)
-                                </span>
-                            )}
-                        </h3>
-
-                        <div className="space-y-3">
-
-                            {cargandoNotas ? (
-                                <div className="text-center py-10 text-purple-600">
-                                    <p className="text-sm font-medium animate-pulse">⏳ Cargando notas de ingreso...</p>
-                                </div>
-                            ) : errorNotas ? (
-                                <div className="text-center py-8 text-red-600 bg-red-50 rounded-lg px-4">
-                                    <p className="text-sm font-medium">{errorNotas}</p>
-                                    <button type="button" onClick={() => loadNotasIngreso(selectedClient)}
-                                        className="mt-2 text-xs underline text-red-700 hover:text-red-900">Reintentar</button>
-                                </div>
-                            ) : notasIngreso.length === 0 ? (
-                                <div className="text-center py-12 text-slate-500">
-                                    <p className="text-lg">📭 No hay notas de ingreso con saldo para este cliente</p>
-                                    <p className="text-sm mt-2">Registra una nota de ingreso o ya fueron entregadas completamente</p>
-                                </div>
-                            ) : (
-                                notasIngreso.map(nota => (
-                                        <Card key={nota.id} className="p-5 bg-white border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all">
-                                        <div className="flex items-start justify-between mb-4 pb-4 border-b-2 border-slate-100">
-                                            <div className="flex-1">
-                                                <div className="flex items-baseline gap-3">
-                                                    <h4 className="text-lg font-bold text-slate-800">
-                                                        {nota.numero_ingreso}
-                                                    </h4>
-                                                    <span className="text-sm text-slate-600">
-                                                        📅 {new Date(nota.fecha).toLocaleDateString('es-PE')}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-slate-500 mt-1">
-                                                    📦 {nota.detalles?.length || 0} producto(s) disponible(s)
-                                                </p>
-                                                <p className="text-xs mt-1 text-slate-600">
-                                                    Inicial: <span className="font-semibold text-slate-700">{formatCantidad(getNotaStockInicial(nota))}</span>
-                                                    {' '}| 
-                                                    Stock disp.: <span className="font-semibold text-green-700">{formatCantidad(getNotaStockDisponible(nota))}</span>
-                                                    {' '}| A descontar: <span className="font-semibold text-amber-700">{formatCantidad(getNotaStockSeleccionado(nota.id, nota.detalles || []))}</span>
-                                                    {' '}| Saldo: <span className="font-semibold text-blue-700">{formatCantidad(Math.max(getNotaStockDisponible(nota) - getNotaStockSeleccionado(nota.id, nota.detalles || []), 0))}</span>
-                                                </p>
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                onClick={() => handleSelectTodaNota(nota.id)}
-                                                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm whitespace-nowrap"
-                                            >
-                                                ✓ Todo
-                                            </Button>
-                                        </div>
-
-                                        {nota.detalles && nota.detalles.length > 0 && (
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-xs">
-                                                    <thead className="bg-purple-50">
-                                                        <tr className="border-b border-purple-200">
-                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">✓</th>
-                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Código</th>
-                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Producto</th>
-                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Lote</th>
-                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Vencimiento</th>
-                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">UM</th>
-                                                            <th className="px-3 py-2 text-right font-semibold text-purple-800">Disp.</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        {nota.detalles.map(detalle => {
-                                                            const key = `${nota.id}-${detalle.id}`;
-                                                            const isSelected = selectedProductosFromNota[key];
-                                                            const disponible = getDetalleDisponible(detalle);
-                                                            const total = getDetalleInicial(detalle);
-                                                            return (
-                                                                <tr key={detalle.id} className={`${isSelected ? 'bg-purple-50 border-l-4 border-l-purple-600' : 'hover:bg-slate-50'}`}>
-                                                                    <td className="px-3 py-2 text-center">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={isSelected || false}
-                                                                            onChange={() => handleToggleProductoFromNota(nota.id, detalle)}
-                                                                            disabled={disponible <= 0}
-                                                                            className="w-4 h-4 text-purple-600 rounded cursor-pointer"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="px-3 py-2 font-mono text-slate-700">{detalle.producto?.codigo || '-'}</td>
-                                                                    <td className="px-3 py-2 font-medium text-slate-800">{detalle.producto?.descripcion || '-'}</td>
-                                                                    <td className="px-3 py-2 text-slate-700">{detalle.lote_numero || '-'}</td>
-                                                                    <td className="px-3 py-2">
-                                                                        {detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}
-                                                                    </td>
-                                                                    <td className="px-3 py-2">{detalle.um || detalle.producto?.um || '-'}</td>
-                                                                    <td className="px-3 py-2 text-right font-bold">
-                                                                        <span className={disponible === 0 ? 'text-red-600' : 'text-green-600'}>
-                                                                            {disponible}
-                                                                        </span>
-                                                                        <span className="text-slate-400 ml-1">{total}</span>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                        </Card>
-                                    ))
-                            )}
-                        </div>
-                    </Card>
-                )}
 
                 <Card className="p-6">
                     <h3 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Datos del Documento</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                             <label className="label-premium">Tipo de Documento</label>
-                            <input
+                            <select
                                 {...register('tipo_documento')}
-                                type="text"
                                 className="input-premium"
-                                placeholder="Guía..."
-                            />
+                            >
+                                <option value="">Seleccione...</option>
+                                <option value="Factura">Factura</option>
+                                <option value="Invoice">Invoice</option>
+                                <option value="Boleta de Venta">Boleta de Venta</option>
+                                <option value="Guía de Remisión Remitente">Guía de Remisión Remitente</option>
+                                <option value="Guía de Remisión Transportista">Guía de Remisión Transportista</option>
+                                <option value="Orden de Compra">Orden de Compra</option>
+                            </select>
                         </div>
                         <div>
                             <label className="label-premium">Número de Documento</label>
@@ -1948,6 +1761,222 @@ export const NotaSalidaForm = () => {
                         </div>
                     </div>
                 </Card>
+
+                {/* Cuadros de stock y Notas de Ingreso */}
+                {selectedClient && (
+                    <div className="space-y-3">
+                        {notasIngreso.length > 0 && (
+                            <div className="bg-white rounded-xl border border-purple-200 shadow-sm p-4">
+                                <p className="text-sm font-semibold text-purple-900 mb-2">Stock para descontar por Nota de Ingreso</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-purple-50">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-semibold text-purple-800">Nota Ingreso</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Stock Disponible</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">A Descontar</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-purple-800">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {notasIngreso.map((nota) => {
+                                                const disponible = getNotaStockDisponible(nota);
+                                                const descontar = getNotaStockSeleccionado(nota.id, nota.detalles || []);
+                                                const saldo = Math.max(disponible - descontar, 0);
+                                                return (
+                                                    <tr key={`resumen-${nota.id}`}>
+                                                        <td className="px-3 py-2 font-medium text-slate-800">{nota.numero_ingreso || `NI-${nota.id}`}</td>
+                                                        <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(disponible)}</td>
+                                                        <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(descontar)}</td>
+                                                        <td className="px-3 py-2 text-right text-blue-700 font-semibold">{formatCantidad(saldo)}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                        {stockPorProductoLote.length > 0 && (
+                            <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4">
+                                <p className="text-sm font-semibold text-blue-900 mb-2">Stock actualizado por Producto y Lote</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-blue-50">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Código</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Producto</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">Lote</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-blue-800">UM</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Disponible</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">A Descontar</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-blue-800">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {stockPorProductoLote.map((item) => (
+                                                <tr key={`stock-lote-${item.key}`}>
+                                                    <td className="px-3 py-2 font-mono text-slate-700">{item.codigo}</td>
+                                                    <td className="px-3 py-2 text-slate-800">{item.producto}</td>
+                                                    <td className="px-3 py-2 text-slate-700">{item.lote}</td>
+                                                    <td className="px-3 py-2 text-slate-700">{item.um}</td>
+                                                    <td className="px-3 py-2 text-right text-green-700 font-semibold">{formatCantidad(item.disponible)}</td>
+                                                    <td className="px-3 py-2 text-right text-amber-700 font-semibold">{formatCantidad(item.descontar)}</td>
+                                                    <td className={`px-3 py-2 text-right font-semibold ${item.saldo <= 0 ? 'text-red-700' : 'text-blue-700'}`}>{formatCantidad(item.saldo)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Sección de Notas de Ingreso */}
+                {selectedClient && (
+                    <Card className="p-6 bg-linear-to-br from-purple-50 to-blue-50 border-purple-200 border-2">
+                        <h3 className="text-xl font-bold text-purple-900 mb-5 flex items-center gap-3 pb-3 border-b-2 border-purple-200">
+                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Selecciona Nota de Ingreso
+                            {notasIngreso.length > 0 && (
+                                <span className="ml-auto bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                                    {notasIngreso.length} disponible(s)
+                                </span>
+                            )}
+                        </h3>
+
+                        {/* Buscador bajo demanda por Nº de ingreso */}
+                        <div className="mb-4">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    <input
+                                        type="text"
+                                        value={buscarNota}
+                                        onChange={(e) => setBuscarNota(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && buscarNotaIngreso()}
+                                        placeholder="Nº de ingreso (ej: 00000075)..."
+                                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border-2 border-purple-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={buscarNotaIngreso}
+                                    disabled={!buscarNota.trim() || cargandoNotas}
+                                    className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-semibold rounded-lg transition-all flex items-center gap-2 whitespace-nowrap"
+                                >
+                                    {cargandoNotas ? (
+                                        <span className="animate-pulse">Buscando...</span>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                            Buscar
+                                        </>
+                                    )}
+                                </button>
+                                {notasIngreso.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setNotasIngreso([]); setBuscarNota(''); setErrorNotas(''); }}
+                                        className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-medium rounded-lg transition-all"
+                                        title="Limpiar resultado"
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-xs text-purple-500 mt-1.5 pl-1">Escribe el número de ingreso y presiona Enter o haz clic en Buscar</p>
+                        </div>
+
+                        <div className="space-y-3">
+                            {cargandoNotas ? (
+                                <div className="text-center py-10 text-purple-600">
+                                    <p className="text-sm font-medium animate-pulse">⏳ Buscando nota de ingreso...</p>
+                                </div>
+                            ) : errorNotas ? (
+                                <div className="text-center py-8 text-red-600 bg-red-50 rounded-lg px-4">
+                                    <p className="text-sm font-medium">{errorNotas}</p>
+                                    <button type="button" onClick={buscarNotaIngreso} className="mt-2 text-xs underline text-red-700 hover:text-red-900">Reintentar</button>
+                                </div>
+                            ) : notasIngreso.length === 0 ? (
+                                <div className="text-center py-10 text-slate-400">
+                                    <p className="text-4xl mb-3">🔍</p>
+                                    <p className="text-sm font-medium">Ingresa el número de la nota de ingreso para buscarla</p>
+                                </div>
+                            ) : (
+                                notasIngreso.map(nota => (
+                                    <Card key={nota.id} className="p-5 bg-white border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all">
+                                        <div className="flex items-start justify-between mb-4 pb-4 border-b-2 border-slate-100">
+                                            <div className="flex-1">
+                                                <div className="flex items-baseline gap-3">
+                                                    <h4 className="text-lg font-bold text-slate-800">{nota.numero_ingreso}</h4>
+                                                    <span className="text-sm text-slate-600">📅 {new Date(nota.fecha).toLocaleDateString('es-PE')}</span>
+                                                </div>
+                                                <p className="text-sm text-slate-500 mt-1">📦 {nota.detalles?.length || 0} producto(s) disponible(s)</p>
+                                                <p className="text-xs mt-1 text-slate-600">
+                                                    Stock disp.: <span className="font-semibold text-green-700">{formatCantidad(getNotaStockDisponible(nota))}</span>
+                                                    {' '}| A descontar: <span className="font-semibold text-amber-700">{formatCantidad(getNotaStockSeleccionado(nota.id, nota.detalles || []))}</span>
+                                                    {' '}| Saldo: <span className="font-semibold text-blue-700">{formatCantidad(Math.max(getNotaStockDisponible(nota) - getNotaStockSeleccionado(nota.id, nota.detalles || []), 0))}</span>
+                                                </p>
+                                            </div>
+                                            <Button type="button" onClick={() => handleSelectTodaNota(nota.id)} className="bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm whitespace-nowrap">
+                                                ✓ Todo
+                                            </Button>
+                                        </div>
+                                        {nota.detalles && nota.detalles.length > 0 && (
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-xs">
+                                                    <thead className="bg-purple-50">
+                                                        <tr className="border-b border-purple-200">
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">✓</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Código</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Producto</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Lote</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">Vencimiento</th>
+                                                            <th className="px-3 py-2 text-left font-semibold text-purple-800">UM</th>
+                                                            <th className="px-3 py-2 text-right font-semibold text-purple-800">Disp.</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {nota.detalles.map(detalle => {
+                                                            const key = `${nota.id}-${detalle.id}`;
+                                                            const isSelected = selectedProductosFromNota[key];
+                                                            const disponible = getDetalleDisponible(detalle);
+                                                            const total = getDetalleInicial(detalle);
+                                                            return (
+                                                                <tr key={detalle.id} className={`${isSelected ? 'bg-purple-50 border-l-4 border-l-purple-600' : 'hover:bg-slate-50'}`}>
+                                                                    <td className="px-3 py-2 text-center">
+                                                                        <input type="checkbox" checked={isSelected || false} onChange={() => handleToggleProductoFromNota(nota.id, detalle)} disabled={disponible <= 0} className="w-4 h-4 text-purple-600 rounded cursor-pointer" />
+                                                                    </td>
+                                                                    <td className="px-3 py-2 font-mono text-slate-700">{detalle.producto?.codigo || '-'}</td>
+                                                                    <td className="px-3 py-2 font-medium text-slate-800">{detalle.producto?.descripcion || '-'}</td>
+                                                                    <td className="px-3 py-2 text-slate-700">{detalle.lote_numero || '-'}</td>
+                                                                    <td className="px-3 py-2">{detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}</td>
+                                                                    <td className="px-3 py-2">{detalle.um || detalle.producto?.um || '-'}</td>
+                                                                    <td className="px-3 py-2 text-right font-bold">
+                                                                        <span className={disponible === 0 ? 'text-red-600' : 'text-green-600'}>{disponible}</span>
+                                                                        <span className="text-slate-400 ml-1">{total}</span>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        )}
+                                    </Card>
+                                ))
+                            )}
+                        </div>
+                    </Card>
+                )}
 
                 <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
                     <table className="w-full text-sm text-left">
