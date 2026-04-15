@@ -101,7 +101,7 @@ const LotesDetalle = ({ productoId, clienteId }) => {
                             Desglose por lote ({lotes.length})
                         </span>
                     </div>
-                    <div className="overflow-x-auto rounded-lg border border-blue-100 shadow-sm">
+                    <div className="table-scroll-top rounded-lg border border-blue-100 shadow-sm">
                         <table className="w-full text-xs">
                             <thead>
                                 <tr className="bg-blue-600 text-white">
@@ -584,7 +584,7 @@ export const InventarioGeneral = () => {
                             <p className="text-slate-500 mt-4">No se encontraron productos</p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
+                        <div className="table-scroll-top">
                             <table className="w-full">
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>

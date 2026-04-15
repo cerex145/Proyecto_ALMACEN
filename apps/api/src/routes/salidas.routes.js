@@ -564,7 +564,12 @@ async function salidasRoutes(fastify, options) {
                                 lote_id: { type: 'integer' }
                             }
                         }
-                    }
+                    },
+                    tipo_documento: { type: 'string', nullable: true },
+                    numero_documento: { type: 'string', nullable: true },
+                    fecha_ingreso: { type: 'string', nullable: true },
+                    motivo_salida: { type: 'string', nullable: true },
+                    responsable_id: { type: 'integer', nullable: true }
                 }
             },
             response: {
@@ -1430,7 +1435,7 @@ async function salidasRoutes(fastify, options) {
                                 { text: (d.lote ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : (d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-')), style: 'tableCell' },
                                 { text: d.um || d.producto?.unidad_medida || 'UND', style: 'tableCell' },
                                 { text: d.fabricante || d.producto?.fabricante || '-', style: 'tableCell' },
-                                { text: (d.temperatura_min_c != null) ? `${d.temperatura_min_c}° ${d.temperatura_max_c ?? d.temperatura_min_c}°C` : ((d.producto?.temperatura_min_c != null) ? `${d.producto.temperatura_min_c}° ${d.producto.temperatura_max_c}°C` : '-'), style: 'tableCell' },
+                                { text: '15°C a 25°C', style: 'tableCell' },
                                 { text: parseFloat(d.cant_bulto || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cant_caja || 0).toFixed(2), style: 'tableCell' },
                                 { text: parseFloat(d.cant_x_caja || 0).toFixed(2), style: 'tableCell' },

@@ -35,7 +35,8 @@ const buildNuevoProductoState = (defaults = {}) => ({
     procedencia: defaults.procedencia || '',
     unidad: defaults.unidad || 'UND',
     um: defaults.um || 'UND',
-    temperatura: defaults.temperatura || '25',
+    temperatura_min: defaults.temperatura_min || '15',
+    temperatura_max: defaults.temperatura_max || '25',
     observaciones: defaults.observaciones || '',
     cantidad_bultos: defaults.cantidad_bultos || 1,
     cantidad_cajas: defaults.cantidad_cajas || 1,
@@ -125,7 +126,8 @@ export const NotaIngresoForm = () => {
     const [bultos, setBultos] = useState(1);
     const [um, setUm] = useState('UND');
     const [fabricante, setFabricante] = useState('');
-    const [temperatura, setTemperatura] = useState('25');
+    const [temperaturaMin, setTemperaturaMin] = useState('15');
+    const [temperaturaMax, setTemperaturaMax] = useState('25');
 
     const [lote, setLote] = useState('');
     const [vencimiento, setVencimiento] = useState('');
@@ -150,7 +152,8 @@ export const NotaIngresoForm = () => {
         fecha_vencimiento: '',
         um: 'UND',
         fabricante: '',
-        temperatura: '25',
+        temperatura_min: '15',
+        temperatura_max: '25',
         cantidad_bultos: 1,
         cantidad_cajas: 1,
         cantidad_por_caja: 1,
@@ -348,7 +351,8 @@ export const NotaIngresoForm = () => {
         setSelectedLoteId(product?.lote ? 'PRODUCTO_LOTE' : '');
         setUm(product?.um || product?.unidad || 'UND');
         setFabricante(product?.fabricante || '');
-        setTemperatura(String(product?.temperatura ?? product?.temperatura_min_c ?? 25));
+        setTemperaturaMin(String(product?.temperatura_min_c ?? product?.temperatura ?? 15));
+        setTemperaturaMax(String(product?.temperatura_max_c ?? product?.temperatura ?? 25));
         setLote(product?.lote || '');
         setVencimiento(normalizarFechaInput(product?.fecha_vencimiento || product?.proximo_vencimiento));
         setBultos(product?.cantidad_bultos ?? 1);
@@ -466,7 +470,8 @@ export const NotaIngresoForm = () => {
             fecha_vencimiento: vencimiento,
             fabricante,
             um: um || 'UND',
-            temperatura: String(temperatura || '25'),
+            temperatura_min: String(temperaturaMin || '15'),
+            temperatura_max: String(temperaturaMax || '25'),
             tipo_documento: tipoDocumentoActual,
             numero_documento: numeroDocumentoActual
         }));
@@ -581,9 +586,10 @@ export const NotaIngresoForm = () => {
             return;
         }
 
-        const temperaturaNumero = Number(nuevoProductoForm.temperatura || 25);
-        if (!Number.isFinite(temperaturaNumero)) {
-            showError('La temperatura debe ser un valor numérico válido.');
+        const tempMin = Number(nuevoProductoForm.temperatura_min ?? 15);
+        const tempMax = Number(nuevoProductoForm.temperatura_max ?? 25);
+        if (!Number.isFinite(tempMin) || !Number.isFinite(tempMax)) {
+            showError('Las temperaturas deben ser valores numéricos válidos.');
             return;
         }
 
@@ -605,7 +611,9 @@ export const NotaIngresoForm = () => {
                 procedencia: String(nuevoProductoForm.procedencia || '').trim() || null,
                 unidad: nuevoProductoForm.unidad || 'UND',
                 um: nuevoProductoForm.um || 'UND',
-                temperatura: temperaturaNumero,
+                temperatura: tempMin,
+                temperatura_min: tempMin,
+                temperatura_max: tempMax,
                 observaciones: String(nuevoProductoForm.observaciones || '').trim() || null
             };
 
@@ -628,8 +636,8 @@ export const NotaIngresoForm = () => {
                     fecha_vencimiento: normalizarFechaInput(nuevoProductoForm.fecha_vencimiento) || null,
                     um: payload.um || '',
                     fabricante: payload.fabricante || '',
-                    temperatura_min: Number(temperaturaNumero),
-                    temperatura_max: Number(temperaturaNumero),
+                    temperatura_min: tempMin,
+                    temperatura_max: tempMax,
                     cantidad_bultos: Number(nuevoProductoForm.cantidad_bultos || 0),
                     cantidad_cajas: Number(nuevoProductoForm.cantidad_cajas || 0),
                     cantidad_por_caja: Number(nuevoProductoForm.cantidad_por_caja || 0),
@@ -652,7 +660,8 @@ export const NotaIngresoForm = () => {
             setVencimiento(normalizarFechaInput(nuevoProductoForm.fecha_vencimiento) || '');
             setUm(payload.um || 'UND');
             setFabricante(payload.fabricante || '');
-            setTemperatura(String(temperaturaNumero));
+            setTemperaturaMin(String(tempMin));
+            setTemperaturaMax(String(tempMax));
             setMostrarModalNuevoProducto(false);
         } catch (error) {
             console.error('Error creando producto desde ingreso:', error);
@@ -697,7 +706,8 @@ export const NotaIngresoForm = () => {
             if (productoDetalle) {
                 setUm(productoDetalle.um || '');
                 setFabricante(productoDetalle.fabricante || '');
-                setTemperatura(String(productoDetalle.temperatura ?? productoDetalle.temperatura_min_c ?? 25));
+                setTemperaturaMin(String(productoDetalle.temperatura_min_c ?? productoDetalle.temperatura ?? 15));
+                setTemperaturaMax(String(productoDetalle.temperatura_max_c ?? productoDetalle.temperatura ?? 25));
                 setBultos(productoDetalle.cantidad_bultos ?? '');
                 setCajas(productoDetalle.cantidad_cajas ?? '');
                 setUnidadesCaja(productoDetalle.cantidad_por_caja ?? '');
@@ -759,8 +769,8 @@ export const NotaIngresoForm = () => {
                 fecha_vencimiento: vencimiento || existing.fecha_vencimiento,
                 um: um || existing.um,
                 fabricante: fabricante || existing.fabricante,
-                temperatura_min: Number(temperatura || existing.temperatura_min || 25),
-                temperatura_max: Number(temperatura || existing.temperatura_max || 25)
+                temperatura_min: Number(temperaturaMin || existing.temperatura_min || 15),
+                temperatura_max: Number(temperaturaMax || existing.temperatura_max || 25)
             });
         } else {
             append({
@@ -772,8 +782,8 @@ export const NotaIngresoForm = () => {
                 fecha_vencimiento: vencimiento || null,
                 um: um || '',
                 fabricante: fabricante || '',
-                temperatura_min: Number(temperatura || 25),
-                temperatura_max: Number(temperatura || 25),
+                temperatura_min: Number(temperaturaMin || 15),
+                temperatura_max: Number(temperaturaMax || 25),
                 cantidad_bultos: parseFloat(bultos || 0),
                 cantidad_cajas: parseFloat(cajas || 0),
                 cantidad_por_caja: parseFloat(unidadesCaja || 0),
@@ -875,7 +885,8 @@ export const NotaIngresoForm = () => {
             fecha_vencimiento: normalizarFechaInput(producto.fecha_vencimiento),
             um: producto.um || producto.unidad || 'UND',
             fabricante: producto.fabricante || '',
-            temperatura: String(producto.temperatura ?? producto.temperatura_min_c ?? 25),
+            temperatura_min: String(producto.temperatura_min_c ?? 15),
+            temperatura_max: String(producto.temperatura_max_c ?? 25),
             cantidad_bultos: bultosIniciales,
             cantidad_cajas: cajasIniciales,
             cantidad_por_caja: unidadesPorCajaIniciales,
@@ -2013,7 +2024,7 @@ export const NotaIngresoForm = () => {
                 </Card>
 
                 {/* Tabla de Items */}
-                <div className="rounded-xl border border-slate-200 overflow-x-auto overflow-y-hidden bg-white shadow-sm">
+                <div className="table-scroll-top rounded-xl border border-slate-200 bg-white shadow-sm">
                     <table className="min-w-max w-full text-sm text-left">
                         <thead className="bg-slate-50 text-slate-500 font-semibold uppercase text-xs">
                             <tr>
@@ -2078,12 +2089,23 @@ export const NotaIngresoForm = () => {
                                         />
                                     </td>
                                     <td className="px-6 py-3">
-                                        <input
-                                            type="number"
-                                            value={field.temperatura_min ?? field.temperatura_max ?? 25}
-                                            onChange={(e) => handleUpdateDetalle(index, 'temperatura', e.target.value)}
-                                            className="input-premium h-8 text-xs p-1 w-20"
-                                        />
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="number"
+                                                title="Temperatura mínima (°C)"
+                                                value={field.temperatura_min ?? 15}
+                                                onChange={(e) => handleUpdateDetalle(index, 'temperatura_min', e.target.value)}
+                                                className="input-premium h-8 text-xs p-1 w-14"
+                                            />
+                                            <span className="text-xs text-slate-400">a</span>
+                                            <input
+                                                type="number"
+                                                title="Temperatura máxima (°C)"
+                                                value={field.temperatura_max ?? 25}
+                                                onChange={(e) => handleUpdateDetalle(index, 'temperatura_max', e.target.value)}
+                                                className="input-premium h-8 text-xs p-1 w-14"
+                                            />
+                                        </div>
                                     </td>
                                     <td className="px-6 py-3">
                                         <input
@@ -2337,12 +2359,24 @@ export const NotaIngresoForm = () => {
                                 </select>
                             </div>
                             <div>
-                                <label className="label-premium">Temperatura maxima (°C)</label>
+                                <label className="label-premium">Temp. Mínima (°C)</label>
                                 <input
                                     type="number"
-                                    step="0.01"
-                                    value={nuevoProductoForm.temperatura}
-                                    onChange={(e) => handleNuevoProductoChange('temperatura', e.target.value)}
+                                    step="0.1"
+                                    placeholder="15"
+                                    value={nuevoProductoForm.temperatura_min}
+                                    onChange={(e) => handleNuevoProductoChange('temperatura_min', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Temp. Máxima (°C)</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    placeholder="25"
+                                    value={nuevoProductoForm.temperatura_max}
+                                    onChange={(e) => handleNuevoProductoChange('temperatura_max', e.target.value)}
                                     className="input-premium"
                                 />
                             </div>

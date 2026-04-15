@@ -100,3 +100,40 @@ h6 {
 .btn-gradient-primary {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
 }
+
+/* =========================================================
+   Table Scroll Top — Scrollbar horizontal al INICIO (arriba)
+   Uso: reemplazar "overflow-x-auto" con "table-scroll-top"
+   en el div contenedor de una tabla.
+   El hijo directo (tabla o div inner) recibe "table-scroll-inner".
+   ========================================================= */
+.table-scroll-top {
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Voltea el EJE X para que el scrollbar pase de abajo a arriba */
+  transform: rotateX(180deg);
+  -webkit-transform: rotateX(180deg);
+}
+
+/* Contra-volteo para que el contenido se vea normal */
+.table-scroll-top > table,
+.table-scroll-top > .table-scroll-inner {
+  transform: rotateX(180deg);
+  -webkit-transform: rotateX(180deg);
+}
+
+/* Estilo del scrollbar (Webkit) — más visible y elegante */
+.table-scroll-top::-webkit-scrollbar {
+  height: 6px;
+}
+.table-scroll-top::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+.table-scroll-top::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+.table-scroll-top::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
