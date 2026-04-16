@@ -481,8 +481,9 @@ async function ingresosRoutes(fastify, options) {
         const queryBuilder = notaIngresoRepo.createQueryBuilder('nota');
 
         if (busqueda) {
+            queryBuilder.leftJoin('nota.detalles', 'search_detalles_filter');
             queryBuilder.where(
-                '(nota.numero_ingreso LIKE :busqueda OR nota.proveedor LIKE :busqueda OR nota.numero_documento LIKE :busqueda)',
+                '(nota.numero_ingreso LIKE :busqueda OR nota.proveedor LIKE :busqueda OR nota.numero_documento LIKE :busqueda OR search_detalles_filter.lote_numero LIKE :busqueda)',
                 { busqueda: `%${busqueda}%` }
             );
         }

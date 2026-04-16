@@ -588,7 +588,7 @@ export const NotaSalidaForm = () => {
             const client = clients.find(c => String(c.id) === String(selectedClient));
             if (!client) { setCargandoNotas(false); return; }
 
-            const url = `${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}&numero_ingreso=${encodeURIComponent(buscarNota.trim())}&include_detalles=true`;
+            const url = `${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}&busqueda=${encodeURIComponent(buscarNota.trim())}&include_detalles=true`;
             const response = await fetch(url);
             const result = await response.json();
             const notas = result.data || [];
@@ -1860,7 +1860,7 @@ export const NotaSalidaForm = () => {
                                         value={buscarNota}
                                         onChange={(e) => setBuscarNota(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && buscarNotaIngreso()}
-                                        placeholder="Nº de ingreso (ej: 00000075)..."
+                                        placeholder="Nº de ingreso, Doc o Lote..."
                                         className="w-full pl-10 pr-4 py-2.5 rounded-lg border-2 border-purple-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all"
                                     />
                                 </div>
@@ -1892,7 +1892,7 @@ export const NotaSalidaForm = () => {
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs text-purple-500 mt-1.5 pl-1">Escribe el número de ingreso y presiona Enter o haz clic en Buscar</p>
+                            <p className="text-xs text-purple-500 mt-1.5 pl-1">Busca por número de ingreso, documento (factura/guía) o lote</p>
                         </div>
 
                         <div className="space-y-3">
@@ -1908,7 +1908,7 @@ export const NotaSalidaForm = () => {
                             ) : notasIngreso.length === 0 ? (
                                 <div className="text-center py-10 text-slate-400">
                                     <p className="text-4xl mb-3">🔍</p>
-                                    <p className="text-sm font-medium">Ingresa el número de la nota de ingreso para buscarla</p>
+                                    <p className="text-sm font-medium">Busca una nota por su número, documento o lote</p>
                                 </div>
                             ) : (
                                 notasIngreso.map(nota => (
