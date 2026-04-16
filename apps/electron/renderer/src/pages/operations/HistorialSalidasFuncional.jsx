@@ -119,6 +119,45 @@ export const HistorialSalidasFuncional = () => {
         }
     };
 
+    const handleEditarSalida = (notaId) => {
+        if (!notaId) return;
+        navigate(`/salidas/editar/${notaId}`);
+    };
+
+    const handleCancelarSalida = async (notaId) => {
+        if (!notaId) return;
+        
+        const confirmacion = window.confirm(
+            '¿Está seguro de que desea cancelar esta nota de salida?\n\nEsta acción revertirá todos los cambios en la base de datos (Kardex, lotes, stock).'
+        );
+        
+        if (!confirmacion) return;
+
+        try {
+            setLoading(true);
+            const response = await fetch(`${API_ORIGIN}/api/salidas/${notaId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert('✅ ' + (data.message || 'Nota de salida cancelada exitosamente'));
+                cargarSalidas();
+            } else {
+                const error = await response.json();
+                alert('❌ Error: ' + (error.error || 'Error al cancelar la nota'));
+            }
+        } catch (error) {
+            console.error('Error al cancelar salida:', error);
+            alert('❌ Error de conexión al cancelar la nota');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -170,7 +209,7 @@ export const HistorialSalidasFuncional = () => {
                                         <th className="px-4 py-3">DIA</th>
                                         <th className="px-4 py-3">RUC</th>
                                         <th className="px-4 py-3">AÑO</th>
-                                        <th className="px-4 py-3 text-center">PDF</th>
+                                        <th className="px-4 py-3 text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -191,7 +230,7 @@ export const HistorialSalidasFuncional = () => {
                                             <td className="px-4 py-2">{row.dia}</td>
                                             <td className="px-4 py-2">{row.ruc}</td>
                                             <td className="px-4 py-2">{row.anio}</td>
-                                            <td className="px-4 py-2 text-center">
+                                            <td className="px-4 py-2 text-center flex gap-2 justify-center">
                                                 <Button
                                                     type="button"
                                                     size="sm"
@@ -199,6 +238,22 @@ export const HistorialSalidasFuncional = () => {
                                                     onClick={() => handleDescargarPdf(row.notaId)}
                                                 >
                                                     PDF
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                                    onClick={() => handleEditarSalida(row.notaId)}
+                                                >
+                                                    Editar
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    className="bg-red-600 hover:bg-red-700 text-white"
+                                                    onClick={() => handleCancelarSalida(row.notaId)}
+                                                >
+                                                    Cancelar
                                                 </Button>
                                             </td>
                                         </tr>

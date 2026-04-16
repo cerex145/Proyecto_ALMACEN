@@ -216,6 +216,45 @@ export const HistorialIngresosFuncional = () => {
         }
     };
 
+    const handleEditarIngreso = (ingresoId) => {
+        if (!ingresoId) return;
+        navigate(`/ingresos/editar/${ingresoId}`);
+    };
+
+    const handleCancelarIngreso = async (ingresoId) => {
+        if (!ingresoId) return;
+        
+        const confirmacion = window.confirm(
+            '¿Está seguro de que desea cancelar esta nota de ingreso?\n\nEsta acción revertirá todos los cambios en la base de datos (Kardex, lotes, stock).'
+        );
+        
+        if (!confirmacion) return;
+
+        try {
+            setLoading(true);
+            const response = await fetch(`${API_ORIGIN}/api/ingresos/${ingresoId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert('✅ ' + (data.message || 'Nota de ingreso cancelada exitosamente'));
+                cargarIngresos();
+            } else {
+                const error = await response.json();
+                alert('❌ Error: ' + (error.error || 'Error al cancelar la nota'));
+            }
+        } catch (error) {
+            console.error('Error al cancelar ingreso:', error);
+            alert('❌ Error de conexión al cancelar la nota');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (showForm) {
         return (
             <div className="max-w-7xl mx-auto">
@@ -280,7 +319,7 @@ export const HistorialIngresosFuncional = () => {
                                         <th className="px-4 py-3">DIA</th>
                                         <th className="px-4 py-3">RUC</th>
                                         <th className="px-4 py-3">AÑO</th>
-                                        <th className="px-4 py-3 text-center">PDF</th>
+                                        <th className="px-4 py-3 text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -303,7 +342,7 @@ export const HistorialIngresosFuncional = () => {
                                             <td className="px-4 py-2">{row.dia}</td>
                                             <td className="px-4 py-2">{row.ruc}</td>
                                             <td className="px-4 py-2">{row.anio}</td>
-                                            <td className="px-4 py-2 text-center">
+                                            <td className="px-4 py-2 text-center flex gap-2 justify-center">
                                                 <Button
                                                     type="button"
                                                     variant="secondary"
@@ -311,6 +350,20 @@ export const HistorialIngresosFuncional = () => {
                                                     onClick={() => handleDescargarPdf(row.ingresoId)}
                                                 >
                                                     PDF
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                                                    onClick={() => handleEditarIngreso(row.ingresoId)}
+                                                >
+                                                    Editar
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    className="text-xs bg-red-600 hover:bg-red-700 text-white"
+                                                    onClick={() => handleCancelarIngreso(row.ingresoId)}
+                                                >
+                                                    Cancelar
                                                 </Button>
                                             </td>
                                         </tr>

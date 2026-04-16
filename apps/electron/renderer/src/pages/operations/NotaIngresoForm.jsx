@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
+import { useParams } from 'react-router-dom';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
@@ -233,6 +234,59 @@ export const NotaIngresoForm = () => {
     useEffect(() => {
         loadData();
     }, []);
+
+    const { id: ingresoId } = useParams();
+    
+    useEffect(() => {
+        if (!ingresoId) return;
+        
+        const cargarDatosEdicion = async () => {
+            try {
+                const response = await fetch(`${API_ORIGIN}/api/ingresos/${ingresoId}?include_detalles=true`);
+                if (response.ok) {
+                    const dataResponse = await response.json();
+                    const nota = dataResponse.data || dataResponse;
+                    
+                    // Pre-llenar datos principales
+                    setValue('fecha', nota.fecha || '');
+                    if (nota.cliente_id) setSelectedClient(nota.cliente_id);
+                    if (nota.cliente_ruc) setClienteRuc(nota.cliente_ruc);
+                    if (nota.proveedor) setProveedorNombre(nota.proveedor);
+                    
+                    // Llenar detalles si existen
+                    if (nota.detalles && Array.isArray(nota.detalles) && nota.detalles.length > 0) {
+                        reset({
+                            fecha: nota.fecha,
+                            numero_ingreso: nota.numero_ingreso || '',
+                            tipo_documento: nota.tipo_documento || '',
+                            numero_documento: nota.numero_documento || '',
+                            responsable_id: nota.responsable_id || 1,
+                            detalles: nota.detalles.map(det => ({
+                                producto_id: det.producto_id,
+                                cantidad: det.cantidad || det.cantidad_total || 0,
+                                lote_numero: det.lote_numero || '',
+                                fecha_vencimiento: det.fecha_vencimiento || '',
+                                um: det.um || 'UND',
+                                fabricante: det.fabricante || '',
+                                temperatura_min_c: det.temperatura_min_c || 15,
+                                temperatura_max_c: det.temperatura_max_c || 25,
+                                cantidad_bultos: det.cantidad_bultos || 1,
+                                cantidad_cajas: det.cantidad_cajas || 1,
+                                cantidad_por_caja: det.cantidad_por_caja || 1,
+                                cantidad_fraccion: det.cantidad_fraccion || 0,
+                                cantidad_total: det.cantidad_total || det.cantidad || 0
+                            }))
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error cargando datos para edición:', error);
+                setUiError('Error al cargar los datos de la nota para edición');
+            }
+        };
+        
+        cargarDatosEdicion();
+    }, [ingresoId, setValue, reset]);
 
     useEffect(() => {
         loadProducts();

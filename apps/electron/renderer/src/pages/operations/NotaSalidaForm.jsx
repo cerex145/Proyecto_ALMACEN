@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
+import { useParams } from 'react-router-dom';
 import { operationService } from '../../services/operation.service';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
@@ -463,11 +464,60 @@ export const NotaSalidaForm = () => {
             });
     };
 
+    const { id: salidaId } = useParams();
+
     useEffect(() => {
         loadClients();
         // Cargar productos iniciales (sin filtro o todos)
         loadProducts();
     }, []);
+
+    useEffect(() => {
+        if (!salidaId) return;
+        
+        const cargarDatosEdicion = async () => {
+            try {
+                const response = await fetch(`${API_ORIGIN}/api/salidas/${salidaId}?include_detalles=true`);
+                if (response.ok) {
+                    const dataResponse = await response.json();
+                    const nota = dataResponse.data || dataResponse;
+                    
+                    // Pre-llenar datos principales
+                    setValue('fecha', nota.fecha || '');
+                    setValue('cliente_id', nota.cliente_id || '');
+                    if (nota.cliente_id) setSelectedClient(nota.cliente_id);
+                    if (nota.cliente_ruc) setClienteRuc(nota.cliente_ruc);
+                    
+                    // Llenar detalles si existen
+                    if (nota.detalles && Array.isArray(nota.detalles) && nota.detalles.length > 0) {
+                        reset({
+                            cliente_id: nota.cliente_id || '',
+                            fecha: nota.fecha || '',
+                            responsable_id: nota.responsable_id || 1,
+                            tipo_documento: nota.tipo_documento || '',
+                            numero_documento: nota.numero_documento || '',
+                            fecha_ingreso: nota.fecha_ingreso || '',
+                            motivo_salida: nota.motivo_salida || '',
+                            detalles: nota.detalles.map(det => ({
+                                producto_id: det.producto_id,
+                                cantidad: det.cantidad || 0,
+                                cant_bulto: det.cant_bulto || 0,
+                                cant_caja: det.cant_caja || 0,
+                                cant_x_caja: det.cant_x_caja || 0,
+                                cant_fraccion: det.cant_fraccion || 0,
+                                lote_id: det.lote_id || null
+                            }))
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error cargando datos para edición:', error);
+                alert('Error al cargar los datos de la nota para edición');
+            }
+        };
+        
+        cargarDatosEdicion();
+    }, [salidaId, setValue, reset]);
 
     useEffect(() => {
         if (!selectedClient) {

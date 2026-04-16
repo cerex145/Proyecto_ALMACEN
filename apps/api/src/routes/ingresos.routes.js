@@ -858,16 +858,48 @@ async function ingresosRoutes(fastify, options) {
         }
     });
 
-    // PUT /api/ingresos/:id - Actualizar nota de ingreso
+    // PUT /api/ingresos/:id - Actualizar nota de ingreso con detalles
     fastify.put('/api/ingresos/:id', {
         schema: {
             tags: ['Ingresos'],
-            description: 'Actualizar una nota de ingreso existente',
+            description: 'Actualizar una nota de ingreso existente incluyendo detalles',
             params: {
                 type: 'object',
                 required: ['id'],
                 properties: {
                     id: { type: 'integer' }
+                }
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    fecha: { type: 'string' },
+                    proveedor: { type: 'string' },
+                    tipo_documento: { type: 'string' },
+                    numero_documento: { type: 'string' },
+                    estado: { type: 'string' },
+                    observaciones: { type: 'string' },
+                    detalles: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'integer', nullable: true },
+                                producto_id: { type: 'integer' },
+                                cantidad: { type: 'number', minimum: 0 },
+                                lote_numero: { type: 'string' },
+                                fecha_vencimiento: { type: ['string', 'null'] },
+                                um: { type: 'string' },
+                                fabricante: { type: 'string' },
+                                temperatura_min_c: { type: 'number' },
+                                temperatura_max_c: { type: 'number' },
+                                cantidad_bultos: { type: 'number' },
+                                cantidad_cajas: { type: 'number' },
+                                cantidad_por_caja: { type: 'number' },
+                                cantidad_fraccion: { type: 'number' }
+                            }
+                        }
+                    }
                 }
             },
             response: {
@@ -877,27 +909,239 @@ async function ingresosRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { fecha, proveedor, tipo_documento, numero_documento, estado, observaciones } = request.body;
+        const { fecha: fechaRaw, proveedor, tipo_documento, numero_documento, estado, observaciones, detalles } = request.body;
 
         const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
         if (!nota) {
             return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
         }
 
-        if (fecha) nota.fecha = fecha;
-        if (proveedor) nota.proveedor = proveedor;
-        if (tipo_documento !== undefined) nota.tipo_documento = tipo_documento || null;
-        if (numero_documento !== undefined) nota.numero_documento = numero_documento || null;
-        if (estado) nota.estado = estado;
-        if (observaciones) nota.observaciones = observaciones;
+        try {
+            await fastify.db.transaction(async (transactionalEntityManager) => {
+                // Actualizar campos básicos de la nota
+                if (fechaRaw) nota.fecha = normalizarFecha(fechaRaw);
+                if (proveedor) nota.proveedor = proveedor;
+                if (tipo_documento !== undefined) nota.tipo_documento = tipo_documento || null;
+                if (numero_documento !== undefined) nota.numero_documento = numero_documento || null;
+                if (estado) nota.estado = estado;
+                if (observaciones) nota.observaciones = observaciones;
 
-        await notaIngresoRepo.save(nota);
+                await transactionalEntityManager.save('NotaIngreso', nota);
 
-        return {
-            success: true,
-            data: nota,
-            message: 'Nota actualizada exitosamente'
-        };
+                // Si se envían detalles, actualizar toda la estructura
+                if (detalles && Array.isArray(detalles) && detalles.length > 0) {
+                    // Obtener detalles antiguos para revertir Kardex
+                    const detallesAntiguos = await transactionalEntityManager.find('NotaIngresoDetalle', {
+                        where: { nota_ingreso_id: Number(id) }
+                    });
+
+                    // Revertir movimientos de Kardex de los detalles anteriores
+                    for (const detalleAntiguo of detallesAntiguos) {
+                        const movimientoReversa = kardexRepo.create({
+                            producto_id: detalleAntiguo.producto_id,
+                            lote_numero: detalleAntiguo.lote_numero,
+                            tipo_movimiento: 'INGRESO_REVERSA',
+                            cantidad: -Number(detalleAntiguo.cantidad),
+                            saldo: -Number(detalleAntiguo.cantidad),
+                            documento_tipo: 'NOTA_INGRESO',
+                            documento_numero: nota.numero_ingreso,
+                            referencia_id: nota.id
+                        });
+                        await transactionalEntityManager.save('Kardex', movimientoReversa);
+
+                        // Revertir cambios en lotes
+                        const lotes = await transactionalEntityManager.find('Lote', {
+                            where: {
+                                nota_ingreso_id: Number(id),
+                                producto_id: detalleAntiguo.producto_id,
+                                numero_lote: detalleAntiguo.lote_numero
+                            }
+                        });
+                        for (const lote of lotes) {
+                            lote.cantidad_disponible = Math.max(0, Number(lote.cantidad_disponible) - Number(detalleAntiguo.cantidad));
+                            await transactionalEntityManager.save('Lote', lote);
+                        }
+                    }
+
+                    // Eliminar detalles antiguos
+                    await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: Number(id) });
+
+                    // Insertar nuevos detalles
+                    for (const detalle of detalles) {
+                        const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
+                        if (!producto) {
+                            throw new Error(`Producto ${detalle.producto_id} no encontrado`);
+                        }
+
+                        const fechaVencimiento = detalle.fecha_vencimiento ? normalizarFecha(detalle.fecha_vencimiento) : null;
+
+                        const detalleNota = notaIngresoDetalleRepo.create({
+                            nota_ingreso_id: nota.id,
+                            producto_id: detalle.producto_id,
+                            lote_numero: detalle.lote_numero,
+                            fecha_vencimiento: fechaVencimiento,
+                            um: detalle.um || null,
+                            fabricante: detalle.fabricante || null,
+                            temperatura_min_c: detalle.temperatura_min_c || null,
+                            temperatura_max_c: detalle.temperatura_max_c || null,
+                            cantidad: detalle.cantidad,
+                            cantidad_bultos: detalle.cantidad_bultos || 0,
+                            cantidad_cajas: detalle.cantidad_cajas || 0,
+                            cantidad_por_caja: detalle.cantidad_por_caja || 0,
+                            cantidad_fraccion: detalle.cantidad_fraccion || 0,
+                            cantidad_total: detalle.cantidad
+                        });
+                        await transactionalEntityManager.save('NotaIngresoDetalle', detalleNota);
+
+                        // Crear o actualizar lote
+                        const loteExistente = await transactionalEntityManager.findOne('Lote', {
+                            where: {
+                                producto_id: detalle.producto_id,
+                                numero_lote: detalle.lote_numero,
+                                nota_ingreso_id: nota.id
+                            }
+                        });
+
+                        if (loteExistente) {
+                            loteExistente.cantidad_ingresada = Number(detalle.cantidad);
+                            loteExistente.cantidad_disponible = Number(detalle.cantidad);
+                            loteExistente.fecha_vencimiento = fechaVencimiento;
+                            await transactionalEntityManager.save('Lote', loteExistente);
+                        } else {
+                            const lote = loteRepo.create({
+                                producto_id: detalle.producto_id,
+                                numero_lote: detalle.lote_numero,
+                                fecha_vencimiento: fechaVencimiento,
+                                cantidad_ingresada: detalle.cantidad,
+                                cantidad_disponible: detalle.cantidad,
+                                nota_ingreso_id: nota.id
+                            });
+                            await transactionalEntityManager.save('Lote', lote);
+                        }
+
+                        // Crear nuevo movimiento en Kardex
+                        const movimiento = kardexRepo.create({
+                            producto_id: detalle.producto_id,
+                            lote_numero: detalle.lote_numero,
+                            tipo_movimiento: 'INGRESO',
+                            cantidad: detalle.cantidad,
+                            saldo: Number(detalle.cantidad),
+                            documento_tipo: 'NOTA_INGRESO',
+                            documento_numero: nota.numero_ingreso,
+                            referencia_id: nota.id
+                        });
+                        await transactionalEntityManager.save('Kardex', movimiento);
+                    }
+                }
+            });
+
+            return {
+                success: true,
+                data: nota,
+                message: 'Nota actualizada exitosamente'
+            };
+        } catch (error) {
+            fastify.log.error(error);
+            return reply.status(400).send({
+                success: false,
+                error: error.message || 'Error al actualizar la nota'
+            });
+        }
+    });
+
+    // DELETE /api/ingresos/:id - Cancelar nota de ingreso
+    fastify.delete('/api/ingresos/:id', {
+        schema: {
+            tags: ['Ingresos'],
+            description: 'Cancelar una nota de ingreso (revierte cambios en Kardex y lotes)',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        success: { type: 'boolean' },
+                        message: { type: 'string' }
+                    }
+                },
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
+        const { id } = request.params;
+
+        const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
+        if (!nota) {
+            return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
+        }
+
+        try {
+            await fastify.db.transaction(async (transactionalEntityManager) => {
+                // Obtener todos los detalles de la nota
+                const detalles = await transactionalEntityManager.find('NotaIngresoDetalle', {
+                    where: { nota_ingreso_id: Number(id) }
+                });
+
+                // Revertir cada detalle
+                for (const detalle of detalles) {
+                    // Crear movimiento de reversa en Kardex
+                    const movimientoReversa = kardexRepo.create({
+                        producto_id: detalle.producto_id,
+                        lote_numero: detalle.lote_numero,
+                        tipo_movimiento: 'INGRESO_REVERSA',
+                        cantidad: -Number(detalle.cantidad),
+                        saldo: -Number(detalle.cantidad),
+                        documento_tipo: 'NOTA_INGRESO_CANCELADA',
+                        documento_numero: nota.numero_ingreso,
+                        referencia_id: nota.id
+                    });
+                    await transactionalEntityManager.save('Kardex', movimientoReversa);
+
+                    // Revertir cambios en lotes
+                    const lotes = await transactionalEntityManager.find('Lote', {
+                        where: {
+                            nota_ingreso_id: Number(id),
+                            producto_id: detalle.producto_id,
+                            numero_lote: detalle.lote_numero
+                        }
+                    });
+
+                    for (const lote of lotes) {
+                        lote.cantidad_disponible = Math.max(0, Number(lote.cantidad_disponible) - Number(detalle.cantidad));
+                        if (lote.cantidad_disponible === 0 && lote.cantidad_ingresada === Number(detalle.cantidad)) {
+                            // Si el lote queda sin stock y fue completamente revertido, eliminarlo
+                            await transactionalEntityManager.delete('Lote', { id: lote.id });
+                        } else {
+                            await transactionalEntityManager.save('Lote', lote);
+                        }
+                    }
+                }
+
+                // Marcar nota como cancelada o eliminarla
+                nota.estado = 'CANCELADA';
+                nota.observaciones = (nota.observaciones || '') + ' | CANCELADO: ' + new Date().toLocaleString();
+                await transactionalEntityManager.save('NotaIngreso', nota);
+
+                // Eliminar detalles
+                await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: Number(id) });
+            });
+
+            return {
+                success: true,
+                message: `Nota de ingreso ${nota.numero_ingreso} cancelada exitosamente. Los cambios han sido revertidos en la base de datos.`
+            };
+        } catch (error) {
+            fastify.log.error(error);
+            return reply.status(400).send({
+                success: false,
+                error: error.message || 'Error al cancelar la nota'
+            });
+        }
     });
 
     // POST /api/ingresos/:id/aprobar - Aprobar nota

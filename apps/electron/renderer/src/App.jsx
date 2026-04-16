@@ -51,10 +51,12 @@ function App() {
 
               {/* Operaciones */}
               <Route path="/ingresos/nuevo" element={<NotaIngresoForm />} />
+              <Route path="/ingresos/editar/:id" element={<NotaIngresoForm />} />
               <Route path="/ingresos/controles" element={<NotaIngresoForm />} />
               <Route path="/ingresos/historial" element={<HistorialIngresosFuncional />} />
 
               <Route path="/salidas/nuevo" element={<NotaSalidaForm />} />
+              <Route path="/salidas/editar/:id" element={<NotaSalidaForm />} />
               <Route path="/salidas/controles" element={<NotaSalidaLayout />} />
               <Route path="/salidas/historial" element={<HistorialSalidasFuncional />} />
 
