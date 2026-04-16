@@ -155,9 +155,31 @@ export const InventarioGeneral = () => {
 
     // Primero aplanamos TODO el inventario para calcular stats correctamente
     const inventarioAplanado = aplanarPorLote(inventario);
+    const busquedaNormalizada = busqueda.trim().toLowerCase();
 
     // Filtrado sobre la lista aplanada
     const inventarioFiltrado = inventarioAplanado.filter(p => {
+        if (busquedaNormalizada) {
+            const camposBusqueda = [
+                p.codigo,
+                p.descripcion,
+                p.proveedor,
+                p.cliente_nombre,
+                p.cliente_ruc,
+                p.registro_sanitario,
+                p.categoria_ingreso,
+                p.um,
+                p.unidad,
+                p._lote_numero
+            ];
+
+            const coincideTexto = camposBusqueda.some((campo) =>
+                String(campo || '').toLowerCase().includes(busquedaNormalizada)
+            );
+
+            if (!coincideTexto) return false;
+        }
+
         // Filtro por estado de stock (usamos _lote_disponible)
         const disp = p._lote_disponible;
         if (stockFiltro === 'con_stock' && disp <= 0) return false;
@@ -343,7 +365,7 @@ export const InventarioGeneral = () => {
                             </label>
                             <input
                                 type="text"
-                                placeholder="Código, nombre, proveedor o fabricante..."
+                                placeholder="Código, nombre, proveedor, cliente o lote..."
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={busqueda}
                                 onChange={(e) => setBusqueda(e.target.value)}

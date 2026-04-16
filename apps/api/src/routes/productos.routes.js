@@ -1420,6 +1420,12 @@ async function productoRoutes(fastify, options) {
                     OR p.descripcion ILIKE $${idx}
                     OR p.proveedor ILIKE $${idx}
                     OR p.fabricante ILIKE $${idx}
+                    OR EXISTS (
+                        SELECT 1
+                        FROM lotes lbus
+                        WHERE lbus.producto_id = p.id
+                          AND lbus.numero_lote ILIKE $${idx}
+                    )
                 )
             `;
             params.push(`%${busquedaTexto}%`);
