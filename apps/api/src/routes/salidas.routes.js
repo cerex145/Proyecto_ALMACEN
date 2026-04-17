@@ -410,7 +410,7 @@ async function salidasRoutes(fastify, options) {
     fastify.get('/api/salidas/historial', {
         schema: {
             tags: ['Salidas'],
-            description: 'Historial de salidas optimizado (filas de detalle) con búsqueda por código, producto o número de salida',
+            description: 'Historial de salidas optimizado (filas de detalle) con búsqueda por salida, documento, producto, lote y cliente',
             querystring: {
                 type: 'object',
                 properties: {
@@ -430,6 +430,7 @@ async function salidasRoutes(fastify, options) {
                 nota.numero_salida,
                 nota.fecha,
                 nota.estado,
+                COALESCE(NULLIF(nota.cliente_ruc, ''), NULLIF(cliente.cuit, ''), '-') AS cliente_ruc,
                 detalle.id AS detalle_id,
                 detalle.producto_id,
                                 COALESCE(NULLIF(detalle.lote_numero, ''), NULLIF(detalle.lote_numero, '-'), kardex_fallback.lote_numero) AS lote_numero,
@@ -478,6 +479,7 @@ async function salidasRoutes(fastify, options) {
                 prod.unidad_medida AS producto_unidad_medida
             FROM nota_salida_detalles detalle
             INNER JOIN notas_salida nota ON nota.id = detalle.nota_salida_id
+            LEFT JOIN clientes cliente ON cliente.id = nota.cliente_id
             LEFT JOIN productos prod ON prod.id = detalle.producto_id
                         LEFT JOIN (
                                 SELECT referencia_id, producto_id, MIN(NULLIF(lote_numero, '')) AS lote_numero
@@ -503,12 +505,32 @@ async function salidasRoutes(fastify, options) {
                 OR nota.numero_salida ILIKE $2
                 OR prod.codigo ILIKE $3
                 OR prod.descripcion ILIKE $4
+                OR COALESCE(NULLIF(detalle.lote_numero, ''), NULLIF(detalle.lote_numero, '-'), kardex_fallback.lote_numero, '') ILIKE $5
+                OR COALESCE(nota.numero_documento, '') ILIKE $6
+                OR COALESCE(nota.cliente_ruc, '') ILIKE $7
+                OR COALESCE(cliente.cuit, '') ILIKE $8
+                OR COALESCE(cliente.razon_social, '') ILIKE $9
+                OR COALESCE(cliente.codigo, '') ILIKE $10
+                OR COALESCE(nota.motivo_salida, '') ILIKE $11
             )
             ORDER BY nota.fecha DESC, nota.id DESC, detalle.id ASC
-            LIMIT $5
+            LIMIT $12
         `;
 
-        const rows = await fastify.db.query(sql, [termino, like, like, like, Number(limit)]);
+        const rows = await fastify.db.query(sql, [
+            termino,
+            like,
+            like,
+            like,
+            like,
+            like,
+            like,
+            like,
+            like,
+            like,
+            like,
+            Number(limit)
+        ]);
 
         return {
             success: true,

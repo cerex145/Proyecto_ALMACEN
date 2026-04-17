@@ -85,7 +85,7 @@ export const HistorialSalidasFuncional = () => {
                     fechaSalida: formatearFecha(fila.fecha),
                     mes,
                     dia,
-                    ruc: '-',
+                    ruc: fila.cliente_ruc || '-',
                     anio
                 });
             });
@@ -173,9 +173,9 @@ export const HistorialSalidasFuncional = () => {
             <Card className="p-6">
                 <div className="flex gap-4 items-end mb-6">
                     <div className="flex-1">
-                        <label className="label-premium">Buscar por N° salida / Código / Producto / RUC</label>
+                        <label className="label-premium">Buscar por N° salida / Documento / Código / Producto / Lote / Cliente / RUC</label>
                         <Input
-                            placeholder="Ej: 53610002, OB0810T, 00000059"
+                            placeholder="Ej: 53610002, F001-000123, OB0810T, LOTE-01, 00000059"
                             value={filtro}
                             onChange={(e) => setFiltro(e.target.value)}
                             className="input-premium"
