@@ -30,3 +30,25 @@ Thumbs.db
 
 # Electron
 out/
+
+# Reportes y temporales de ejecucion (raiz)
+reporte_*.csv
+reporte_*.txt
+salidas_*_preparado.csv
+salidas_*_origen.csv
+salidas_reintento_pendientes.csv
+ingresos_ruc_*_preparado.csv
+tmp_*.json
+test-pdf-output.txt
+backup_output.log
+migrar_salidas_errores.log
+
+# Temporales de validacion/debug
+tmp_*.js
+tmp/*.out
+tmp/check_*.js
+test_db.js
+verify_fifo.js
+check_stock.js
+ingreso.csv
+salida.csv
