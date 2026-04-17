@@ -259,6 +259,9 @@ async function salidasRoutes(fastify, options) {
             querystring: {
                 type: 'object',
                 properties: {
+                    busqueda: { type: 'string' },
+                    numero_salida: { type: 'string' },
+                    numero_documento: { type: 'string' },
                     fecha_desde: { type: 'string', format: 'date' },
                     fecha_hasta: { type: 'string', format: 'date' },
                     cliente_id: { type: 'integer' },
@@ -295,6 +298,7 @@ async function salidasRoutes(fastify, options) {
         const {
             busqueda = '',
             numero_salida,
+            numero_documento,
             cliente_id,
             cliente_ruc,
             estado,
@@ -309,11 +313,25 @@ async function salidasRoutes(fastify, options) {
 
         const skip = (page - 1) * limit;
 
-        const queryBuilder = notaSalidaRepo.createQueryBuilder('nota');
+        const queryBuilder = notaSalidaRepo
+            .createQueryBuilder('nota')
+            .leftJoin('nota.cliente', 'cliente')
+            .leftJoin('nota.detalles', 'search_detalles_filter')
+            .distinct(true);
 
         const terminoBusqueda = busqueda || numero_salida || '';
         if (terminoBusqueda) {
-            queryBuilder.where('nota.numero_salida LIKE :busqueda', { busqueda: `%${terminoBusqueda}%` });
+            queryBuilder.where(
+                `(
+                    nota.numero_salida ILIKE :busqueda
+                    OR coalesce(nota.numero_documento, '') ILIKE :busqueda
+                    OR coalesce(nota.cliente_ruc, '') ILIKE :busqueda
+                    OR coalesce(cliente.razon_social, '') ILIKE :busqueda
+                    OR coalesce(cliente.codigo, '') ILIKE :busqueda
+                    OR coalesce(search_detalles_filter.lote_numero, '') ILIKE :busqueda
+                )`,
+                { busqueda: `%${terminoBusqueda}%` }
+            );
         }
 
         if (estado) {
@@ -327,6 +345,12 @@ async function salidasRoutes(fastify, options) {
         if (cliente_ruc) {
             queryBuilder.andWhere("regexp_replace(coalesce(nota.cliente_ruc, ''), '\\D', '', 'g') = regexp_replace(:cliente_ruc, '\\D', '', 'g')", {
                 cliente_ruc: String(cliente_ruc)
+            });
+        }
+
+        if (numero_documento) {
+            queryBuilder.andWhere("coalesce(nota.numero_documento, '') ILIKE :numero_documento", {
+                numero_documento: `%${String(numero_documento).trim()}%`
             });
         }
 

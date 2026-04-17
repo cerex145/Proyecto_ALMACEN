@@ -9,7 +9,7 @@ import { Badge } from '../../components/common/Badge';
 export const NotaSalidaList = () => {
     const [salidas, setSalidas] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [filtros, setFiltros] = useState({ cliente_id: '', estado: '', page: 1 });
+    const [filtros, setFiltros] = useState({ busqueda: '', cliente_id: '', estado: '', page: 1 });
 
     useEffect(() => {
         cargarSalidas();
@@ -81,9 +81,14 @@ export const NotaSalidaList = () => {
             </div>
 
             <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <Input
+                    placeholder="Buscar N° Salida, N° Doc, Cliente, RUC o Lote..."
+                    value={filtros.busqueda}
+                    onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value, page: 1 })}
+                />
                 <select
                     value={filtros.estado}
-                    onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}
+                    onChange={(e) => setFiltros({ ...filtros, estado: e.target.value, page: 1 })}
                     style={{ padding: '8px', borderRadius: '4px' }}
                 >
                     <option value="">Todos los estados</option>
