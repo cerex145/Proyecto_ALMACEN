@@ -74,6 +74,13 @@ export const NotaSalidaForm = () => {
     const [errorNotas, setErrorNotas] = useState('');
     const [buscarNota, setBuscarNota] = useState('');
 
+    // Búsqueda por lote
+    const [buscarLote, setBuscarLote] = useState('');
+    const [cargandoLote, setCargandoLote] = useState(false);
+    const [errorLote, setErrorLote] = useState('');
+    const [resultadosLote, setResultadosLote] = useState([]); // [{ nota, detalle }]
+    const [seleccionadosLote, setSeleccionadosLote] = useState({}); // key: `${notaId}-${detalleId}`
+
     // Toast
     const [toastMsg, setToastMsg] = useState('');
     const [toastType, setToastType] = useState('success');
@@ -687,6 +694,85 @@ export const NotaSalidaForm = () => {
         } finally {
             setCargandoNotas(false);
         }
+    };
+
+    const buscarPorLote = async () => {
+        if (!buscarLote.trim() || !selectedClient) return;
+        setCargandoLote(true);
+        setErrorLote('');
+        setResultadosLote([]);
+        setSeleccionadosLote({});
+        try {
+            const client = clients.find(c => String(c.id) === String(selectedClient));
+            if (!client) { setCargandoLote(false); return; }
+
+            // Busca notas del cliente con ese lote en sus detalles
+            const url = `${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}&busqueda=${encodeURIComponent(buscarLote.trim())}&include_detalles=true`;
+            const response = await fetch(url);
+            const result = await response.json();
+            const notas = result.data || [];
+
+            // Para cada nota, cargar detalles completos y filtrar los que tengan ese lote
+            const items = [];
+            for (const nota of notas) {
+                let detalles = nota.detalles || [];
+                if (!detalles.length) {
+                    try {
+                        const detRes = await fetch(`${API_ORIGIN}/api/ingresos/${nota.id}`);
+                        const detJson = await detRes.json();
+                        detalles = detJson?.data?.detalles || [];
+                    } catch { detalles = []; }
+                }
+                const q = buscarLote.trim().toLowerCase();
+                const filtrados = detalles.filter(d =>
+                    (d.lote_numero || '').toLowerCase().includes(q) &&
+                    getDetalleDisponible(d) > 0
+                );
+                for (const det of filtrados) {
+                    items.push({ nota, detalle: { ...det, nota_ingreso_id: Number(det.nota_ingreso_id || nota.id), cantidad_inicial: getDetalleInicial(det) } });
+                }
+            }
+
+            if (items.length === 0) {
+                setErrorLote(`No se encontraron productos con el lote "${buscarLote.trim()}" con stock disponible.`);
+            } else {
+                setResultadosLote(items);
+                // Pre-seleccionar todos
+                const sel = {};
+                items.forEach(({ nota, detalle }) => { sel[`${nota.id}-${detalle.id}`] = true; });
+                setSeleccionadosLote(sel);
+            }
+        } catch (err) {
+            console.error('Error buscando por lote:', err);
+            setErrorLote('Error al buscar. Intente de nuevo.');
+        } finally {
+            setCargandoLote(false);
+        }
+    };
+
+    const handleToggleLoteItem = (notaId, detalleId) => {
+        const key = `${notaId}-${detalleId}`;
+        setSeleccionadosLote(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const handleAgregarDesdeLotem = () => {
+        const seleccionados = resultadosLote.filter(({ nota, detalle }) => seleccionadosLote[`${nota.id}-${detalle.id}`]);
+        for (const { nota, detalle } of seleccionados) {
+            handleToggleProductoFromNota(nota.id, detalle);
+        }
+        // Agregar las notas al estado notasIngreso si no están ya
+        setNotasIngreso(prev => {
+            const ids = new Set(prev.map(n => n.id));
+            const nuevas = [];
+            for (const { nota } of seleccionados) {
+                if (!ids.has(nota.id)) { ids.add(nota.id); nuevas.push(nota); }
+            }
+            return [...prev, ...nuevas];
+        });
+        setResultadosLote([]);
+        setBuscarLote('');
+        setSeleccionadosLote({});
+        showToast(`${seleccionados.length} producto(s) agregados desde lote.`, 'success');
     };
 
     useEffect(() => {
@@ -2025,6 +2111,158 @@ export const NotaSalidaForm = () => {
                                 ))
                             )}
                         </div>
+                    </Card>
+                )}
+
+                {/* ===== Buscar por Lote ===== */}
+                {selectedClient && (
+                    <Card className="p-6 bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200 border-2">
+                        <h3 className="text-xl font-bold text-teal-900 mb-5 flex items-center gap-3 pb-3 border-b-2 border-teal-200">
+                            <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            Buscar por Lote
+                            {resultadosLote.length > 0 && (
+                                <span className="ml-auto bg-teal-600 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                                    {resultadosLote.length} producto(s)
+                                </span>
+                            )}
+                        </h3>
+
+                        {/* Input de búsqueda */}
+                        <div className="mb-4">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    <input
+                                        type="text"
+                                        value={buscarLote}
+                                        onChange={(e) => setBuscarLote(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && buscarPorLote()}
+                                        placeholder="Número de lote (ej: 2511090101)..."
+                                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border-2 border-teal-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition-all"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={buscarPorLote}
+                                    disabled={!buscarLote.trim() || cargandoLote}
+                                    className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white text-sm font-semibold rounded-lg transition-all flex items-center gap-2 whitespace-nowrap"
+                                >
+                                    {cargandoLote ? (
+                                        <span className="animate-pulse">Buscando...</span>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                            Buscar
+                                        </>
+                                    )}
+                                </button>
+                                {resultadosLote.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setResultadosLote([]); setBuscarLote(''); setErrorLote(''); setSeleccionadosLote({}); }}
+                                        className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-medium rounded-lg transition-all"
+                                        title="Limpiar"
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-xs text-teal-600 mt-1.5 pl-1">Escribe el número de lote — se mostrarán todos los productos con ese lote y stock disponible</p>
+                        </div>
+
+                        {/* Resultados */}
+                        {cargandoLote ? (
+                            <div className="text-center py-10 text-teal-600">
+                                <p className="text-sm font-medium animate-pulse">⏳ Buscando productos del lote...</p>
+                            </div>
+                        ) : errorLote ? (
+                            <div className="text-center py-8 text-red-600 bg-red-50 rounded-lg px-4">
+                                <p className="text-sm font-medium">{errorLote}</p>
+                                <button type="button" onClick={buscarPorLote} className="mt-2 text-xs underline text-red-700 hover:text-red-900">Reintentar</button>
+                            </div>
+                        ) : resultadosLote.length === 0 ? (
+                            <div className="text-center py-10 text-slate-400">
+                                <p className="text-4xl mb-3">🏷️</p>
+                                <p className="text-sm font-medium">Ingresa un número de lote para ver sus productos</p>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="overflow-x-auto rounded-xl border border-teal-100">
+                                    <table className="w-full text-xs">
+                                        <thead className="bg-teal-50">
+                                            <tr className="border-b border-teal-200">
+                                                <th className="px-3 py-2 text-center font-semibold text-teal-800">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={resultadosLote.every(({ nota, detalle }) => seleccionadosLote[`${nota.id}-${detalle.id}`])}
+                                                        onChange={(e) => {
+                                                            const sel = {};
+                                                            if (e.target.checked) {
+                                                                resultadosLote.forEach(({ nota, detalle }) => { sel[`${nota.id}-${detalle.id}`] = true; });
+                                                            }
+                                                            setSeleccionadosLote(sel);
+                                                        }}
+                                                        className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                                                    />
+                                                </th>
+                                                <th className="px-3 py-2 text-left font-semibold text-teal-800">N° Ingreso</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-teal-800">Código</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-teal-800">Producto</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-teal-800">Lote</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-teal-800">Vencimiento</th>
+                                                <th className="px-3 py-2 text-left font-semibold text-teal-800">UM</th>
+                                                <th className="px-3 py-2 text-right font-semibold text-teal-800">Disponible</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 bg-white">
+                                            {resultadosLote.map(({ nota, detalle }) => {
+                                                const key = `${nota.id}-${detalle.id}`;
+                                                const disponible = getDetalleDisponible(detalle);
+                                                return (
+                                                    <tr key={key} className={seleccionadosLote[key] ? 'bg-teal-50 border-l-4 border-l-teal-600' : 'hover:bg-slate-50'}>
+                                                        <td className="px-3 py-2 text-center">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!seleccionadosLote[key]}
+                                                                onChange={() => handleToggleLoteItem(nota.id, detalle.id)}
+                                                                className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-2 font-semibold text-slate-700">{nota.numero_ingreso || `NI-${nota.id}`}</td>
+                                                        <td className="px-3 py-2 font-mono text-slate-600">{detalle.producto?.codigo || '-'}</td>
+                                                        <td className="px-3 py-2 text-slate-800 font-medium">{detalle.producto?.descripcion || '-'}</td>
+                                                        <td className="px-3 py-2 text-teal-700 font-semibold">{detalle.lote_numero || '-'}</td>
+                                                        <td className="px-3 py-2 text-slate-600">{detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-PE') : '-'}</td>
+                                                        <td className="px-3 py-2 text-slate-600">{detalle.um || detalle.producto?.um || '-'}</td>
+                                                        <td className="px-3 py-2 text-right font-bold text-green-600">{disponible}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="mt-4 flex items-center justify-between">
+                                    <p className="text-sm text-slate-600">
+                                        <span className="font-semibold text-teal-700">{Object.values(seleccionadosLote).filter(Boolean).length}</span> de {resultadosLote.length} productos seleccionados
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleAgregarDesdeLotem}
+                                        disabled={!Object.values(seleccionadosLote).some(Boolean)}
+                                        className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2"
+                                    >
+                                        ✓ Agregar seleccionados a la salida
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </Card>
                 )}
 
