@@ -946,7 +946,7 @@ async function ingresosRoutes(fastify, options) {
                             .addOrderBy('k.id', 'DESC')
                             .limit(1)
                             .getOne();
-                        
+
                         const ultimoSaldo = ultimoMovimiento?.saldo || 0;
                         const nuevoSaldo = Number(ultimoSaldo) - Number(detalleAntiguo.cantidad);
 
@@ -1111,7 +1111,7 @@ async function ingresosRoutes(fastify, options) {
                         .addOrderBy('k.id', 'DESC')
                         .limit(1)
                         .getOne();
-                    
+
                     const ultimoSaldo = ultimoMovimiento?.saldo || 0;
                     const nuevoSaldo = Number(ultimoSaldo) - Number(detalle.cantidad);
 

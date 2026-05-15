@@ -236,23 +236,23 @@ export const NotaIngresoForm = () => {
     }, []);
 
     const { id: ingresoId } = useParams();
-    
+
     useEffect(() => {
         if (!ingresoId) return;
-        
+
         const cargarDatosEdicion = async () => {
             try {
                 const response = await fetch(`${API_ORIGIN}/api/ingresos/${ingresoId}?include_detalles=true`);
                 if (response.ok) {
                     const dataResponse = await response.json();
                     const nota = dataResponse.data || dataResponse;
-                    
+
                     // Pre-llenar datos principales
                     setValue('fecha', nota.fecha || '');
                     if (nota.cliente_id) setSelectedClient(nota.cliente_id);
                     if (nota.cliente_ruc) setClienteRuc(nota.cliente_ruc);
                     if (nota.proveedor) setProveedorNombre(nota.proveedor);
-                    
+
                     // Llenar detalles si existen
                     if (nota.detalles && Array.isArray(nota.detalles) && nota.detalles.length > 0) {
                         reset({
@@ -284,7 +284,7 @@ export const NotaIngresoForm = () => {
                 setUiError('Error al cargar los datos de la nota para edición');
             }
         };
-        
+
         cargarDatosEdicion();
     }, [ingresoId, setValue, reset]);
 
@@ -614,7 +614,7 @@ export const NotaIngresoForm = () => {
     const handleNuevoProductoChange = (field, value) => {
         setNuevoProductoForm((prev) => {
             const updated = { ...prev, [field]: value };
-            
+
             if (['cantidad_bultos', 'cantidad_cajas', 'cantidad_por_caja', 'cantidad_fraccion'].includes(field)) {
                 if (!updated.quantityManual) {
                     const c = parseInt(updated.cantidad_cajas) || 0;
@@ -626,7 +626,7 @@ export const NotaIngresoForm = () => {
             if (field === 'cantidad_total') {
                 updated.quantityManual = true;
             }
-            
+
             return updated;
         });
     };
@@ -1104,7 +1104,7 @@ export const NotaIngresoForm = () => {
                 detalles: detallesSanitizados,
                 observaciones: data.numero_ingreso ? `Documento: ${data.numero_ingreso}` : undefined
             };
-            
+
             let result;
             if (ingresoId) {
                 // Actualizar ingreso existente
@@ -1115,7 +1115,7 @@ export const NotaIngresoForm = () => {
                 result = await operationService.createIngreso(payload);
                 showSuccess('Nota de ingreso registrada con éxito.');
             }
-            
+
             setLastIngresoId(result?.id || null);
             reset();
             setSelectedProduct('');
@@ -2658,7 +2658,7 @@ export const NotaIngresoForm = () => {
                                             </div>
                                         )}
                                     </div>
-                                    
+
                                     <div className="text-sm bg-slate-50 p-4 rounded-xl text-slate-600">
                                         💡 Al confirmar, estos productos se añadirán a la lista de detalles y podrás seguir editándolos si es necesario antes de grabar finalmente la Nota de Ingreso.
                                     </div>
@@ -3044,7 +3044,7 @@ export const NotaIngresoForm = () => {
 
             {/* Modal de Resolución de Código Ambiguo en CSV */}
             {mostrarModalResolucionCSV && pendientesResolucionCSV.length > 0 && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={() => {}}>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={() => { }}>
                     <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full overflow-hidden">
                         <div className="bg-amber-600 px-6 py-4 text-white flex justify-between items-center">
                             <div>
