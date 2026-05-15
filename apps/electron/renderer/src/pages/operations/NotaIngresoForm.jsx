@@ -1104,9 +1104,19 @@ export const NotaIngresoForm = () => {
                 detalles: detallesSanitizados,
                 observaciones: data.numero_ingreso ? `Documento: ${data.numero_ingreso}` : undefined
             };
-            const created = await operationService.createIngreso(payload);
-            setLastIngresoId(created?.id || null);
-            showSuccess('Nota de ingreso registrada con éxito.');
+            
+            let result;
+            if (ingresoId) {
+                // Actualizar ingreso existente
+                result = await operationService.updateIngreso(ingresoId, payload);
+                showSuccess('Nota de ingreso actualizada con éxito.');
+            } else {
+                // Crear nuevo ingreso
+                result = await operationService.createIngreso(payload);
+                showSuccess('Nota de ingreso registrada con éxito.');
+            }
+            
+            setLastIngresoId(result?.id || null);
             reset();
             setSelectedProduct('');
             setSelectedLoteId('');

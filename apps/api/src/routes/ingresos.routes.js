@@ -937,12 +937,25 @@ async function ingresosRoutes(fastify, options) {
 
                     // Revertir movimientos de Kardex de los detalles anteriores
                     for (const detalleAntiguo of detallesAntiguos) {
+                        // Obtener el último saldo del kardex para este lote
+                        const ultimoMovimiento = await transactionalEntityManager
+                            .createQueryBuilder('Kardex', 'k')
+                            .where('k.producto_id = :productoId', { productoId: detalleAntiguo.producto_id })
+                            .andWhere('k.lote_numero = :lote', { lote: detalleAntiguo.lote_numero })
+                            .orderBy('k.created_at', 'DESC')
+                            .addOrderBy('k.id', 'DESC')
+                            .limit(1)
+                            .getOne();
+                        
+                        const ultimoSaldo = ultimoMovimiento?.saldo || 0;
+                        const nuevoSaldo = Number(ultimoSaldo) - Number(detalleAntiguo.cantidad);
+
                         const movimientoReversa = kardexRepo.create({
                             producto_id: detalleAntiguo.producto_id,
                             lote_numero: detalleAntiguo.lote_numero,
                             tipo_movimiento: 'INGRESO_REVERSA',
                             cantidad: -Number(detalleAntiguo.cantidad),
-                            saldo: -Number(detalleAntiguo.cantidad),
+                            saldo: nuevoSaldo,
                             documento_tipo: 'NOTA_INGRESO',
                             documento_numero: nota.numero_ingreso,
                             referencia_id: nota.id
@@ -1089,13 +1102,26 @@ async function ingresosRoutes(fastify, options) {
 
                 // Revertir cada detalle
                 for (const detalle of detalles) {
+                    // Obtener el último saldo del kardex para este lote
+                    const ultimoMovimiento = await transactionalEntityManager
+                        .createQueryBuilder('Kardex', 'k')
+                        .where('k.producto_id = :productoId', { productoId: detalle.producto_id })
+                        .andWhere('k.lote_numero = :lote', { lote: detalle.lote_numero })
+                        .orderBy('k.created_at', 'DESC')
+                        .addOrderBy('k.id', 'DESC')
+                        .limit(1)
+                        .getOne();
+                    
+                    const ultimoSaldo = ultimoMovimiento?.saldo || 0;
+                    const nuevoSaldo = Number(ultimoSaldo) - Number(detalle.cantidad);
+
                     // Crear movimiento de reversa en Kardex
                     const movimientoReversa = kardexRepo.create({
                         producto_id: detalle.producto_id,
                         lote_numero: detalle.lote_numero,
                         tipo_movimiento: 'INGRESO_REVERSA',
                         cantidad: -Number(detalle.cantidad),
-                        saldo: -Number(detalle.cantidad),
+                        saldo: nuevoSaldo,
                         documento_tipo: 'NOTA_INGRESO_CANCELADA',
                         documento_numero: nota.numero_ingreso,
                         referencia_id: nota.id
@@ -1113,8 +1139,8 @@ async function ingresosRoutes(fastify, options) {
 
                     for (const lote of lotes) {
                         lote.cantidad_disponible = Math.max(0, Number(lote.cantidad_disponible) - Number(detalle.cantidad));
-                        if (lote.cantidad_disponible === 0 && lote.cantidad_ingresada === Number(detalle.cantidad)) {
-                            // Si el lote queda sin stock y fue completamente revertido, eliminarlo
+                        if (lote.cantidad_disponible === 0) {
+                            // Si el lote queda sin stock, eliminarlo
                             await transactionalEntityManager.delete('Lote', { id: lote.id });
                         } else {
                             await transactionalEntityManager.save('Lote', lote);

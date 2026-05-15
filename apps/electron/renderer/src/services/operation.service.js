@@ -10,6 +10,14 @@ export const operationService = {
         return response.data.data || response.data;
     },
 
+    updateIngreso: async (id, data) => {
+        // Actualizar nota de ingreso existente
+        const response = await api.put(`/ingresos/${id}`, data, {
+            timeout: 120000
+        });
+        return response.data.data || response.data;
+    },
+
     getIngresos: async () => {
         const response = await api.get('/ingresos');
         return response.data.data || [];
