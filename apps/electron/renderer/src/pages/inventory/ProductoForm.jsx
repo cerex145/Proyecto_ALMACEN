@@ -114,7 +114,8 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                 unidad: data.unidad || 'UND',
                 unidad_otro: data.unidad === 'OTRO' ? (data.unidad_otro || null) : null,
                 um: data.um ? data.um : null,
-                temperatura: 25.0,
+                temperatura_min: data.temperatura_min || 15,
+                temperatura_max: data.temperatura_max || 25,
                 observaciones: data.observaciones || null
             };
             // If editing
@@ -296,8 +297,12 @@ export const ProductoForm = ({ productToEdit, onSuccess, onCancel }) => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura (°C)</label>
-                                    <input value="25" readOnly className="w-full h-9 rounded border-gray-300 bg-gray-50 border px-2 text-sm text-gray-500" />
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura Mín (°C)</label>
+                                    <input type="number" step="0.1" defaultValue="15" {...register('temperatura_min')} className="w-full h-9 rounded border-gray-300 bg-white border px-2 text-sm focus:border-blue-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura Máx (°C)</label>
+                                    <input type="number" step="0.1" defaultValue="25" {...register('temperatura_max')} className="w-full h-9 rounded border-gray-300 bg-white border px-2 text-sm focus:border-blue-500" />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="block text-xs font-bold text-gray-700 mb-1">Observaciones</label>

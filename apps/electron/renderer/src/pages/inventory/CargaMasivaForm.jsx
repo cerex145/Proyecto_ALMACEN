@@ -81,6 +81,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         codigo: '', descripcion: '', lote: '', fabricante: '',
         fecha_vencimiento: '', um: '',
         fecha_ingreso: '',
+        temperatura_min: 15,
+        temperatura_max: 25,
         observaciones: ''
     });
 
@@ -205,6 +207,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             codigo: '', descripcion: '', lote: '', fabricante: '',
             fecha_vencimiento: '', um: '',
             fecha_ingreso: '',
+            temperatura_min: 15,
+            temperatura_max: 25,
             observaciones: ''
         });
     };
@@ -234,6 +238,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     fecha_vencimiento: row.fecha_vencimiento || null,
                     fecha_ingreso: row.fecha_ingreso || null,
                     um: row.um || null,
+                    temperatura_min: row.temperatura_min || 15,
+                    temperatura_max: row.temperatura_max || 25,
                     observaciones: row.observaciones || null,
                     activo: true
                 };
@@ -557,8 +563,16 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura (°C)</label>
-                                            <input value="25" readOnly className="w-full h-9 rounded border border-gray-300 bg-gray-50 px-2 text-sm text-gray-500" />
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura Mín (°C)</label>
+                                            <input type="number" step="0.1" value={manualForm.temperatura_min}
+                                                onChange={e => setManualForm(p => ({ ...p, temperatura_min: Number(e.target.value) || 15 }))}
+                                                className="w-full h-9 rounded border border-gray-300 bg-white px-2 text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Temperatura Máx (°C)</label>
+                                            <input type="number" step="0.1" value={manualForm.temperatura_max}
+                                                onChange={e => setManualForm(p => ({ ...p, temperatura_max: Number(e.target.value) || 25 }))}
+                                                className="w-full h-9 rounded border border-gray-300 bg-white px-2 text-sm" />
                                         </div>
 
                                         <div className="col-span-2 sm:col-span-3">

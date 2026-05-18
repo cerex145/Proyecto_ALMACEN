@@ -97,14 +97,17 @@ async function productoRoutes(fastify, options) {
     const productoRepo = fastify.db.getRepository('Producto');
     const clienteRepo = fastify.db.getRepository('Cliente');
     const toActivoSmallint = (value) => (value === true || value === 'true' || value === 1 || value === '1' ? 1 : 0);
-    const mapTemperaturaEntrada = (value) => {
-        const parsed = Number(value);
-        const safe = Number.isFinite(parsed) ? parsed : 25;
-        return { temperatura_min_c: safe, temperatura_max_c: safe };
+    const mapTemperaturaEntrada = (tempMin, tempMax) => {
+        const min = Number(tempMin);
+        const max = Number(tempMax);
+        const minSafe = Number.isFinite(min) ? min : 15;
+        const maxSafe = Number.isFinite(max) ? max : 25;
+        return { temperatura_min_c: minSafe, temperatura_max_c: maxSafe };
     };
     const mapProductoSalida = (producto) => ({
         ...producto,
-        temperatura: Number(producto.temperatura_min_c ?? producto.temperatura_max_c ?? 25)
+        temperatura_min: Number(producto.temperatura_min_c ?? 15),
+        temperatura_max: Number(producto.temperatura_max_c ?? 25)
     });
 
     // GET /api/productos - Listar con filtros y paginación
@@ -299,7 +302,7 @@ async function productoRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla');
 
         // Título e instrucciones
-        const totalCols = 11;
+        const totalCols = 13;
         worksheet.mergeCells(1, 1, 1, totalCols);
         worksheet.getCell('A1').value = 'PLANTILLA DE CARGA MASIVA — DATOS POR PRODUCTO';
         worksheet.getCell('A1').font = { bold: true, size: 14 };
@@ -324,6 +327,8 @@ async function productoRoutes(fastify, options) {
             { header: 'F. Vencimiento', key: 'fecha_vencimiento', width: 16 },
             { header: 'Unidad', key: 'unidad', width: 12 },
             { header: 'UM', key: 'um', width: 10 },
+            { header: 'Temp. Mín (°C)', key: 'temperatura_min', width: 14 },
+            { header: 'Temp. Máx (°C)', key: 'temperatura_max', width: 14 },
             { header: 'Fabricante', key: 'fabricante', width: 25 },
             { header: 'Procedencia', key: 'procedencia', width: 18 },
             { header: 'Observaciones', key: 'observaciones', width: 35 }
@@ -369,6 +374,8 @@ async function productoRoutes(fastify, options) {
             '2028-03-15',
             'Caja',
             'UND',
+            15,
+            25,
             'Laboratorios Salud',
             'Perú',
             'Ejemplo referencial'
@@ -383,6 +390,8 @@ async function productoRoutes(fastify, options) {
             '2027-12-31',
             'Blíster',
             'UND',
+            15,
+            25,
             'Pharma Global',
             'Colombia',
             'Segundo ejemplo'
@@ -477,6 +486,8 @@ async function productoRoutes(fastify, options) {
             unidad,
             unidad_otro,
             um,
+            temperatura_min,
+            temperatura_max,
             temperatura,
             observaciones
         } = request.body;
@@ -536,7 +547,7 @@ async function productoRoutes(fastify, options) {
             unidad: unidad || 'UND',
             unidad_otro: unidad_otro || null,
             um: um !== undefined ? um : null,
-            ...mapTemperaturaEntrada(temperatura),
+            ...mapTemperaturaEntrada(temperatura_min ?? temperatura, temperatura_max ?? temperatura),
             observaciones: observaciones || null,
             activo: toActivoSmallint(true)
         });
@@ -583,6 +594,8 @@ async function productoRoutes(fastify, options) {
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
                     um: nullableEnumSchema(umValues),
+                    temperatura_min: { type: 'number', nullable: true },
+                    temperatura_max: { type: 'number', nullable: true },
                     temperatura: { type: 'number', nullable: true },
                     observaciones: { type: 'string', nullable: true }
                 }
@@ -614,6 +627,8 @@ async function productoRoutes(fastify, options) {
             unidad,
             unidad_otro,
             um,
+            temperatura_min,
+            temperatura_max,
             temperatura,
             observaciones
         } = request.body;
@@ -683,8 +698,11 @@ async function productoRoutes(fastify, options) {
         if (unidad !== undefined) producto.unidad = unidad || 'UND';
         if (unidad_otro !== undefined) producto.unidad_otro = unidad_otro || null;
         if (um !== undefined) producto.um = um || null;
-        if (temperatura !== undefined) {
-            const mappedTemp = mapTemperaturaEntrada(temperatura);
+        if (temperatura_min !== undefined || temperatura_max !== undefined || temperatura !== undefined) {
+            const mappedTemp = mapTemperaturaEntrada(
+                temperatura_min ?? temperatura,
+                temperatura_max ?? temperatura
+            );
             producto.temperatura_min_c = mappedTemp.temperatura_min_c;
             producto.temperatura_max_c = mappedTemp.temperatura_max_c;
         }
@@ -763,11 +781,13 @@ async function productoRoutes(fastify, options) {
             'fecha_vencimiento',   // F - col 6
             'unidad',              // G - col 7
             'um',                  // H - col 8
-            'fabricante',          // I - col 9
-            'procedencia',         // J - col 10
-            'observaciones'        // K - col 11
+            'temperatura_min',     // I - col 9
+            'temperatura_max',     // J - col 10
+            'fabricante',          // K - col 11
+            'procedencia',         // L - col 12
+            'observaciones'        // M - col 13
         ];
-        const NUMERICAS = [];
+        const NUMERICAS = ['temperatura_min', 'temperatura_max'];
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer);
