@@ -30,6 +30,11 @@ export const productService = {
         return response.data.data || response.data;
     },
 
+    createProductWithLote: async (data) => {
+        const response = await api.post('/productos/crear-con-lote', data);
+        return response.data.data || response.data;
+    },
+
     updateProduct: async (id, data) => {
         const response = await api.put(`/productos/${id}`, data);
         return response.data.data || response.data;

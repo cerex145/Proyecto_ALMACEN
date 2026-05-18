@@ -302,7 +302,7 @@ async function productoRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla');
 
         // Título e instrucciones
-        const totalCols = 13;
+        const totalCols = 14;
         worksheet.mergeCells(1, 1, 1, totalCols);
         worksheet.getCell('A1').value = 'PLANTILLA DE CARGA MASIVA — DATOS POR PRODUCTO';
         worksheet.getCell('A1').font = { bold: true, size: 14 };
@@ -322,6 +322,7 @@ async function productoRoutes(fastify, options) {
             { header: '⭐ Cod. Producto', key: 'codigo', width: 18 },
             { header: '⭐ Descripción', key: 'descripcion', width: 45 },
             { header: 'Lote', key: 'lote', width: 16 },
+            { header: 'Cantidad Ingreso', key: 'cantidad_ingreso', width: 16 },
             { header: 'Registro Sanitario', key: 'registro_sanitario', width: 22 },
             { header: 'Fecha Ingreso', key: 'fecha_ingreso', width: 16 },
             { header: 'F. Vencimiento', key: 'fecha_vencimiento', width: 16 },
@@ -369,6 +370,7 @@ async function productoRoutes(fastify, options) {
             'PROD-001',
             'Paracetamol 500 mg Tabletas x 100',
             'L240315A',
+            500,
             'RS-12345',
             '2026-03-15',
             '2028-03-15',
@@ -385,6 +387,7 @@ async function productoRoutes(fastify, options) {
             'PROD-002',
             'Ibuprofeno 400 mg Tabletas x 50',
             'L240315B',
+            300,
             'RS-67890',
             '2026-03-15',
             '2027-12-31',
@@ -458,6 +461,8 @@ async function productoRoutes(fastify, options) {
                     unidad: { type: 'string', nullable: true },
                     unidad_otro: { type: 'string', nullable: true },
                     um: nullableEnumSchema(umValues),
+                    temperatura_min: { type: 'number', nullable: true },
+                    temperatura_max: { type: 'number', nullable: true },
                     temperatura: { type: 'number', nullable: true },
                     observaciones: { type: 'string', nullable: true }
                 }
@@ -750,6 +755,123 @@ async function productoRoutes(fastify, options) {
         return { success: true, message: 'Producto desactivado exitosamente' };
     });
 
+    // POST /api/productos/crear-con-lote - Crear producto + lote + kardex (para carga masiva unificada)
+    fastify.post('/api/productos/crear-con-lote', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Crear producto con lote y movimiento kardex automático (unifica carga masiva con ingreso)',
+            body: {
+                type: 'object',
+                required: ['codigo', 'descripcion'],
+                properties: {
+                    codigo: { type: 'string' },
+                    descripcion: { type: 'string' },
+                    cliente_id: { type: 'integer', nullable: true },
+                    cliente_ruc: { type: 'string', nullable: true },
+                    proveedor: { type: 'string', nullable: true },
+                    tipo_documento: { type: 'string', nullable: true },
+                    numero_documento: { type: 'string', nullable: true },
+                    registro_sanitario: { type: 'string', nullable: true },
+                    proveedor_ruc: { type: 'string', nullable: true },
+                    fecha_ingreso: { type: 'string', nullable: true },
+                    lote: { type: 'string', nullable: true },
+                    fabricante: { type: 'string', nullable: true },
+                    categoria_ingreso: { type: 'string', nullable: true },
+                    procedencia: { type: 'string', nullable: true },
+                    unidad: { type: 'string', nullable: true },
+                    unidad_otro: { type: 'string', nullable: true },
+                    um: { type: 'string', nullable: true },
+                    temperatura_min: { type: 'number', nullable: true },
+                    temperatura_max: { type: 'number', nullable: true },
+                    temperatura: { type: 'number', nullable: true },
+                    observaciones: { type: 'string', nullable: true },
+                    fecha_vencimiento: { type: 'string', nullable: true },
+                    cantidad_ingreso: { type: 'number', nullable: true }
+                }
+            },
+            response: {
+                201: { type: 'object', additionalProperties: true },
+                400: { type: 'object', properties: { success: { type: 'boolean' }, error: { type: 'string' } } }
+            }
+        }
+    }, async (request, reply) => {
+        const {
+            codigo, descripcion, cliente_id, cliente_ruc, proveedor, tipo_documento, numero_documento,
+            registro_sanitario, proveedor_ruc, fecha_ingreso, lote, fabricante, categoria_ingreso,
+            procedencia, unidad, unidad_otro, um, temperatura_min, temperatura_max, temperatura,
+            observaciones, fecha_vencimiento, cantidad_ingreso
+        } = request.body;
+
+        if (!codigo || !descripcion) {
+            return reply.status(400).send({ success: false, error: 'Código y Descripción son obligatorios' });
+        }
+
+        try {
+            return await fastify.db.transaction(async (tx) => {
+                const loteRepo = tx.getRepository('Lote');
+                const kardexRepo = tx.getRepository('Kardex');
+
+                // 1. Crear o actualizar producto
+                let producto = await productoRepo.findOneBy({ codigo });
+                
+                if (!producto) {
+                    producto = productoRepo.create({
+                        codigo, descripcion, cliente_id, cliente_ruc, proveedor, tipo_documento,
+                        numero_documento, registro_sanitario, proveedor_ruc, fecha_ingreso, lote,
+                        fabricante, categoria_ingreso, procedencia, unidad, unidad_otro, um,
+                        ...mapTemperaturaEntrada(temperatura_min ?? temperatura, temperatura_max ?? temperatura),
+                        observaciones, activo: toActivoSmallint(true)
+                    });
+                    await tx.save('Producto', producto);
+                } else {
+                    producto.descripcion = descripcion;
+                    if (fabricante) producto.fabricante = fabricante;
+                    if (categoria_ingreso) producto.categoria_ingreso = categoria_ingreso;
+                    await tx.save('Producto', producto);
+                }
+
+                // 2. Si hay lote + vencimiento + cantidad, crear movimiento completo
+                if (lote && cantidad_ingreso && Number(cantidad_ingreso) > 0) {
+                    // Crear lote
+                    const nuevoLote = loteRepo.create({
+                        producto_id: producto.id,
+                        numero_lote: lote,
+                        fecha_vencimiento: fecha_vencimiento || null,
+                        cantidad_ingresada: Number(cantidad_ingreso),
+                        cantidad_disponible: Number(cantidad_ingreso),
+                        nota_ingreso_id: null
+                    });
+                    await tx.save('Lote', nuevoLote);
+
+                    // Crear kardex INGRESO
+                    const kardexIngreso = kardexRepo.create({
+                        producto_id: producto.id,
+                        lote_numero: lote,
+                        tipo_movimiento: 'INGRESO',
+                        cantidad: Number(cantidad_ingreso),
+                        saldo: Number(cantidad_ingreso),
+                        documento_tipo: 'CARGA_MASIVA',
+                        documento_numero: codigo,
+                        referencia_id: producto.id
+                    });
+                    await tx.save('Kardex', kardexIngreso);
+                }
+
+                return reply.status(201).send({
+                    success: true,
+                    data: producto,
+                    message: lote ? 'Producto y lote creados exitosamente' : 'Producto creado exitosamente'
+                });
+            });
+        } catch (error) {
+            console.error('Error en crear-con-lote:', error);
+            return reply.status(400).send({
+                success: false,
+                error: error.message || 'Error al crear producto'
+            });
+        }
+    });
+
     // POST /api/productos/parsear-plantilla - Parsea el xlsx y devuelve filas como JSON
     fastify.post('/api/productos/parsear-plantilla', {
         schema: {
@@ -776,18 +898,19 @@ async function productoRoutes(fastify, options) {
             'codigo',              // A - col 1
             'descripcion',         // B - col 2
             'lote',                // C - col 3
-            'registro_sanitario',  // D - col 4
-            'fecha_ingreso',       // E - col 5
-            'fecha_vencimiento',   // F - col 6
-            'unidad',              // G - col 7
-            'um',                  // H - col 8
-            'temperatura_min',     // I - col 9
-            'temperatura_max',     // J - col 10
-            'fabricante',          // K - col 11
-            'procedencia',         // L - col 12
-            'observaciones'        // M - col 13
+            'cantidad_ingreso',    // D - col 4 (NUEVO)
+            'registro_sanitario',  // E - col 5
+            'fecha_ingreso',       // F - col 6
+            'fecha_vencimiento',   // G - col 7
+            'unidad',              // H - col 8
+            'um',                  // I - col 9
+            'temperatura_min',     // J - col 10
+            'temperatura_max',     // K - col 11
+            'fabricante',          // L - col 12
+            'procedencia',         // M - col 13
+            'observaciones'        // N - col 14
         ];
-        const NUMERICAS = ['temperatura_min', 'temperatura_max'];
+        const NUMERICAS = ['cantidad_ingreso', 'temperatura_min', 'temperatura_max'];
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer);

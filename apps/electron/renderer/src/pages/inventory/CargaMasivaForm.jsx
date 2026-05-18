@@ -81,6 +81,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         codigo: '', descripcion: '', lote: '', fabricante: '',
         fecha_vencimiento: '', um: '',
         fecha_ingreso: '',
+        cantidad_ingreso: '',
         temperatura_min: 15,
         temperatura_max: 25,
         observaciones: ''
@@ -174,7 +175,12 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             let insertados = 0, actualizados = 0;
             for (const prod of productos) {
                 try {
-                    await productService.createProduct({ ...prod, activo: true });
+                    // Si tiene lote, usar endpoint con ingreso automático
+                    if (prod.lote && prod.cantidad_ingreso) {
+                        await productService.createProductWithLote({ ...prod, activo: true });
+                    } else {
+                        await productService.createProduct({ ...prod, activo: true });
+                    }
                     insertados++;
                 } catch {
                     try {
@@ -207,6 +213,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
             codigo: '', descripcion: '', lote: '', fabricante: '',
             fecha_vencimiento: '', um: '',
             fecha_ingreso: '',
+            cantidad_ingreso: '',
             temperatura_min: 15,
             temperatura_max: 25,
             observaciones: ''
@@ -237,6 +244,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     fabricante: row.fabricante || null,
                     fecha_vencimiento: row.fecha_vencimiento || null,
                     fecha_ingreso: row.fecha_ingreso || null,
+                    cantidad_ingreso: row.cantidad_ingreso ? Number(row.cantidad_ingreso) : null,
                     um: row.um || null,
                     temperatura_min: row.temperatura_min || 15,
                     temperatura_max: row.temperatura_max || 25,
@@ -244,7 +252,12 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     activo: true
                 };
                 try {
-                    await productService.createProduct(prod);
+                    // Si tiene lote, usar endpoint con ingreso automático
+                    if (prod.lote && prod.cantidad_ingreso) {
+                        await productService.createProductWithLote(prod);
+                    } else {
+                        await productService.createProduct(prod);
+                    }
                     insertados++;
                 } catch {
                     try {
@@ -536,6 +549,7 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                                             { key: 'fabricante', label: 'Fabricante', placeholder: 'Laboratorio...' },
                                             { key: 'fecha_vencimiento', label: 'F. Vencimiento', type: 'date' },
                                             { key: 'fecha_ingreso', label: 'Fecha Ingreso', type: 'date' },
+                                            { key: 'cantidad_ingreso', label: 'Cantidad Ingreso', type: 'number', placeholder: '100' },
                                         ].map(({ key, label, placeholder, type, span }) => (
                                             <div key={key} className={span ? `col-span-${span}` : ''}>
                                                 <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>

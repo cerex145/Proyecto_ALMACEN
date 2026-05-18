@@ -1304,7 +1304,8 @@ async function ingresosRoutes(fastify, options) {
                     cantidad_total,
                     um,
                     fabricante,
-                    temperatura,
+                    temperatura_min,
+                    temperatura_max,
                     responsable
                 ] = row.values.slice(1);
 
@@ -1344,11 +1345,8 @@ async function ingresosRoutes(fastify, options) {
                     return;
                 }
 
-                const temp = parseTemperatura(temperatura);
-                if (temp.invalida) {
-                    errores.push(`Fila ${rowNumber}: temperatura inválida. Usa formato como 2-8 o 4`);
-                    return;
-                }
+                const tempMin = parseNumero(temperatura_min) || 15;
+                const tempMax = parseNumero(temperatura_max) || 25;
 
                 detallesActuales.push({
                     fecha: fechaIngresoParsed,
@@ -1367,8 +1365,8 @@ async function ingresosRoutes(fastify, options) {
                     cantidad_total: totalFinal,
                     um: um ? String(um).trim() : null,
                     fabricante: fabricante ? String(fabricante).trim() : null,
-                    temperatura_min_c: temp.min,
-                    temperatura_max_c: temp.max
+                    temperatura_min_c: tempMin,
+                    temperatura_max_c: tempMax
                 });
             });
 
@@ -1571,7 +1569,8 @@ async function ingresosRoutes(fastify, options) {
             { header: 'Cantidad Total', key: 'cantidad_total', width: 18 },
             { header: 'UM', key: 'um', width: 12 },
             { header: 'Fabricante', key: 'fabricante', width: 25 },
-            { header: 'Temperatura', key: 'temperatura', width: 18 },
+            { header: 'Temp. Mín (°C)', key: 'temperatura_min', width: 15 },
+            { header: 'Temp. Máx (°C)', key: 'temperatura_max', width: 15 },
             { header: 'Responsable (ID)', key: 'responsable', width: 15 }
         ];
 
@@ -1589,7 +1588,8 @@ async function ingresosRoutes(fastify, options) {
             cantidad_total: '243',
             um: 'UND',
             fabricante: 'FABRICA SAC',
-            temperatura: '2-8',
+            temperatura_min: '15',
+            temperatura_max: '25',
             responsable: '1'
         });
 
