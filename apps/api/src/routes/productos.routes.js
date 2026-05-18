@@ -813,7 +813,7 @@ async function productoRoutes(fastify, options) {
 
                 // 1. Crear o actualizar producto
                 let producto = await productoRepo.findOneBy({ codigo });
-                
+
                 if (!producto) {
                     producto = productoRepo.create({
                         codigo, descripcion, cliente_id, cliente_ruc, proveedor, tipo_documento,
