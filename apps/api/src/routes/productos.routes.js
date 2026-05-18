@@ -1494,8 +1494,8 @@ async function productoRoutes(fastify, options) {
                     )
                 )
             `;
-                        params.push(`%${clienteNombreFiltro}%`);
-                        idx += 1;
+            params.push(`%${clienteNombreFiltro}%`);
+            idx += 1;
         }
 
         if (clienteRucFiltro) {
@@ -1551,7 +1551,7 @@ async function productoRoutes(fastify, options) {
                 const l = row.lotes_json;
                 if (Array.isArray(l)) return l;
                 if (typeof l === 'string') {
-                    try { return JSON.parse(l); } catch(e) {}
+                    try { return JSON.parse(l); } catch (e) { }
                 }
                 return [];
             })()
