@@ -78,13 +78,14 @@ const PLANTILLA_INGRESO_HEADERS = [
     'cantidad_total',
     'um',
     'fabricante',
-    'temperatura'
+    'temperatura_minima',
+    'temperatura_maxima'
 ];
 
 const PLANTILLA_INGRESO_EJEMPLOS = [
-    ['20123456789', 'MED-003', 'PARACETAMOL 500MG', 'LOTE-2024-001', '2025-12-31', '2026-03-30', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '25'],
-    ['20123456789', 'MED-007', 'AMOXICILINA 500MG', 'LOTE-2024-002', '2026-06-15', '2026-03-30', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '25'],
-    ['20123456789', 'INS-004', 'GUANTES LATEX TALLA M', 'LOTE-2024-003', '2027-03-20', '2026-03-30', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '25']
+    ['20123456789', 'MED-003', 'PARACETAMOL 500MG', 'LOTE-2024-001', '2025-12-31', '2026-03-30', '2', '10', '50', '5', '505', 'UND', 'Laboratorio ABC', '15', '25'],
+    ['20123456789', 'MED-007', 'AMOXICILINA 500MG', 'LOTE-2024-002', '2026-06-15', '2026-03-30', '1', '5', '100', '0', '500', 'UND', 'Farmacia XYZ', '15', '25'],
+    ['20123456789', 'INS-004', 'GUANTES LATEX TALLA M', 'LOTE-2024-003', '2027-03-20', '2026-03-30', '3', '8', '25', '10', '210', 'UND', 'Insumos Med', '15', '25']
 ];
 
 export const NotaIngresoForm = () => {
@@ -218,7 +219,15 @@ export const NotaIngresoForm = () => {
         cant_total: 'cantidad_total',
         cant_total_ingreso: 'cantidad_total',
         cant_total__ingreso: 'cantidad_total',
-        unidad_medida: 'um'
+        unidad_medida: 'um',
+        // Temperatura separada en min/max
+        temperatura: 'temperatura_minima',          // columna legacy → min por compatibilidad
+        temp_min: 'temperatura_minima',
+        temp_minima: 'temperatura_minima',
+        temperatura_min: 'temperatura_minima',
+        temp_max: 'temperatura_maxima',
+        temp_maxima: 'temperatura_maxima',
+        temperatura_max: 'temperatura_maxima'
     };
 
     const showError = (message) => {
@@ -863,7 +872,8 @@ export const NotaIngresoForm = () => {
         setBultos(1);
         setUm('UND');
         setFabricante('');
-        setTemperatura('25');
+        setTemperaturaMin('15');
+        setTemperaturaMax('25');
         setLote('');
         setVencimiento('');
         showSuccess('Producto agregado al detalle con éxito.');
@@ -891,8 +901,8 @@ export const NotaIngresoForm = () => {
             fecha_vencimiento: normalizarFechaInput(detalle.fecha_vencimiento) || null,
             um: detalle.um || producto.um || producto.unidad || '',
             fabricante: detalle.fabricante || producto.fabricante || '',
-            temperatura_min: Number(detalle.temperatura || 25),
-            temperatura_max: Number(detalle.temperatura || 25),
+            temperatura_min: Number(detalle.temperatura_min ?? detalle.temperatura ?? 15),
+            temperatura_max: Number(detalle.temperatura_max ?? detalle.temperatura ?? 25),
             cantidad_bultos: Number(detalle.cantidad_bultos || 0),
             cantidad_cajas: Number(detalle.cantidad_cajas || 0),
             cantidad_por_caja: Number(detalle.cantidad_por_caja || 0),
@@ -1128,7 +1138,8 @@ export const NotaIngresoForm = () => {
             setFraccion('');
             setUm('');
             setFabricante('');
-            setTemperatura('25');
+            setTemperaturaMin('15');
+            setTemperaturaMax('25');
             setQuantity(0);
             setQuantityManual(false);
         } catch (error) {
@@ -1176,7 +1187,8 @@ export const NotaIngresoForm = () => {
         setBultos(1);
         setUm('UND');
         setFabricante('');
-        setTemperatura('25');
+        setTemperaturaMin('15');
+        setTemperaturaMax('25');
         setLastIngresoId(null);
         setSelectedDetalleIds({});
         setFiltroProductosMasivos('');
@@ -1214,10 +1226,14 @@ export const NotaIngresoForm = () => {
             next.cantidad = Number(next.cantidad_total || 0);
         }
 
-        if (field === 'temperatura') {
-            const t = Number(value || 25);
-            next.temperatura_min = t;
-            next.temperatura_max = t;
+        if (field === 'temperatura_min') {
+            next.temperatura_min = Number(value ?? 15);
+            next.temperatura_min_c = next.temperatura_min;
+        }
+
+        if (field === 'temperatura_max') {
+            next.temperatura_max = Number(value ?? 25);
+            next.temperatura_max_c = next.temperatura_max;
         }
 
         update(index, next);
@@ -1319,10 +1335,16 @@ export const NotaIngresoForm = () => {
     };
 
     const construirDetalleDesdeCSV = (producto, row) => {
-        const temperatura = parseTemperaturaCSV(
-            row.temperatura || row.temperatura_min || row.temperatura_max || producto.temperatura || producto.temperatura_min_c || 25,
-            25
-        );
+        // Lee temperatura_minima y temperatura_maxima de forma independiente.
+        // Fallback: si sólo viene la columna legacy 'temperatura' (o 'temperatura_minima' por alias),
+        // se usa ese valor para min y 25 para max.
+        const tempMinRaw = row.temperatura_minima ?? row.temperatura_min ?? row.temperatura
+            ?? producto.temperatura_min_c ?? producto.temperatura ?? 15;
+        const tempMaxRaw = row.temperatura_maxima ?? row.temperatura_max
+            ?? producto.temperatura_max_c ?? producto.temperatura ?? 25;
+
+        const tempMin = parseTemperaturaCSV(tempMinRaw, 15);
+        const tempMax = parseTemperaturaCSV(tempMaxRaw, 25);
         const cantidadTotal = parseNumber(row.cantidad_total, 0);
 
         return {
@@ -1339,10 +1361,10 @@ export const NotaIngresoForm = () => {
             cantidad: cantidadTotal,
             um: row.um || producto.um || producto.unidad || '',
             fabricante: row.fabricante || producto.fabricante || '',
-            temperatura_min: temperatura,
-            temperatura_max: temperatura,
-            temperatura_min_c: temperatura,
-            temperatura_max_c: temperatura,
+            temperatura_min: tempMin,
+            temperatura_max: tempMax,
+            temperatura_min_c: tempMin,
+            temperatura_max_c: tempMax,
             detalle_calculo: buildDetalleCalculo({
                 cantidad_bultos: row.cantidad_bultos,
                 cantidad_cajas: row.cantidad_cajas,
@@ -1563,7 +1585,12 @@ export const NotaIngresoForm = () => {
                                             lote: row.lote || '',
                                             fabricante: row.fabricante || '',
                                             um: row.um || '',
-                                            temperatura: parseTemperaturaCSV(row.temperatura, 25),
+                                            temperatura_min: parseTemperaturaCSV(
+                                                row.temperatura_minima ?? row.temperatura_min ?? row.temperatura ?? 15, 15
+                                            ),
+                                            temperatura_max: parseTemperaturaCSV(
+                                                row.temperatura_maxima ?? row.temperatura_max ?? row.temperatura ?? 25, 25
+                                            ),
                                             tipo_documento: row.tipo_documento || getValues('tipo_documento') || '',
                                             numero_documento: row.numero_documento || getValues('numero_documento') || ''
                                         }]
@@ -1741,7 +1768,7 @@ export const NotaIngresoForm = () => {
         ws['!cols'] = [
             { wch: 14 }, { wch: 18 }, { wch: 42 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
             { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 10 },
-            { wch: 28 }, { wch: 14 }
+            { wch: 28 }, { wch: 18 }, { wch: 18 }
         ];
 
         XLSX.utils.book_append_sheet(wb, ws, 'IngresoMasivo');
@@ -1752,7 +1779,10 @@ export const NotaIngresoForm = () => {
             ['2) Use una sola fecha de ingreso por archivo.', ''],
             ['3) ruc_cliente, codigo_producto, lote y cantidad_total son obligatorios.', ''],
             ['4) Formato de fecha recomendado: YYYY-MM-DD.', ''],
-            ['5) Puede importar este archivo directamente desde el botón Importar Excel/CSV.', '']
+            ['5) Puede importar este archivo directamente desde el botón Importar Excel/CSV.', ''],
+            ['6) temperatura_minima: temperatura mínima de almacenamiento (por defecto 15 °C).', ''],
+            ['7) temperatura_maxima: temperatura máxima de almacenamiento (por defecto 25 °C).', ''],
+            ['8) Ambas columnas son editables. Si las deja vacías se usarán los valores por defecto.', '']
         ];
         const wsManual = XLSX.utils.aoa_to_sheet(manual);
         wsManual['!cols'] = [{ wch: 80 }, { wch: 10 }];
@@ -3002,11 +3032,24 @@ export const NotaIngresoForm = () => {
                                 />
                             </div>
                             <div>
-                                <label className="label-premium">Temperatura (°C)</label>
+                                <label className="label-premium">Temp. Mínima (°C)</label>
                                 <input
                                     type="number"
-                                    value={detalleProductoDraft.temperatura}
-                                    onChange={(e) => handleDetalleDraftChange('temperatura', e.target.value)}
+                                    step="0.1"
+                                    placeholder="15"
+                                    value={detalleProductoDraft.temperatura_min ?? 15}
+                                    onChange={(e) => handleDetalleDraftChange('temperatura_min', e.target.value)}
+                                    className="input-premium"
+                                />
+                            </div>
+                            <div>
+                                <label className="label-premium">Temp. Máxima (°C)</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    placeholder="25"
+                                    value={detalleProductoDraft.temperatura_max ?? 25}
+                                    onChange={(e) => handleDetalleDraftChange('temperatura_max', e.target.value)}
                                     className="input-premium"
                                 />
                             </div>
