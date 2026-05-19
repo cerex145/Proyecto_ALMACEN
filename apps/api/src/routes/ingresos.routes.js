@@ -1406,11 +1406,19 @@ async function ingresosRoutes(fastify, options) {
                 let faltanteProducto = false;
 
                 for (const detalle of grupo.detalles) {
-                    const producto = await productoRepo.findOneBy({ codigo: detalle.codigo_producto });
+                    let producto = await productoRepo.findOneBy({ codigo: detalle.codigo_producto });
                     if (!producto) {
-                        errores.push(`Producto ${detalle.codigo_producto} no encontrado`);
-                        faltanteProducto = true;
-                        break;
+                        // Auto-crear el producto si no existe
+                        producto = productoRepo.create({
+                            codigo: detalle.codigo_producto,
+                            descripcion: detalle.descripcion || detalle.codigo_producto,
+                            fabricante: detalle.fabricante || null,
+                            um: detalle.um || null,
+                            temperatura_min_c: detalle.temperatura_min_c || null,
+                            temperatura_max_c: detalle.temperatura_max_c || null,
+                            activo: 1
+                        });
+                        await productoRepo.save(producto);
                     }
                     detallesConProducto.push({ detalle, producto });
                 }

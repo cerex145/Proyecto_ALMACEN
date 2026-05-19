@@ -350,10 +350,9 @@ async function clienteRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Cliente no encontrado' });
         }
 
-        cliente.activo = 0;
-        await clienteRepo.save(cliente);
+        await clienteRepo.remove(cliente);
 
-        return { success: true, message: 'Cliente desactivado exitosamente' };
+        return { success: true, message: 'Cliente eliminado exitosamente' };
     });
 
     // POST /api/clientes/importar - Importar desde Excel
