@@ -9,6 +9,7 @@ import * as XLSX from 'xlsx';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
+import { normalizarFechaInput } from './notaIngreso.utils';
 
 export const NotaSalidaForm = () => {
     const OTHER_LOTE_OPTION = 'OTRO';
@@ -91,17 +92,7 @@ export const NotaSalidaForm = () => {
     };
 
     const normalizeDateInput = (value) => {
-        if (!value) {
-            return '';
-        }
-        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-            return value;
-        }
-        const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) {
-            return '';
-        }
-        return parsed.toISOString().split('T')[0];
+        return normalizarFechaInput(value);
     };
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
@@ -1158,8 +1149,16 @@ export const NotaSalidaForm = () => {
                     setValue('cliente_id', String(clientePorRuc.id), { shouldValidate: true });
                 }
 
-                const fechaActual = new Date().toISOString().split('T')[0];
-                setValue('fecha', fechaActual);
+                // Leer la fecha desde el Excel si existe en alguna fila; si no, usar la del formulario actual
+                const fechaHeaderIdx = headers.indexOf('fecha');
+                if (fechaHeaderIdx !== -1) {
+                    const primeraFila = Array.isArray(rows[1]) ? rows[1] : [];
+                    const fechaExcel = primeraFila[fechaHeaderIdx];
+                    const fechaNormalizada = normalizarFechaInput(fechaExcel);
+                    if (fechaNormalizada) {
+                        setValue('fecha', fechaNormalizada);
+                    }
+                }
 
                 const motivoHeader = headers.includes('motivo_salida') ? 'motivo_salida' : '';
                 if (motivoHeader) {
@@ -1401,7 +1400,7 @@ export const NotaSalidaForm = () => {
         }
     };
 
-    const descargarPlantillaSalidaCSV = () => {
+    const descargarPlantillaSalidaExcel = () => {
         const headers = [
             'ruc_cliente',
             'fecha',
@@ -1422,26 +1421,29 @@ export const NotaSalidaForm = () => {
             'Despacho comercial',
             'MED-001',
             'LOTE-2026-001',
-            '25',
+            25,
             'UND',
-            '1',
-            '2',
-            '10',
-            '5'
+            1,
+            2,
+            10,
+            5
         ];
 
-        const csvContent = `${headers.join(',')}\n${ejemplo.join(',')}\n`;
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const wb = XLSX.utils.book_new();
+        const wsData = [headers, ejemplo];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-        link.href = url;
-        link.setAttribute('download', 'plantilla_nota_salida.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        // Dar formato de texto a la columna fecha (columna B, índice 1) para que no se convierta a número
+        if (!ws['!cols']) ws['!cols'] = [];
+        ws['!cols'][1] = { wch: 14 };
+        ws['!cols'][0] = { wch: 15 };
+        ws['!cols'][3] = { wch: 18 };
+        ws['!cols'][4] = { wch: 16 };
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Salidas');
+        XLSX.writeFile(wb, 'plantilla_nota_salida.xlsx');
     };
+
 
     const handleToggleDetalle = (id) => {
         setSelectedDetalleIds((prev) => ({
@@ -1762,7 +1764,7 @@ export const NotaSalidaForm = () => {
                             />
                         </div>
                         <div>
-                            <label className="label-premium">Fecha</label>
+                            <label className="label-premium">Fecha de Salida</label>
                             <input
                                 {...register('fecha')}
                                 type="date"
@@ -2461,7 +2463,8 @@ export const NotaSalidaForm = () => {
 
                         <div className="p-6 space-y-4">
                             <p className="text-sm text-slate-600">
-                                Columnas requeridas: <span className="font-mono">codigo_producto, lote, cantidad</span>. Opcionales: <span className="font-mono">ruc_cliente, fecha, motivo_salida, um, cant_bulto, cant_caja, cant_x_caja, cant_fraccion</span>.
+                                Columnas requeridas: <span className="font-mono">codigo_producto, lote, cantidad</span>. Opcionales: <span className="font-mono">ruc_cliente, <strong>fecha</strong>, motivo_salida, um, cant_bulto, cant_caja, cant_x_caja, cant_fraccion</span>.
+                                La columna <span className="font-mono font-semibold">fecha</span> permite definir la fecha de salida (formato <span className="font-mono">YYYY-MM-DD</span>). Si se omite, se usa la fecha del formulario.
                             </p>
 
                             {!selectedClient && (
@@ -2471,8 +2474,8 @@ export const NotaSalidaForm = () => {
                             )}
 
                             <div className="flex justify-end">
-                                <Button type="button" variant="secondary" onClick={descargarPlantillaSalidaCSV}>
-                                    Descargar plantilla CSV
+                                <Button type="button" variant="secondary" onClick={descargarPlantillaSalidaExcel}>
+                                    📥 Descargar plantilla Excel
                                 </Button>
                             </div>
 
