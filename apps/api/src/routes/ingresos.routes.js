@@ -623,39 +623,34 @@ async function ingresosRoutes(fastify, options) {
                 required: ['fecha', 'detalles'],
                 properties: {
                     fecha: { type: 'string' },
-                    ruc_cliente: { type: 'string' },
-                    cliente_id: { type: 'integer' },
-                    proveedor: { type: 'string' },
-                    tipo_documento: { type: 'string' },
-                    numero_documento: { type: 'string' },
-                    responsable_id: { type: 'integer' },
-                    observaciones: { type: 'string' },
+                    ruc_cliente: { type: ['string', 'null'] },
+                    cliente_id: { type: ['integer', 'string', 'null'] },
+                    proveedor: { type: ['string', 'null'] },
+                    tipo_documento: { type: ['string', 'null'] },
+                    numero_documento: { type: ['string', 'null'] },
+                    responsable_id: { type: ['integer', 'string', 'null'] },
+                    observaciones: { type: ['string', 'null'] },
                     detalles: {
                         type: 'array',
                         items: {
                             type: 'object',
                             required: ['producto_id', 'cantidad'],
                             properties: {
-                                producto_id: { type: 'integer' },
-                                cantidad: { type: 'number', minimum: 0 },
+                                producto_id: { type: ['integer', 'string'] },
+                                cantidad: { type: ['number', 'string', 'null'], minimum: 0 },
                                 lote_numero: { type: 'string' },
-                                fecha_vencimiento: {
-                                    anyOf: [
-                                        { type: 'string' },
-                                        { type: 'null' }
-                                    ]
-                                },
-                                um: { type: 'string' },
-                                fabricante: { type: 'string' },
-                                temperatura_min: { type: 'number' },
-                                temperatura_max: { type: 'number' },
-                                temperatura_min_c: { type: 'number' },
-                                temperatura_max_c: { type: 'number' },
-                                cantidad_bultos: { type: 'number' },
-                                cantidad_cajas: { type: 'number' },
-                                cantidad_por_caja: { type: 'number' },
-                                cantidad_fraccion: { type: 'number' },
-                                cantidad_total: { type: 'number' }
+                                fecha_vencimiento: { type: ['string', 'null'] },
+                                um: { type: ['string', 'null'] },
+                                fabricante: { type: ['string', 'null'] },
+                                temperatura_min: { type: ['number', 'string', 'null'] },
+                                temperatura_max: { type: ['number', 'string', 'null'] },
+                                temperatura_min_c: { type: ['number', 'string', 'null'] },
+                                temperatura_max_c: { type: ['number', 'string', 'null'] },
+                                cantidad_bultos: { type: ['number', 'string', 'null'] },
+                                cantidad_cajas: { type: ['number', 'string', 'null'] },
+                                cantidad_por_caja: { type: ['number', 'string', 'null'] },
+                                cantidad_fraccion: { type: ['number', 'string', 'null'] },
+                                cantidad_total: { type: ['number', 'string', 'null'] }
                             }
                         }
                     }
@@ -890,29 +885,35 @@ async function ingresosRoutes(fastify, options) {
                 type: 'object',
                 properties: {
                     fecha: { type: 'string' },
-                    proveedor: { type: 'string' },
-                    tipo_documento: { type: 'string' },
-                    numero_documento: { type: 'string' },
-                    estado: { type: 'string' },
-                    observaciones: { type: 'string' },
+                    cliente_id: { type: ['integer', 'string', 'null'] },
+                    ruc_cliente: { type: ['string', 'null'] },
+                    proveedor: { type: ['string', 'null'] },
+                    tipo_documento: { type: ['string', 'null'] },
+                    numero_documento: { type: ['string', 'null'] },
+                    responsable_id: { type: ['integer', 'string', 'null'] },
+                    estado: { type: ['string', 'null'] },
+                    observaciones: { type: ['string', 'null'] },
                     detalles: {
                         type: 'array',
                         items: {
                             type: 'object',
                             properties: {
-                                id: { type: 'integer', nullable: true },
-                                producto_id: { type: 'integer' },
-                                cantidad: { type: 'number', minimum: 0 },
+                                id: { type: ['integer', 'string', 'null'] },
+                                producto_id: { type: ['integer', 'string'] },
+                                cantidad: { type: ['number', 'string', 'null'], minimum: 0 },
                                 lote_numero: { type: 'string' },
                                 fecha_vencimiento: { type: ['string', 'null'] },
-                                um: { type: 'string' },
-                                fabricante: { type: 'string' },
-                                temperatura_min_c: { type: 'number' },
-                                temperatura_max_c: { type: 'number' },
-                                cantidad_bultos: { type: 'number' },
-                                cantidad_cajas: { type: 'number' },
-                                cantidad_por_caja: { type: 'number' },
-                                cantidad_fraccion: { type: 'number' }
+                                um: { type: ['string', 'null'] },
+                                fabricante: { type: ['string', 'null'] },
+                                temperatura_min: { type: ['number', 'string', 'null'] },
+                                temperatura_max: { type: ['number', 'string', 'null'] },
+                                temperatura_min_c: { type: ['number', 'string', 'null'] },
+                                temperatura_max_c: { type: ['number', 'string', 'null'] },
+                                cantidad_bultos: { type: ['number', 'string', 'null'] },
+                                cantidad_cajas: { type: ['number', 'string', 'null'] },
+                                cantidad_por_caja: { type: ['number', 'string', 'null'] },
+                                cantidad_fraccion: { type: ['number', 'string', 'null'] },
+                                cantidad_total: { type: ['number', 'string', 'null'] }
                             }
                         }
                     }
@@ -991,14 +992,14 @@ async function ingresosRoutes(fastify, options) {
                             fecha_vencimiento: fechaVencimiento,
                             um: detalle.um || null,
                             fabricante: detalle.fabricante || null,
-                            temperatura_min_c: detalle.temperatura_min_c || null,
-                            temperatura_max_c: detalle.temperatura_max_c || null,
+                            temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || null,
+                            temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || null,
                             cantidad: detalle.cantidad,
                             cantidad_bultos: detalle.cantidad_bultos || 0,
                             cantidad_cajas: detalle.cantidad_cajas || 0,
                             cantidad_por_caja: detalle.cantidad_por_caja || 0,
                             cantidad_fraccion: detalle.cantidad_fraccion || 0,
-                            cantidad_total: detalle.cantidad
+                            cantidad_total: detalle.cantidad_total || detalle.cantidad
                         });
                         await transactionalEntityManager.save('NotaIngresoDetalle', detalleNota);
 

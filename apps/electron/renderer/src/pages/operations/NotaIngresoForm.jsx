@@ -1086,17 +1086,31 @@ export const NotaIngresoForm = () => {
                 return;
             }
 
-            const detallesSanitizados = (data.detalles || []).map((d) => ({
-                ...d,
-                lote_numero: String(d.lote_numero || '').trim(),
-                fecha_vencimiento: normalizarFechaInput(d.fecha_vencimiento) || null,
-                cantidad: Number(d.cantidad_total || d.cantidad || 0),
-                cantidad_total: Number(d.cantidad_total || d.cantidad || 0),
-                cantidad_bultos: Number(d.cantidad_bultos || 0),
-                cantidad_cajas: Number(d.cantidad_cajas || 0),
-                cantidad_por_caja: Number(d.cantidad_por_caja || 0),
-                cantidad_fraccion: Number(d.cantidad_fraccion || 0)
-            })).filter((d) => d.producto_id && d.lote_numero && Number(d.cantidad) > 0);
+            const detallesSanitizados = (data.detalles || []).map((d) => {
+                const parseNumOrNull = (val) => {
+                    if (val === null || val === undefined || String(val).trim() === '') return null;
+                    const parsed = Number(val);
+                    return Number.isFinite(parsed) ? parsed : null;
+                };
+
+                return {
+                    producto_id: Number(d.producto_id),
+                    lote_numero: String(d.lote_numero || '').trim(),
+                    fecha_vencimiento: normalizarFechaInput(d.fecha_vencimiento) || null,
+                    cantidad: Number(d.cantidad_total || d.cantidad || 0),
+                    cantidad_total: Number(d.cantidad_total || d.cantidad || 0),
+                    cantidad_bultos: Number(d.cantidad_bultos || 0),
+                    cantidad_cajas: Number(d.cantidad_cajas || 0),
+                    cantidad_por_caja: Number(d.cantidad_por_caja || 0),
+                    cantidad_fraccion: Number(d.cantidad_fraccion || 0),
+                    um: d.um ? String(d.um).trim() : null,
+                    fabricante: d.fabricante ? String(d.fabricante).trim() : null,
+                    temperatura_min: parseNumOrNull(d.temperatura_min),
+                    temperatura_max: parseNumOrNull(d.temperatura_max),
+                    temperatura_min_c: parseNumOrNull(d.temperatura_min_c ?? d.temperatura_min),
+                    temperatura_max_c: parseNumOrNull(d.temperatura_max_c ?? d.temperatura_max)
+                };
+            }).filter((d) => d.producto_id && d.lote_numero && Number(d.cantidad) > 0);
 
             if (detallesSanitizados.length === 0) {
                 showError('No hay detalles válidos para guardar. Verifica lote y cantidad mayor a 0.');

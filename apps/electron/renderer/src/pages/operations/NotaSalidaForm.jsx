@@ -11,6 +11,60 @@ import { Card } from '../../components/common/Card';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { normalizarFechaInput } from './notaIngreso.utils';
 
+// Helper component to edit quantity with local state to prevent focus loss and cursor jumps
+const CantidadInput = ({ field, index, update }) => {
+    const [localValue, setLocalValue] = useState(
+        field.cantidad !== undefined && field.cantidad !== null ? String(field.cantidad) : '0'
+    );
+
+    useEffect(() => {
+        setLocalValue(
+            field.cantidad !== undefined && field.cantidad !== null ? String(field.cantidad) : '0'
+        );
+    }, [field.cantidad]);
+
+    const handleChange = (e) => {
+        const val = e.target.value;
+        if (val === '' || /^\d+$/.test(val)) {
+            setLocalValue(val);
+        }
+    };
+
+    const handleBlur = () => {
+        const raw = localValue === '' ? 0 : Number(localValue);
+        const max = field.cantidad_disponible != null ? Number(field.cantidad_disponible) : null;
+        const nextBase = Number.isNaN(raw) ? 0 : (max != null ? Math.min(raw, max) : raw);
+        const next = Math.max(0, Math.floor(nextBase));
+
+        update(index, {
+            ...field,
+            cantidad: next,
+            cant_total: next
+        });
+        setLocalValue(String(next));
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleBlur();
+        }
+    };
+
+    return (
+        <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={localValue}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className="input-premium w-28 text-right"
+        />
+    );
+};
+
 export const NotaSalidaForm = () => {
     const OTHER_LOTE_OPTION = 'OTRO';
     const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
@@ -1000,12 +1054,17 @@ export const NotaSalidaForm = () => {
         setSelectedProductosFromNota({});
     };
 
-    const handleCambiarCantidad = (detalleId, nuevaCantidad) => {
-        const cantidad = Math.max(0, Math.floor(Number(nuevaCantidad) || 0));
-        setCantidadesEditadas(prev => ({
-            ...prev,
-            [detalleId]: cantidad
-        }));
+    const handleCambiarCantidad = (detalleId, nuevaCantidad, disponible) => {
+        if (nuevaCantidad === '' || /^\d+$/.test(nuevaCantidad)) {
+            const num = nuevaCantidad === '' ? 0 : Number(nuevaCantidad);
+            const capped = disponible != null ? Math.min(num, disponible) : num;
+            const finalVal = Math.max(0, Math.floor(capped));
+            
+            setCantidadesEditadas(prev => ({
+                ...prev,
+                [detalleId]: nuevaCantidad === '' ? '' : String(finalVal)
+            }));
+        }
     };
 
     const handleAddLine = () => {
@@ -2351,27 +2410,10 @@ export const NotaSalidaForm = () => {
                                     <td className="px-6 py-3">{field.cant_por_caja ?? 0}</td>
                                     <td className="px-6 py-3">{field.cant_fraccion ?? 0}</td>
                                     <td className="px-6 py-3 text-right">
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            value={field.cantidad ?? 0}
-                                            onChange={(event) => {
-                                                const raw = Number(event.target.value);
-                                                const max = field.cantidad_disponible != null
-                                                    ? Number(field.cantidad_disponible)
-                                                    : null;
-                                                const nextBase = Number.isNaN(raw)
-                                                    ? 0
-                                                    : (max != null ? Math.min(raw, max) : raw);
-                                                const next = Math.max(0, Math.floor(nextBase));
-                                                update(index, {
-                                                    ...field,
-                                                    cantidad: next,
-                                                    cant_total: next
-                                                });
-                                            }}
-                                            className="input-premium w-28 text-right"
+                                        <CantidadInput
+                                            field={field}
+                                            index={index}
+                                            update={update}
                                         />
                                         {field.cantidad_disponible != null && (
                                             <div className="text-[10px] text-slate-400">Disp: {field.cantidad_disponible}</div>
@@ -2546,7 +2588,7 @@ export const NotaSalidaForm = () => {
                             <div className="space-y-4">
                                 {detallesAEditar.map((detalle) => {
                                     const disponible = getDetalleDisponible(detalle);
-                                    const cantidad = cantidadesEditadas[detalle.id] || 0;
+                                    const cantidad = cantidadesEditadas[detalle.id] !== undefined ? cantidadesEditadas[detalle.id] : '';
 
                                     return (
                                         <div key={detalle.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
@@ -2582,16 +2624,15 @@ export const NotaSalidaForm = () => {
                                                         Cantidad a Salir
                                                     </label>
                                                     <input
-                                                        type="number"
-                                                        min="0"
-                                                        max={disponible}
-                                                        step="1"
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
                                                         value={cantidad}
-                                                        onChange={(e) => handleCambiarCantidad(detalle.id, e.target.value)}
+                                                        onChange={(e) => handleCambiarCantidad(detalle.id, e.target.value, disponible)}
                                                         className="input-premium text-lg font-bold text-right"
                                                         autoFocus
                                                     />
-                                                    {cantidad > disponible && (
+                                                    {Number(cantidad) > disponible && (
                                                         <p className="text-xs text-red-600 mt-1">⚠️ Supera el disponible</p>
                                                     )}
                                                 </div>
