@@ -1375,32 +1375,6 @@ export const NotaIngresoForm = () => {
     };
 
     const agregarDetalleImportado = (detalle) => {
-        const loteFinal = String(detalle.lote_numero || '').trim();
-        const detallesActuales = getValues('detalles') || [];
-        const existingIndex = detallesActuales.findIndex(
-            (field) => Number(field.producto_id) === Number(detalle.producto_id)
-                && String(field.lote_numero || '').trim() === loteFinal
-        );
-
-        if (existingIndex >= 0) {
-            const existing = detallesActuales[existingIndex];
-            update(existingIndex, {
-                ...existing,
-                cantidad: Number(existing.cantidad || 0) + Number(detalle.cantidad || 0),
-                cantidad_total: Number(existing.cantidad_total || 0) + Number(detalle.cantidad_total || 0),
-                cantidad_bultos: Number(existing.cantidad_bultos || 0) + Number(detalle.cantidad_bultos || 0),
-                cantidad_cajas: Number(existing.cantidad_cajas || 0) + Number(detalle.cantidad_cajas || 0),
-                cantidad_por_caja: Number(existing.cantidad_por_caja || 0) + Number(detalle.cantidad_por_caja || 0),
-                cantidad_fraccion: Number(existing.cantidad_fraccion || 0) + Number(detalle.cantidad_fraccion || 0),
-                um: detalle.um || existing.um,
-                fabricante: detalle.fabricante || existing.fabricante,
-                fecha_vencimiento: detalle.fecha_vencimiento || existing.fecha_vencimiento,
-                temperatura_min: Number(detalle.temperatura_min ?? existing.temperatura_min ?? 25),
-                temperatura_max: Number(detalle.temperatura_max ?? existing.temperatura_max ?? 25)
-            });
-            return;
-        }
-
         append(detalle);
     };
 
@@ -1566,12 +1540,26 @@ export const NotaIngresoForm = () => {
 
                         const codigoBuscado = normalizarCodigoProducto(row.codigo_producto);
                         const loteBuscado = normalizarTexto(row.lote);
+                        const isGeneric = !codigoBuscado || codigoBuscado === '-' || codigoBuscado === '--';
+
                         let candidatosCodigo = deduplicarOpcionesCSV(products.filter(
-                            (p) => coincideCodigoProducto(p, codigoBuscado)
+                            (p) => {
+                                if (isGeneric) {
+                                    const codeMatch = coincideCodigoProducto(p, codigoBuscado);
+                                    const nameCsv = normalizarTexto(row.nombre || row.descripcion || '');
+                                    const nameProd = normalizarTexto(p.descripcion || p.nombre || '');
+                                    return codeMatch && (nameProd === nameCsv || nameProd.includes(nameCsv) || nameCsv.includes(nameProd));
+                                }
+                                return coincideCodigoProducto(p, codigoBuscado);
+                            }
                         ));
 
+                        const cacheKey = isGeneric
+                            ? `${codigoBuscado}|${normalizarTexto(row.nombre || row.descripcion || '')}`
+                            : codigoBuscado;
+
                         if (candidatosCodigo.length === 0) {
-                            if (!cacheProductosResueltos.has(codigoBuscado)) {
+                            if (!cacheProductosResueltos.has(cacheKey)) {
                                 try {
                                     const clienteFila = buscarClientePorRuc(rucFila);
                                     const respuestaResolucion = await productService.resolveOrCreateProducts({
@@ -1597,26 +1585,34 @@ export const NotaIngresoForm = () => {
                                     });
 
                                     const resolucion = (respuestaResolucion?.data || []).find(
-                                        (item) => normalizarCodigoProducto(item?.codigo) === codigoBuscado
-                                    ) || null;
+                                        (item) => {
+                                            const codeMatch = normalizarCodigoProducto(item?.codigo) === codigoBuscado;
+                                            if (isGeneric) {
+                                                const descBuscada = normalizarTexto(row.nombre || row.descripcion || '');
+                                                const descItem = normalizarTexto(item?.descripcion || item?.nombre || '');
+                                                return codeMatch && (descItem === descBuscada || descItem.includes(descBuscada) || descBuscada.includes(descItem));
+                                            }
+                                            return codeMatch;
+                                        }
+                                    ) || (respuestaResolucion?.data || [])[0] || null;
 
                                     if (resolucion) {
-                                        cacheProductosResueltos.set(codigoBuscado, resolucion);
+                                        cacheProductosResueltos.set(cacheKey, resolucion);
                                         if (String(resolucion.status || '').toLowerCase() === 'created') {
                                             codigosCreados.add(resolucion.codigo);
                                         } else {
                                             codigosExistentes.add(resolucion.codigo);
                                         }
                                     } else {
-                                        cacheProductosResueltos.set(codigoBuscado, null);
+                                        cacheProductosResueltos.set(cacheKey, null);
                                     }
                                 } catch (resolveError) {
                                     console.error('Error al resolver/crear producto en importación:', resolveError);
-                                    cacheProductosResueltos.set(codigoBuscado, null);
+                                    cacheProductosResueltos.set(cacheKey, null);
                                 }
                             }
 
-                            const productoResuelto = cacheProductosResueltos.get(codigoBuscado);
+                            const productoResuelto = cacheProductosResueltos.get(cacheKey);
                             if (productoResuelto) {
                                 candidatosCodigo = deduplicarOpcionesCSV([
                                     ...candidatosCodigo,

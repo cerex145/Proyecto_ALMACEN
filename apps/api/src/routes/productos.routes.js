@@ -1249,15 +1249,23 @@ async function productoRoutes(fastify, options) {
         const norm = (v) => String(v || '').trim();
         const normRuc = (v) => String(v || '').replace(/[^0-9]/g, '').trim();
 
-        const porCodigo = new Map();
+        const isGenericCode = (code) => {
+            const c = String(code || '').trim();
+            return !c || c === '-' || c === '--' || c.toUpperCase() === 'S/C' || c.toUpperCase() === 'SIN CODIGO';
+        };
+
+        const porClave = new Map();
         for (const item of productos) {
             const codigo = norm(item?.codigo);
-            if (!codigo) continue;
+            const descripcion = norm(item?.descripcion || item?.nombre);
+            const isGeneric = isGenericCode(codigo);
+            const key = isGeneric ? `${codigo}|||${descripcion.toUpperCase()}` : codigo;
+            if (!codigo && !descripcion) continue;
 
-            if (!porCodigo.has(codigo)) {
-                porCodigo.set(codigo, {
+            if (!porClave.has(key)) {
+                porClave.set(key, {
                     codigo,
-                    descripcion: norm(item?.descripcion || item?.nombre),
+                    descripcion,
                     lote: norm(item?.lote),
                     fabricante: norm(item?.fabricante),
                     um: norm(item?.um),
@@ -1271,10 +1279,10 @@ async function productoRoutes(fastify, options) {
                 continue;
             }
 
-            const current = porCodigo.get(codigo);
+            const current = porClave.get(key);
             const merged = {
                 ...current,
-                descripcion: current.descripcion || norm(item?.descripcion || item?.nombre),
+                descripcion: current.descripcion || descripcion,
                 lote: current.lote || norm(item?.lote),
                 fabricante: current.fabricante || norm(item?.fabricante),
                 um: current.um || norm(item?.um),
@@ -1287,26 +1295,49 @@ async function productoRoutes(fastify, options) {
             if (merged.temperatura === undefined || merged.temperatura === null) {
                 merged.temperatura = item?.temperatura;
             }
-            porCodigo.set(codigo, merged);
+            porClave.set(key, merged);
         }
 
-        const codigos = [...porCodigo.keys()];
-        if (codigos.length === 0) {
+        const claves = [...porClave.keys()];
+        if (claves.length === 0) {
             return reply.status(400).send({ success: false, error: 'No se encontraron códigos válidos para procesar' });
         }
 
-        const existentes = await productoRepo
-            .createQueryBuilder('p')
-            .where('p.codigo IN (:...codigos)', { codigos })
-            .orderBy('p.updated_at', 'DESC')
-            .addOrderBy('p.id', 'DESC')
-            .getMany();
+        const specificCodes = claves.filter(k => !k.includes('|||'));
+        const hasGenerics = claves.some(k => k.includes('|||'));
+
+        const query = productoRepo.createQueryBuilder('p');
+        const conditions = [];
+        const params = {};
+
+        if (specificCodes.length > 0) {
+            conditions.push('p.codigo IN (:...specificCodes)');
+            params.specificCodes = specificCodes;
+        }
+
+        if (hasGenerics) {
+            const genericCodes = ['-', '', '--', 'S/C', 'SIN CODIGO'];
+            conditions.push('p.codigo IN (:...genericCodes)');
+            params.genericCodes = genericCodes;
+        }
+
+        let existentes = [];
+        if (conditions.length > 0) {
+            existentes = await query
+                .where(conditions.join(' OR '), params)
+                .orderBy('p.updated_at', 'DESC')
+                .addOrderBy('p.id', 'DESC')
+                .getMany();
+        }
 
         const agrupados = new Map();
         for (const p of existentes) {
             const codigo = norm(p.codigo);
-            if (!agrupados.has(codigo)) agrupados.set(codigo, []);
-            agrupados.get(codigo).push(p);
+            const descripcion = norm(p.descripcion);
+            const isGeneric = isGenericCode(codigo);
+            const key = isGeneric ? `${codigo}|||${descripcion.toUpperCase()}` : codigo;
+            if (!agrupados.has(key)) agrupados.set(key, []);
+            agrupados.get(key).push(p);
         }
 
         const clienteIdNum = cliente_id != null && cliente_id !== '' ? Number(cliente_id) : null;
@@ -1328,9 +1359,9 @@ async function productoRoutes(fastify, options) {
         let creados = 0;
         let existentesCount = 0;
 
-        for (const codigo of codigos) {
-            const payload = porCodigo.get(codigo);
-            const lista = agrupados.get(codigo) || [];
+        for (const key of claves) {
+            const payload = porClave.get(key);
+            const lista = agrupados.get(key) || [];
 
             if (lista.length > 0) {
                 const elegido = [...lista].sort((a, b) => {
@@ -1373,6 +1404,7 @@ async function productoRoutes(fastify, options) {
                 continue;
             }
 
+            const codigo = payload.codigo;
             const descripcion = norm(payload.descripcion) || codigo;
             const nuevo = productoRepo.create({
                 codigo,

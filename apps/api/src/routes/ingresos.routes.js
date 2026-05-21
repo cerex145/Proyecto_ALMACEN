@@ -810,16 +810,32 @@ async function ingresosRoutes(fastify, options) {
                     });
                     await transactionalEntityManager.save('NotaIngresoDetalle', detalleNota);
 
-                    // Crear lote
-                    const lote = loteRepo.create({
-                        producto_id: detalle.producto_id,
-                        numero_lote: detalle.lote_numero,
-                        fecha_vencimiento: fechaVencimiento,
-                        cantidad_ingresada: detalle.cantidad,
-                        cantidad_disponible: detalle.cantidad,
-                        nota_ingreso_id: notaGuardada.id
+                    // Crear o actualizar lote consolidado para este producto, número de lote e ingreso
+                    const loteExistente = await transactionalEntityManager.findOne('Lote', {
+                        where: {
+                            producto_id: Number(detalle.producto_id),
+                            numero_lote: detalle.lote_numero,
+                            nota_ingreso_id: notaGuardada.id
+                        }
                     });
-                    await transactionalEntityManager.save('Lote', lote);
+
+                    if (loteExistente) {
+                        loteExistente.cantidad_ingresada = Number(loteExistente.cantidad_ingresada) + Number(detalle.cantidad);
+                        loteExistente.cantidad_disponible = Number(loteExistente.cantidad_disponible) + Number(detalle.cantidad);
+                        loteExistente.fecha_vencimiento = fechaVencimiento;
+                        await transactionalEntityManager.save('Lote', loteExistente);
+                    } else {
+                        const lote = loteRepo.create({
+                            producto_id: detalle.producto_id,
+                            numero_lote: detalle.lote_numero,
+                            fecha_vencimiento: fechaVencimiento,
+                            cantidad_ingresada: detalle.cantidad,
+                            cantidad_disponible: detalle.cantidad,
+                            nota_ingreso_id: notaGuardada.id
+                        });
+                        await transactionalEntityManager.save('Lote', lote);
+                    }
+
 
                     // Registrar en kardex
                     const movimiento = kardexRepo.create({
@@ -1016,8 +1032,8 @@ async function ingresosRoutes(fastify, options) {
                         });
 
                         if (loteExistente) {
-                            loteExistente.cantidad_ingresada = Number(detalle.cantidad);
-                            loteExistente.cantidad_disponible = Number(detalle.cantidad);
+                            loteExistente.cantidad_ingresada = Number(loteExistente.cantidad_ingresada) + Number(detalle.cantidad);
+                            loteExistente.cantidad_disponible = Number(loteExistente.cantidad_disponible) + Number(detalle.cantidad);
                             loteExistente.fecha_vencimiento = fechaVencimiento;
                             await transactionalEntityManager.save('Lote', loteExistente);
                         } else {
@@ -1464,15 +1480,31 @@ async function ingresosRoutes(fastify, options) {
                             });
                             await tx.save('NotaIngresoDetalle', detalleNota);
 
-                            const lote = loteRepo.create({
-                                producto_id: producto.id,
-                                numero_lote: detalle.lote_numero,
-                                fecha_vencimiento: detalle.fecha_vencimiento,
-                                cantidad_ingresada: detalle.cantidad,
-                                cantidad_disponible: detalle.cantidad,
-                                nota_ingreso_id: notaGuardada.id
+                            // Crear o actualizar lote consolidado para este producto, número de lote e ingreso
+                            const loteExistente = await tx.findOne('Lote', {
+                                where: {
+                                    producto_id: Number(producto.id),
+                                    lote_numero: detalle.lote_numero,
+                                    nota_ingreso_id: notaGuardada.id
+                                }
                             });
-                            await tx.save('Lote', lote);
+
+                            if (loteExistente) {
+                                loteExistente.cantidad_ingresada = Number(loteExistente.cantidad_ingresada) + Number(detalle.cantidad);
+                                loteExistente.cantidad_disponible = Number(loteExistente.cantidad_disponible) + Number(detalle.cantidad);
+                                loteExistente.fecha_vencimiento = detalle.fecha_vencimiento;
+                                await tx.save('Lote', loteExistente);
+                            } else {
+                                const lote = loteRepo.create({
+                                    producto_id: producto.id,
+                                    numero_lote: detalle.lote_numero,
+                                    fecha_vencimiento: detalle.fecha_vencimiento,
+                                    cantidad_ingresada: detalle.cantidad,
+                                    cantidad_disponible: detalle.cantidad,
+                                    nota_ingreso_id: notaGuardada.id
+                                });
+                                await tx.save('Lote', lote);
+                            }
 
                             const movimiento = kardexRepo.create({
                                 producto_id: producto.id,

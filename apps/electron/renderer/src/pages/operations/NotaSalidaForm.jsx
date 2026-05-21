@@ -149,7 +149,8 @@ export const NotaSalidaForm = () => {
             const codigoProductoCanonico = normalizeProductCode(p?.codigo || '');
 
             if (codigoNoInformativo) {
-                return true;
+                const isProdCodeNoInformativo = !codigoProductoCanonico || codigoProducto === '-' || codigoProducto === '--';
+                return isProdCodeNoInformativo;
             }
 
             return (codigoProducto && (codigoProducto === codigo || codigoProducto.includes(codigo) || codigo.includes(codigoProducto)))
@@ -204,6 +205,26 @@ export const NotaSalidaForm = () => {
                 loteCanonico.includes(loteCsvCanonico)
                 || loteCsvCanonico.includes(loteCanonico)
             ));
+    };
+
+    const findLoteMatch = (lotes, loteCsv) => {
+        if (!lotes || lotes.length === 0 || !loteCsv) return null;
+
+        const loteCsvNormalizado = normalizeLote(loteCsv);
+        const loteCsvCanonico = normalizeLoteCanonico(loteCsv);
+
+        // 1. Intentar coincidencia exacta primero (normalizada o canónica)
+        const exactMatch = lotes.find((l) => {
+            const numLote = String(l.numero_lote || '');
+            const loteNormalizado = normalizeLote(numLote);
+            const loteCanonico = normalizeLoteCanonico(numLote);
+            return loteNormalizado === loteCsvNormalizado || (loteCanonico && loteCanonico === loteCsvCanonico);
+        });
+
+        if (exactMatch) return exactMatch;
+
+        // 2. Si no hay coincidencia exacta, recurrir a la coincidencia flexible
+        return lotes.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
     };
 
     const getLotesActivosForProducto = async ({ productoId, clienteTrabajo, lotesCache }) => {
@@ -324,32 +345,6 @@ export const NotaSalidaForm = () => {
     };
 
     const upsertDetalleSalida = (detalle) => {
-        const detallesActuales = getValues('detalles') || [];
-        const existingIndex = detallesActuales.findIndex(
-            (f) => Number(f.producto_id) === Number(detalle.producto_id)
-                && String(f.lote_numero || '') === String(detalle.lote_numero || '')
-                && Number(f.nota_ingreso_id || 0) === Number(detalle.nota_ingreso_id || 0)
-        );
-
-        if (existingIndex >= 0) {
-            const existing = detallesActuales[existingIndex];
-            const disponibleBase = Number(existing.cantidad_disponible || detalle.cantidad_disponible || 0);
-            const cantidadNueva = Number(existing.cantidad || 0) + Number(detalle.cantidad || 0);
-            const cantidadFinal = Math.min(cantidadNueva, disponibleBase > 0 ? disponibleBase : cantidadNueva);
-
-            update(existingIndex, {
-                ...existing,
-                cant_bulto: Number(existing.cant_bulto || 0) + Number(detalle.cant_bulto || 0),
-                cant_caja: Number(existing.cant_caja || 0) + Number(detalle.cant_caja || 0),
-                cant_por_caja: Number(existing.cant_por_caja || 0) + Number(detalle.cant_por_caja || 0),
-                cant_fraccion: Number(existing.cant_fraccion || 0) + Number(detalle.cant_fraccion || 0),
-                cantidad: cantidadFinal,
-                cant_total: cantidadFinal,
-                fecha_vencimiento: normalizeDateInput(detalle.fecha_vencimiento) || normalizeDateInput(existing.fecha_vencimiento)
-            });
-            return;
-        }
-
         append(detalle);
     };
 
@@ -1180,6 +1175,7 @@ export const NotaSalidaForm = () => {
 
                 const lotesCache = new Map();
                 const stockRestantePorProducto = new Map();
+                const loteStockRestante = new Map(); // Para rastrear stock disponible restante por lote_id localmente durante importación
                 const errores = [];
                 let importados = 0;
 
@@ -1234,7 +1230,20 @@ export const NotaSalidaForm = () => {
                         continue;
                     }
 
-                    const stockTotalProducto = lotesActivos.reduce((acc, l) => acc + Number(l.cantidad_disponible || 0), 0);
+                    // Inicializar loteStockRestante para cada lote de este producto
+                    for (const l of lotesActivos) {
+                        if (!loteStockRestante.has(l.id)) {
+                            loteStockRestante.set(l.id, Number(l.cantidad_disponible || 0));
+                        }
+                    }
+
+                    // Filtrar lotes activos que aún tengan stock disponible local
+                    const lotesConStock = lotesActivos.filter(l => {
+                        const rem = loteStockRestante.get(l.id) ?? Number(l.cantidad_disponible || 0);
+                        return rem > 0;
+                    });
+
+                    const stockTotalProducto = lotesConStock.reduce((acc, l) => acc + (loteStockRestante.get(l.id) ?? Number(l.cantidad_disponible || 0)), 0);
                     const productoIdSeleccionado = Number(productoSeleccionado.id);
                     if (!stockRestantePorProducto.has(productoIdSeleccionado)) {
                         stockRestantePorProducto.set(productoIdSeleccionado, stockTotalProducto);
@@ -1244,9 +1253,10 @@ export const NotaSalidaForm = () => {
                     let lote = null;
                     let productoIdFinal = productoIdSeleccionado;
                     let lotesActivosFinal = lotesActivos;
+                    let lotesConStockFinal = lotesConStock;
                     
                     if (loteCsv) {
-                        lote = lotesActivos.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
+                        lote = findLoteMatch(lotesConStock, loteCsv);
 
                         // Si no coincide en el primer candidato, probar con otros candidatos de producto.
                         if (!lote && Array.isArray(resolucionProducto?.candidatos) && resolucionProducto.candidatos.length > 1) {
@@ -1261,10 +1271,23 @@ export const NotaSalidaForm = () => {
                                     lotesCache
                                 });
 
-                                const loteCandidato = lotesCandidato.find((l) => loteCoincideCSV(String(l.numero_lote || ''), loteCsv)) || null;
+                                // Inicializar loteStockRestante para los lotes del candidato
+                                for (const l of lotesCandidato) {
+                                    if (!loteStockRestante.has(l.id)) {
+                                        loteStockRestante.set(l.id, Number(l.cantidad_disponible || 0));
+                                    }
+                                }
+
+                                const lotesCandidatoConStock = lotesCandidato.filter(l => {
+                                    const rem = loteStockRestante.get(l.id) ?? Number(l.cantidad_disponible || 0);
+                                    return rem > 0;
+                                });
+
+                                const loteCandidato = findLoteMatch(lotesCandidatoConStock, loteCsv);
                                 if (loteCandidato) {
                                     productoSeleccionado = candidato;
                                     lotesActivosFinal = lotesCandidato;
+                                    lotesConStockFinal = lotesCandidatoConStock;
                                     lote = loteCandidato;
                                     productoIdFinal = Number(candidato.id);
                                     break;
@@ -1273,21 +1296,21 @@ export const NotaSalidaForm = () => {
                         }
                     }
 
-                    // Validar disponibilidad real del lote o del producto
+                    // Validar disponibilidad real del lote o del producto basándonos en stock local restante
                     let cantidadDisponibleRealActual = 0;
                     if (lote) {
-                        // Si hay lote específico, usar su disponibilidad del sistema
-                        cantidadDisponibleRealActual = Number(lote.cantidad_disponible || 0);
+                        // Si hay lote específico, usar su disponibilidad restante local
+                        cantidadDisponibleRealActual = loteStockRestante.get(lote.id) ?? Number(lote.cantidad_disponible || 0);
                     } else {
-                        // Si no hay lote especificado, acumular de todos los lotes disponibles
-                        cantidadDisponibleRealActual = lotesActivosFinal.reduce(
-                            (acc, l) => acc + Number(l.cantidad_disponible || 0), 
+                        // Si no hay lote especificado, acumular disponibilidad restante local de todos los lotes de stock
+                        cantidadDisponibleRealActual = lotesConStockFinal.reduce(
+                            (acc, l) => acc + (loteStockRestante.get(l.id) ?? Number(l.cantidad_disponible || 0)), 
                             0
                         );
                     }
 
                     if (cantidadDisponibleRealActual <= 0) {
-                        errores.push(`Fila ${i + 1}: sin stock disponible para ${row.codigo_producto}.`);
+                        errores.push(`Fila ${i + 1}: sin stock disponible para ${row.codigo_producto}${loteCsv ? ` (lote ${loteCsv})` : ''}.`);
                         continue;
                     }
 
@@ -1297,7 +1320,8 @@ export const NotaSalidaForm = () => {
                         cantidadAUsar = cantidadDisponibleRealActual;
                     }
 
-                    const disponibleBase = cantidadDisponibleRealActual;
+                    // disponibleBase debe reflejar la capacidad completa del lote asignado para la validación final del formulario
+                    const disponibleBase = lote ? Number(lote.cantidad_disponible || 0) : cantidadDisponibleRealActual;
 
                     const detalle = {
                         producto_id: Number(productoSeleccionado.id),
@@ -1319,7 +1343,26 @@ export const NotaSalidaForm = () => {
                     };
 
                     upsertDetalleSalida(detalle);
-                    // Actualizar contador local solo si es sin lote específico
+
+                    // Actualizar el stock restante local de los lotes seleccionados
+                    if (lote) {
+                        const rem = loteStockRestante.get(lote.id) ?? Number(lote.cantidad_disponible || 0);
+                        loteStockRestante.set(lote.id, Math.max(rem - cantidadAUsar, 0));
+                    } else {
+                        // En caso de FIFO, ir deduciendo secuencialmente de los lotes activos finales con stock restante
+                        let tempCantidad = cantidadAUsar;
+                        for (const l of lotesConStockFinal) {
+                            if (tempCantidad <= 0) break;
+                            const rem = loteStockRestante.get(l.id) ?? Number(l.cantidad_disponible || 0);
+                            if (rem > 0) {
+                                const aDeducir = Math.min(rem, tempCantidad);
+                                loteStockRestante.set(l.id, rem - aDeducir);
+                                tempCantidad -= aDeducir;
+                            }
+                        }
+                    }
+
+                    // Actualizar contador local solo si es sin lote específico (FIFO)
                     if (!lote) {
                         stockRestantePorProducto.set(
                             productoIdFinal,
