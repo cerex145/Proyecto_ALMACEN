@@ -53,13 +53,30 @@ function getJson(urlPath) {
   });
 }
 
+function getValText(val) {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') {
+    if (val.richText && Array.isArray(val.richText)) {
+      return val.richText.map(t => t.text || '').join('').trim();
+    }
+    if (val.text !== undefined) {
+      return String(val.text).trim();
+    }
+    if (val.result !== undefined) {
+      return String(val.result).trim();
+    }
+  }
+  return String(val).trim();
+}
+
 function normalizeProductCode(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return getValText(value).toLowerCase().replace(/\s+/g, ' ');
 }
 
 function normalizeText(value) {
-  return String(value || '').trim().toLowerCase();
+  return getValText(value).toLowerCase();
 }
+
 
 function normalizeLote(lote) {
   return String(lote || '').trim().toUpperCase();
@@ -133,14 +150,14 @@ async function main() {
     if (rowNumber === 1) return;
     const values = row.values;
     ingresoRows.push({
-      ruc_cliente: String(values[1] || '').trim(),
-      codigo_producto: String(values[2] || '').trim(),
-      nombre: String(values[3] || '').trim(),
-      lote: String(values[4] || '').trim(),
+      ruc_cliente: getValText(values[1]),
+      codigo_producto: getValText(values[2]),
+      nombre: getValText(values[3]),
+      lote: getValText(values[4]),
       fecha_vencimiento: values[5],
-      um: String(values[12] || '').trim(),
-      fabricante: String(values[13] || '').trim(),
-      temperatura: values[14] || '15-25',
+      um: getValText(values[12]),
+      fabricante: getValText(values[13]),
+      temperatura: getValText(values[14]) || '15-25',
       cantidad_total: Number(values[11] || 0)
     });
   });
@@ -266,10 +283,10 @@ async function main() {
     if (rowNumber === 1) return;
     const values = row.values;
     salidaRows.push({
-      ruc_cliente: String(values[1] || '').trim(),
-      codigo_producto: String(values[2] || '').trim(),
-      nombre: String(values[3] || '').trim(),
-      lote: String(values[4] || '').trim(),
+      ruc_cliente: getValText(values[1]),
+      codigo_producto: getValText(values[2]),
+      nombre: getValText(values[3]),
+      lote: getValText(values[4]),
       cantidad_total: Number(values[10] || 0)
     });
   });
