@@ -492,8 +492,13 @@ async function salidasRoutes(fastify, options) {
                             ON kardex_fallback.referencia_id = nota.id
                          AND kardex_fallback.producto_id = detalle.producto_id
                         LEFT JOIN lotes lote_fallback
-                            ON lote_fallback.producto_id = detalle.producto_id
-                         AND lote_fallback.numero_lote = COALESCE(NULLIF(detalle.lote_numero, ''), NULLIF(detalle.lote_numero, '-'), kardex_fallback.lote_numero)
+                            ON lote_fallback.id = COALESCE(
+                                detalle.lote_id,
+                                (SELECT l2.id FROM lotes l2
+                                 WHERE l2.producto_id = detalle.producto_id
+                                   AND l2.numero_lote = COALESCE(NULLIF(detalle.lote_numero, ''), NULLIF(detalle.lote_numero, '-'), kardex_fallback.lote_numero)
+                                 LIMIT 1)
+                            )
                         LEFT JOIN (
                                 SELECT producto_id, MAX(CASE WHEN um IS NOT NULL AND um <> '' AND um <> '-' THEN um END) AS um
                                 FROM nota_salida_detalles
@@ -742,6 +747,7 @@ async function salidasRoutes(fastify, options) {
                         const detalleNota = notaSalidaDetalleRepo.create({
                             nota_salida_id: notaGuardada.id,
                             producto_id: pid,
+                            lote_id: lote.id,                          // ← FK exacta al lote
                             lote_numero: lote.numero_lote || null,
                             fecha_vencimiento: lote.fecha_vencimiento || null,
                             um: producto.unidad_medida || null,
@@ -799,6 +805,7 @@ async function salidasRoutes(fastify, options) {
                             const detalleNota = notaSalidaDetalleRepo.create({
                                 nota_salida_id: notaGuardada.id,
                                 producto_id: pid,
+                                lote_id: lote.id,                      // ← FK exacta al lote
                                 lote_numero: lote.numero_lote || null,
                                 fecha_vencimiento: lote.fecha_vencimiento || null,
                                 um: producto.unidad_medida || null,
@@ -919,15 +926,23 @@ async function salidasRoutes(fastify, options) {
 
                     // Revertir cambios en lotes y Kardex de los detalles anteriores
                     for (const detalleAntiguo of detallesAntiguos) {
-                        // Encontrar el lote usado en esta salida
-                        const lotes = await transactionalEntityManager.find('Lote', {
-                            where: {
-                                numero_lote: detalleAntiguo.lote_numero,
-                                producto_id: detalleAntiguo.producto_id
-                            }
-                        });
+                        // Restaurar stock: usar lote_id si existe (exacto), si no buscar por numero_lote+producto_id
+                        let lotesParaRevertir = [];
+                        if (detalleAntiguo.lote_id) {
+                            const loteExacto = await transactionalEntityManager.findOne('Lote', {
+                                where: { id: Number(detalleAntiguo.lote_id) }
+                            });
+                            if (loteExacto) lotesParaRevertir = [loteExacto];
+                        } else {
+                            lotesParaRevertir = await transactionalEntityManager.find('Lote', {
+                                where: {
+                                    numero_lote: detalleAntiguo.lote_numero,
+                                    producto_id: detalleAntiguo.producto_id
+                                }
+                            });
+                        }
 
-                        for (const lote of lotes) {
+                        for (const lote of lotesParaRevertir) {
                             // Restaurar cantidad disponible en lote
                             lote.cantidad_disponible = Number(lote.cantidad_disponible) + Number(detalleAntiguo.cantidad);
                             await transactionalEntityManager.save('Lote', lote);
@@ -997,6 +1012,7 @@ async function salidasRoutes(fastify, options) {
                             const detalleNota = notaSalidaDetalleRepo.create({
                                 nota_salida_id: nota.id,
                                 producto_id: pid,
+                                lote_id: lote.id,                      // ← FK exacta al lote
                                 lote_numero: lote.numero_lote || null,
                                 fecha_vencimiento: lote.fecha_vencimiento || null,
                                 um: producto.unidad_medida || null,
@@ -1052,6 +1068,7 @@ async function salidasRoutes(fastify, options) {
                                 const detalleNota = notaSalidaDetalleRepo.create({
                                     nota_salida_id: nota.id,
                                     producto_id: pid,
+                                    lote_id: lote.id,                  // ← FK exacta al lote
                                     lote_numero: lote.numero_lote || null,
                                     fecha_vencimiento: lote.fecha_vencimiento || null,
                                     um: producto.unidad_medida || null,
@@ -1144,15 +1161,23 @@ async function salidasRoutes(fastify, options) {
 
                 // Revertir cada detalle
                 for (const detalle of detalles) {
-                    // Encontrar lotes y restaurar cantidad
-                    const lotes = await transactionalEntityManager.find('Lote', {
-                        where: {
-                            numero_lote: detalle.lote_numero,
-                            producto_id: detalle.producto_id
-                        }
-                    });
+                    // Restaurar stock: si hay lote_id usamos el lote exacto; si no, buscamos por numero_lote+producto_id
+                    let lotesParaRevertir = [];
+                    if (detalle.lote_id) {
+                        const loteExacto = await transactionalEntityManager.findOne('Lote', {
+                            where: { id: Number(detalle.lote_id) }
+                        });
+                        if (loteExacto) lotesParaRevertir = [loteExacto];
+                    } else {
+                        lotesParaRevertir = await transactionalEntityManager.find('Lote', {
+                            where: {
+                                numero_lote: detalle.lote_numero,
+                                producto_id: detalle.producto_id
+                            }
+                        });
+                    }
 
-                    for (const lote of lotes) {
+                    for (const lote of lotesParaRevertir) {
                         lote.cantidad_disponible = Number(lote.cantidad_disponible) + Number(detalle.cantidad);
                         await transactionalEntityManager.save('Lote', lote);
                     }
@@ -1311,7 +1336,7 @@ async function salidasRoutes(fastify, options) {
 
                 const codigoProducto = obtenerValor(fila.valores, headerMap, ['codigo_producto', 'cod. producto', 'cod producto', 'codproducto'], 3);
                 const codigoCliente = obtenerValor(fila.valores, headerMap, ['codigo_cliente', 'codigo cliente', 'codcli'], null);
-                const ruc = obtenerValor(fila.valores, headerMap, ['ruc', 'cuit'], null);
+                const ruc = obtenerValor(fila.valores, headerMap, ['ruc', 'cuit', 'ruc_cliente', 'ruc cliente'], null);
                 const cantidadTexto = obtenerValor(fila.valores, headerMap, ['cantidad', 'cant.total_salida', 'cant total salida', 'canttotalsalida'], 4);
                 const precioTexto = obtenerValor(fila.valores, headerMap, ['precio', 'precio_unitario'], 5);
                 const cantBultoTexto = obtenerValor(fila.valores, headerMap, ['cant.bulto', 'cant_bulto', 'cantidad_bultos'], null);
@@ -1371,9 +1396,36 @@ async function salidasRoutes(fastify, options) {
                     continue;
                 }
 
-                const producto = await productoRepo.findOneBy({ codigo: String(codigoProducto) });
+                // Buscar producto por (codigo + lote) — combinación única
+                // Si viene lote en el CSV, usamos ambos para no confundir productos con mismo codigo pero distinto lote
+                let producto = null;
+                const loteNumeroLimpio = String(loteNumero || '').trim();
+
+                if (loteNumeroLimpio) {
+                    // Buscar el producto que tiene ese codigo Y tiene ese lote en su tabla de lotes
+                    producto = await productoRepo
+                        .createQueryBuilder('producto')
+                        .innerJoin('producto.lotes', 'lote')
+                        .where('producto.codigo = :codigo', { codigo: String(codigoProducto) })
+                        .andWhere('lote.numero_lote = :lote', { lote: loteNumeroLimpio })
+                        .getOne();
+
+                    // Si no encontró por lotes, intentar por el campo lote directo del producto
+                    if (!producto) {
+                        producto = await productoRepo.findOneBy({
+                            codigo: String(codigoProducto),
+                            lote: loteNumeroLimpio
+                        });
+                    }
+                }
+
+                // Fallback: si no vino lote o no se encontró por lote, buscar solo por codigo
                 if (!producto) {
-                    errores.push(`Fila ${fila.rowNumber}: Producto no encontrado (${codigoProducto})`);
+                    producto = await productoRepo.findOneBy({ codigo: String(codigoProducto) });
+                }
+
+                if (!producto) {
+                    errores.push(`Fila ${fila.rowNumber}: Producto no encontrado (código: ${codigoProducto}${loteNumeroLimpio ? ` / lote: ${loteNumeroLimpio}` : ''})`);
                     continue;
                 }
 
@@ -1587,41 +1639,31 @@ async function salidasRoutes(fastify, options) {
         const worksheet = workbook.addWorksheet('Plantilla Salida');
 
         worksheet.columns = [
-            { header: 'COD. PRODUCTO', key: 'codigo_producto', width: 20 },
-            { header: 'PRODUCTO', key: 'producto', width: 45 },
-            { header: 'LOTE', key: 'lote', width: 20 },
-            { header: 'FECHA VCTO', key: 'fecha_vcto', width: 15 },
-            { header: 'UM', key: 'um', width: 10 },
-            { header: 'CANT.BULTO', key: 'cant_bulto', width: 12 },
-            { header: 'CANT.CAJAS', key: 'cant_cajas', width: 12 },
-            { header: 'CANT X CAJA', key: 'cant_x_caja', width: 12 },
-            { header: 'CANT.FRACCIÓN', key: 'cant_fraccion', width: 14 },
-            { header: 'CANT.TOTAL_SALIDA', key: 'cantidad', width: 18 },
-            { header: 'FECHA DE H_SALIDA', key: 'fecha', width: 18 },
-            { header: 'MES', key: 'mes', width: 8 },
-            { header: 'DIA', key: 'dia', width: 8 },
-            { header: 'RUC', key: 'ruc', width: 16 },
-            { header: 'AÑO', key: 'anio', width: 10 },
-            { header: 'MOTIVO DE SALIDA', key: 'motivo_salida', width: 20 }
+            { header: 'ruc_cliente', key: 'ruc_cliente', width: 16 },
+            { header: 'fecha', key: 'fecha', width: 15 },
+            { header: 'motivo_salida', key: 'motivo_salida', width: 20 },
+            { header: 'codigo_producto', key: 'codigo_producto', width: 20 },
+            { header: 'lote', key: 'lote', width: 20 },
+            { header: 'cantidad', key: 'cantidad', width: 12 },
+            { header: 'um', key: 'um', width: 10 },
+            { header: 'cant_bulto', key: 'cant_bulto', width: 12 },
+            { header: 'cant_caja', key: 'cant_caja', width: 12 },
+            { header: 'cant_x_caja', key: 'cant_x_caja', width: 12 },
+            { header: 'cant_fraccion', key: 'cant_fraccion', width: 14 }
         ];
 
         worksheet.addRow({
-            codigo_producto: 'VK01111505',
-            producto: 'VERTEBROPLASTY KIT',
-            lote: '20250300006',
-            fecha_vcto: '13/2/2028',
+            ruc_cliente: '20606511991',
+            fecha: '17/03/2026',
+            motivo_salida: 'VENTA',
+            codigo_producto: 'MED-001',
+            lote: 'L-2026',
+            cantidad: '10',
             um: 'UND',
-            cant_bulto: '-',
-            cant_cajas: '-',
-            cant_x_caja: '-',
-            cant_fraccion: '-',
-            cantidad: '1',
-            fecha: '15/1/2026',
-            mes: '01',
-            dia: '15',
-            ruc: '20606511991',
-            anio: '2026',
-            motivo_salida: 'VENTA'
+            cant_bulto: '1',
+            cant_caja: '1',
+            cant_x_caja: '10',
+            cant_fraccion: '0'
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -1779,8 +1821,8 @@ async function salidasRoutes(fastify, options) {
                                 { text: String(idx + 1), style: 'tableCell' },
                                 { text: d.producto?.codigo || '-', style: 'tableCell' },
                                 { text: d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
-                                { text: (d.lote ? d.lote.numero_lote : d.lote_numero) || '-', style: 'tableCell' },
-                                { text: (d.lote ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : (d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-')), style: 'tableCell' },
+                                { text: d.lote_numero || (d.lote ? d.lote.numero_lote : null) || '-', style: 'tableCell' },
+                                { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : (d.lote?.fecha_vencimiento ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : '-'), style: 'tableCell' },
                                 { text: d.um || d.producto?.unidad_medida || 'UND', style: 'tableCell' },
                                 { text: d.fabricante || d.producto?.fabricante || '-', style: 'tableCell' },
                                 { text: '15°C a 25°C', style: 'tableCell' },
