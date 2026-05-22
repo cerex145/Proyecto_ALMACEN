@@ -1419,7 +1419,7 @@ async function ingresosRoutes(fastify, options) {
                             const loteExistente = await tx.findOne('Lote', {
                                 where: {
                                     producto_id: Number(producto.id),
-                                    lote_numero: detalle.lote_numero,
+                                    numero_lote: detalle.lote_numero,
                                     nota_ingreso_id: notaGuardada.id
                                 }
                             });
