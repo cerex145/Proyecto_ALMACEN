@@ -1780,7 +1780,7 @@ async function salidasRoutes(fastify, options) {
                                 {
                                     columns: [
                                         { text: 'Fecha de Salida:', width: '*', alignment: 'right', style: 'labelBold' },
-                                        { text: new Date(nota.fecha).toLocaleDateString('es-PE'), width: 100, alignment: 'right', style: 'labelText' }
+                                        { text: String(nota.fecha).split('T')[0].split('-').reverse().join('/'), width: 100, alignment: 'right', style: 'labelText' }
                                     ]
                                 },
                                 {
@@ -1822,7 +1822,7 @@ async function salidasRoutes(fastify, options) {
                                 { text: d.producto?.codigo || '-', style: 'tableCell' },
                                 { text: d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
                                 { text: d.lote_numero || (d.lote ? d.lote.numero_lote : null) || '-', style: 'tableCell' },
-                                { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : (d.lote?.fecha_vencimiento ? new Date(d.lote.fecha_vencimiento).toLocaleDateString('es-PE') : '-'), style: 'tableCell' },
+                                { text: d.fecha_vencimiento ? String(d.fecha_vencimiento).split('T')[0].split('-').reverse().join('/') : (d.lote?.fecha_vencimiento ? String(d.lote.fecha_vencimiento).split('T')[0].split('-').reverse().join('/') : '-'), style: 'tableCell' },
                                 { text: d.um || d.producto?.unidad_medida || 'UND', style: 'tableCell' },
                                 { text: d.fabricante || d.producto?.fabricante || '-', style: 'tableCell' },
                                 { text: '15°C a 25°C', style: 'tableCell' },

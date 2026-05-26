@@ -12,9 +12,11 @@ const EMPRESA = {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (fecha) => {
     if (!fecha) return '—';
-    return new Date(fecha).toLocaleDateString('es-PE', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-    });
+    const partes = String(fecha).split('T')[0].split('-');
+    if (partes.length === 3) {
+        return `${partes[2]}/${partes[1]}/${partes[0]}`; // DD/MM/YYYY
+    }
+    return new Date(fecha).toLocaleDateString('es-PE');
 };
 
 const fmtHora = (fecha) => {
@@ -28,6 +30,7 @@ const fmtHora = (fecha) => {
 const tipoInfo = (tipo) => ({
     INGRESO: { label: 'INGRESO', color: '#16a34a', bg: '#dcfce7', icon: '▲' },
     SALIDA: { label: 'SALIDA', color: '#dc2626', bg: '#fee2e2', icon: '▼' },
+    SALIDA_REVERSA: { label: 'SALIDA REV.', color: '#d97706', bg: '#fef3c7', icon: '↺' },
     AJUSTE_POSITIVO: { label: 'AJ. (+)', color: '#0891b2', bg: '#e0f2fe', icon: '◆' },
     AJUSTE_NEGATIVO: { label: 'AJ. (−)', color: '#d97706', bg: '#fef3c7', icon: '◆' },
     AJUSTE_POR_RECEPCION: { label: 'AJ. REC.', color: '#7c3aed', bg: '#ede9fe', icon: '◈' },
@@ -99,7 +102,7 @@ export const KardexFuncional = () => {
             setMovimientos(data);
 
             const ing = data.filter(m => ['INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION'].includes(m.tipo_movimiento));
-            const sal = data.filter(m => ['SALIDA', 'AJUSTE_NEGATIVO'].includes(m.tipo_movimiento));
+            const sal = data.filter(m => ['SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA'].includes(m.tipo_movimiento));
             const sumIng = ing.reduce((s, m) => s + Number(m.cantidad), 0);
             const sumSal = sal.reduce((s, m) => s + Number(m.cantidad), 0);
             setStats({ ingresos: sumIng, salidas: sumSal, balance: sumIng - sumSal, total: data.length });
@@ -363,6 +366,7 @@ export const KardexFuncional = () => {
                             <option value="">Todos</option>
                             <option value="INGRESO">Ingreso</option>
                             <option value="SALIDA">Salida</option>
+                            <option value="SALIDA_REVERSA">Salida Reversa</option>
                             <option value="AJUSTE_POSITIVO">Ajuste Positivo</option>
                             <option value="AJUSTE_NEGATIVO">Ajuste Negativo</option>
                             <option value="AJUSTE_POR_RECEPCION">Ajuste por Recepción</option>

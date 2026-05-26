@@ -212,9 +212,9 @@ async function kardexRoutes(fastify, options) {
             LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
                 AND k.referencia_id = ni.id
                 AND k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
-            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA'
+            LEFT JOIN notas_salida ns ON k.documento_tipo IN ('NOTA_SALIDA', 'NOTA_SALIDA_CANCELADA')
                 AND k.referencia_id = ns.id
-                AND k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
+                AND k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')
             ${clienteJoin}
             WHERE 1=1
         `;
@@ -437,11 +437,13 @@ async function kardexRoutes(fastify, options) {
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 ni.proveedor as proveedor_ingreso,
+                ni.fecha as fecha_nota_ingreso,
+                ns.fecha as fecha_nota_salida,
                 ${clienteSelect} as cliente_nombre_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
-            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento = 'INGRESO'
-            LEFT JOIN notas_salida ns ON k.documento_tipo = 'NOTA_SALIDA' AND k.referencia_id = ns.id AND k.tipo_movimiento = 'SALIDA'
+            LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
+            LEFT JOIN notas_salida ns ON k.documento_tipo IN ('NOTA_SALIDA', 'NOTA_SALIDA_CANCELADA') AND k.referencia_id = ns.id AND k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')
             ${clienteJoin}
             WHERE 1=1
         `;
@@ -510,12 +512,66 @@ async function kardexRoutes(fastify, options) {
             { header: 'Observaciones', key: 'observaciones', width: 40 }
         ];
 
+        const formatFecha = (fechaVal, isDateOnly = false) => {
+            if (!fechaVal) return '';
+            try {
+                if (fechaVal instanceof Date) {
+                    if (isDateOnly) {
+                        const year = fechaVal.getUTCFullYear();
+                        const month = String(fechaVal.getUTCMonth() + 1).padStart(2, '0');
+                        const day = String(fechaVal.getUTCDate()).padStart(2, '0');
+                        return `${day}/${month}/${year}`;
+                    } else {
+                        const year = fechaVal.getFullYear();
+                        const month = String(fechaVal.getMonth() + 1).padStart(2, '0');
+                        const day = String(fechaVal.getDate()).padStart(2, '0');
+                        return `${day}/${month}/${year}`;
+                    }
+                }
+                
+                const str = String(fechaVal);
+                if (str.includes('T')) {
+                    const datePart = str.split('T')[0];
+                    const partes = datePart.split('-');
+                    if (partes.length === 3) {
+                        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    }
+                } else {
+                    const partes = str.split(' ')[0].split('-');
+                    if (partes.length === 3) {
+                        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+                    }
+                }
+                
+                const d = new Date(fechaVal);
+                if (!isNaN(d.getTime())) {
+                    if (isDateOnly) {
+                        const year = d.getUTCFullYear();
+                        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                        const day = String(d.getUTCDate()).padStart(2, '0');
+                        return `${day}/${month}/${year}`;
+                    } else {
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        return `${day}/${month}/${year}`;
+                    }
+                }
+                return str;
+            } catch (e) {
+                return String(fechaVal);
+            }
+        };
+
         movimientos.forEach(mov => {
             const isIngreso = mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION';
-            const isSalida = mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO';
+            const isSalida = mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO' || mov.tipo_movimiento === 'SALIDA_REVERSA';
+            
+            const fechaDoc = isIngreso ? mov.fecha_nota_ingreso : (isSalida ? mov.fecha_nota_salida : null);
+            const fechaFormateada = fechaDoc ? formatFecha(fechaDoc, true) : formatFecha(mov.created_at, false);
 
             worksheet.addRow({
-                fecha: new Date(mov.created_at).toLocaleString('es-PE'),
+                fecha: fechaFormateada,
                 documento: mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : 'N/A',
                 cliente_nombre: mov.proveedor_ingreso || mov.cliente_nombre_salida || 'N/A',
                 codigo_producto: mov.codigo_producto || 'N/A',
