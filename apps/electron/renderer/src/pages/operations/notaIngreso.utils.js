@@ -257,11 +257,15 @@ export const coincideCodigoProducto = (producto, codigoBuscadoRaw) => {
     const codigoBuscado = normalizarCodigoProducto(codigoBuscadoRaw);
     if (!codigoBuscado) return false;
 
+    const canonicalBuscado = codigoBuscado.replace(/[^a-z0-9]/g, '');
+    if (!canonicalBuscado) return false;
+
     return obtenerCodigosProducto(producto).some((codigo) => {
         const normalizado = normalizarCodigoProducto(codigo);
-        return normalizado === codigoBuscado
-            || normalizado.startsWith(`${codigoBuscado} `)
-            || codigoBuscado.startsWith(`${normalizado} `);
+        if (normalizado === codigoBuscado) return true;
+
+        const canonicalNormalizado = normalizado.replace(/[^a-z0-9]/g, '');
+        return canonicalNormalizado === canonicalBuscado;
     });
 };
 
