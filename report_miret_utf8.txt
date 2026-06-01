@@ -1,0 +1,92 @@
+Conectado a la base de datos.
+Abriendo archivo Excel: C:\Users\Carlos\Downloads\Proyecto_ALMACEN\docs\SALIDA MIRET MEDICAL.xlsx
+Cabeceras detectadas: ["ruc_cliente","codigo_producto","nombre","lote","um","cant_bulto","cant_caja","cant_x_caja","cant_fraccion","cantidad","motivo_salida"]
+
+Filas totales de datos en Excel: 1924
+Cargando productos desde la base de datos...
+Cargados 573 productos en memoria.
+Cargando lotes y RUCs desde la base de datos...
+Cargados 841 lotes en memoria.
+
+==================================================
+DIAGNOSIS DETALLADA DE SALIDAS MIRET MEDICAL
+==================================================
+
+❌ 1. PRODUCTOS QUE NO EXISTEN EN EL SISTEMA EN ABSOLUTO (0):
+  ¡Ninguno! Todos los códigos del Excel existen en el sistema.
+
+❌ 2. PRODUCTOS SIN LOTES PARA EL RUC 20605712241 (0):
+  ¡Ninguno! Todos los productos tienen lotes asociados a este cliente.
+
+❌ 3. FILAS CON LOTE NO ENCONTRADO PARA EL PRODUCTO Y CLIENTE (0):
+  ¡Ninguno!
+
+❌ 4. FILAS CON STOCK INSUFICIENTE O AGOTADO EN EL SISTEMA (65):
+  - Fila Excel 19: Código "NVT23030", Lote: "PMTDF64", Cantidad Pedida: 1, Disponible DB: 0 (Lote "PMTDF64" sin stock disponible (saldo 0))
+  - Fila Excel 715: Código "TSCMG-35-260-LESDC", Lote: "E4747855", Cantidad Pedida: 2, Disponible DB: 0 (Lote "E4747855" sin stock disponible (saldo 0))
+  - Fila Excel 1483: Código "41300150", Lote: "SP4125031203", Cantidad Pedida: 1, Disponible DB: 0 (Lote "SP4125031203" sin stock disponible (saldo 0))
+  - Fila Excel 1510: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1517: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1520: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1521: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1524: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1537: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1538: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1557: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1560: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1568: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1571: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1573: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1577: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1603: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 5, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1609: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1620: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1633: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1659: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1661: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1685: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1688: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1689: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1700: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1704: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1709: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1711: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1714: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1724: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1740: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1745: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1746: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1765: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1768: Código "53610009", Lote: "SP5324121808", Cantidad Pedida: 9, Disponible DB: 8 (Stock insuficiente en lote "SP5324121808" (Pedido: 9, Disponible: 8))
+  - Fila Excel 1769: Código "RS*R60N10MQ", Lote: "250516", Cantidad Pedida: 1, Disponible DB: 0 (Lote "250516" sin stock disponible (saldo 0))
+  - Fila Excel 1771: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1777: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1783: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1784: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1802: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1803: Código "RS*R60N10MQ", Lote: "250516", Cantidad Pedida: 1, Disponible DB: 0 (Lote "250516" sin stock disponible (saldo 0))
+  - Fila Excel 1807: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1808: Código "RS*R60N10MQ", Lote: "250516", Cantidad Pedida: 1, Disponible DB: 0 (Lote "250516" sin stock disponible (saldo 0))
+  - Fila Excel 1819: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1823: Código "RS*R60N10MQ", Lote: "250516", Cantidad Pedida: 1, Disponible DB: 0 (Lote "250516" sin stock disponible (saldo 0))
+  - Fila Excel 1827: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1828: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1832: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1835: Código "AHW14R001S", Lote: "251219A191", Cantidad Pedida: 2, Disponible DB: 1 (Stock insuficiente en lote "251219A191" (Pedido: 2, Disponible: 1))
+  - Fila Excel 1840: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1843: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1846: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1858: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1863: Código "RS*R60N10MQ", Lote: "250516", Cantidad Pedida: 2, Disponible DB: 0 (Lote "250516" sin stock disponible (saldo 0))
+  - Fila Excel 1870: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1876: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1879: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1884: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1893: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1898: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1905: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 1, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1913: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 2, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+  - Fila Excel 1924: Código "RSC061125-HW45", Lote: "202512604", Cantidad Pedida: 30, Disponible DB: 0 (Lote "202512604" sin stock disponible (saldo 0))
+
+✅ 5. RESUMEN DE FILAS QUE PASARÍAN CON ÉXITO (1861):
+  Total filas exitosas: 1861

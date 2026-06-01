@@ -1412,7 +1412,11 @@ export const NotaIngresoForm = () => {
                     const firstSheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[firstSheetName];
                     const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    rows = jsonRows.filter(row => row.some(cell => String(cell || '').trim() !== ''));
+                    rows = jsonRows.filter((row, idx) => {
+                        const isHidden = worksheet['!rows'] && worksheet['!rows'][idx] && worksheet['!rows'][idx].hidden === true;
+                        if (isHidden) return false;
+                        return row.some(cell => String(cell || '').trim() !== '');
+                    });
                 } else {
                     const text = String(e.target.result || '').replace(/^\uFEFF/, '');
                     const parsed = parseCSVDocument(text);

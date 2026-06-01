@@ -97,8 +97,8 @@ async function lotesRoutes(fastify, options) {
         }
 
         if (cliente_id) {
-            // Evitar dependencia de una columna cliente_id ausente en notas_ingreso.
-            queryBuilder.leftJoin('clientes', 'cliente', 'cliente.razon_social = notaIngreso.proveedor');
+            // Evitar dependencia de una columna cliente_id ausente en notas_ingreso, uniendo por RUC (cuit <-> cliente_ruc) de forma robusta.
+            queryBuilder.leftJoin('clientes', 'cliente', "regexp_replace(coalesce(cliente.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(notaIngreso.cliente_ruc, ''), '\\D', '', 'g')");
             queryBuilder.andWhere('cliente.id = :cliente_id', { cliente_id: Number(cliente_id) });
         }
 
@@ -396,7 +396,7 @@ async function lotesRoutes(fastify, options) {
         if (cliente_id) {
             queryBuilder
                 .leftJoin('lote.notaIngreso', 'notaIngreso')
-                .leftJoin('clientes', 'cliente', 'cliente.razon_social = notaIngreso.proveedor')
+                .leftJoin('clientes', 'cliente', "regexp_replace(coalesce(cliente.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(notaIngreso.cliente_ruc, ''), '\\D', '', 'g')")
                 .andWhere('cliente.id = :cliente_id', { cliente_id: Number(cliente_id) });
         }
 
