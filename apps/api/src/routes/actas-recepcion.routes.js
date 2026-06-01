@@ -393,7 +393,7 @@ module.exports = async function (fastify, opts) {
                                         columns: [
                                             { text: 'PACKING LIST', width: 80, style: 'labelSmall' },
                                             { text: checkPackingList ? 'X' : '', width: 15, style: 'checkbox' },
-                                            { text: '', width: '*', style: 'dataText' }
+                                            { text: checkPackingList ? (acta.numero_documento || '') : '', width: '*', style: 'dataTextSmall' }
                                         ],
                                         border: [true, true, true, true]
                                     },
@@ -420,7 +420,7 @@ module.exports = async function (fastify, opts) {
                                         columns: [
                                             { text: 'INVOICE', width: 50, style: 'labelSmall' },
                                             { text: checkInvoice ? 'X' : '', width: 15, style: 'checkbox' },
-                                            { text: acta.numero_documento || '', width: '*', style: 'dataTextSmall' }
+                                            { text: (checkInvoice || (!checkPackingList && !checkGuiaRemision && !checkFactura)) ? (acta.numero_documento || '') : '', width: '*', style: 'dataTextSmall' }
                                         ],
                                         border: [true, true, true, true]
                                     },
@@ -447,7 +447,7 @@ module.exports = async function (fastify, opts) {
                                         columns: [
                                             { text: 'GUIA REMISION', width: 80, style: 'labelSmall' },
                                             { text: checkGuiaRemision ? 'X' : '', width: 15, style: 'checkbox' },
-                                            { text: '', width: '*', style: 'dataText' }
+                                            { text: checkGuiaRemision ? (acta.numero_documento || '') : '', width: '*', style: 'dataTextSmall' }
                                         ],
                                         border: [true, true, true, true]
                                     },
@@ -468,7 +468,7 @@ module.exports = async function (fastify, opts) {
                                         columns: [
                                             { text: 'FACTURA', width: 50, style: 'labelSmall' },
                                             { text: checkFactura ? 'X' : '', width: 15, style: 'checkbox' },
-                                            { text: '', width: '*', style: 'dataText' }
+                                            { text: checkFactura ? (acta.numero_documento || '') : '', width: '*', style: 'dataTextSmall' }
                                         ],
                                         border: [true, true, true, true]
                                     },
