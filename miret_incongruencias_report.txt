@@ -1,0 +1,276 @@
+=== COMPARACIÓN CORREGIDA DE INGRESOS VS SALIDAS (MIRET MEDICAL) ===
+Archivo Ingreso: C:\Users\Carlos\Downloads\Proyecto_ALMACEN\docs\INGRESO MIRET MEDICAL.xlsx
+Archivo Salida: C:\Users\Carlos\Downloads\Proyecto_ALMACEN\docs\SALIDA MIRET MEDICAL.xlsx
+
+Filas totales leídas en Ingreso: 941
+Productos + Lotes únicos en Ingreso: 453
+Filas totales leídas en Salida: 1924
+Productos + Lotes únicos en Salida: 378
+
+==================================================
+INCONGRUENCIAS DETECTADAS (SALIDAS > INGRESOS) - CORREGIDO
+==================================================
+
+⚠️ CASO A: PRODUCTOS QUE TIENEN SALIDAS MAYORES A SUS INGRESOS (7):
+
+📌 Producto: "NVT23030" - "NAVIGATOR 23.0X30MM - TRANSCATHETER HEART VALVE DELIVERY SYSTEM X 01 UND"
+   Lote: "PMTDF64"
+   Cantidad TOTAL que Ingresó en Excel: 1
+   Cantidad TOTAL que se pide Salir en Excel: 2
+   ❌ DESCUADRE: Faltan 1 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 45: cantidad = 1 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 15: cantidad = 1 (VISIBLE)
+     - Fila 19: cantidad = 1 (VISIBLE)
+
+📌 Producto: "TSCMG-35-260-LESDC" - "GUIA METALICA LUNDERQUIST CURVA 35 X 260 CM LESDC (12)"
+   Lote: "E4747855"
+   Cantidad TOTAL que Ingresó en Excel: 10
+   Cantidad TOTAL que se pide Salir en Excel: 12
+   ❌ DESCUADRE: Faltan 2 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 192: cantidad = 5 (VISIBLE)
+     - Fila 379: cantidad = 4 (VISIBLE)
+     - Fila 798: cantidad = 1 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 265: cantidad = 3 (VISIBLE)
+     - Fila 547: cantidad = 2 (VISIBLE)
+     - Fila 684: cantidad = 2 (VISIBLE)
+     - Fila 685: cantidad = 3 (VISIBLE)
+     - Fila 715: cantidad = 2 (VISIBLE)
+
+📌 Producto: "41300150" - "CATÉTER BALÓN PARA ANGIOPLASTÍA CORONARIA NO COMPLACIENTE DE DIÁMETRO 3.0 MM DE LONGITUD 15 MM"
+   Lote: "SP4125031203"
+   Cantidad TOTAL que Ingresó en Excel: 8
+   Cantidad TOTAL que se pide Salir en Excel: 9
+   ❌ DESCUADRE: Faltan 1 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 387: cantidad = 2 (VISIBLE)
+     - Fila 649: cantidad = 6 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 667: cantidad = 1 (VISIBLE)
+     - Fila 700: cantidad = 1 (VISIBLE)
+     - Fila 877: cantidad = 1 (VISIBLE)
+     - Fila 1039: cantidad = 2 (VISIBLE)
+     - Fila 1153: cantidad = 1 (VISIBLE)
+     - Fila 1462: cantidad = 1 (VISIBLE)
+     - Fila 1470: cantidad = 1 (VISIBLE)
+     - Fila 1483: cantidad = 1 (VISIBLE)
+
+📌 Producto: "RSC061125-HW45" - "BrilliantTM Introducer Kit 6Fr x 11 cm"
+   Lote: "202512604"
+   Cantidad TOTAL que Ingresó en Excel: 120
+   Cantidad TOTAL que se pide Salir en Excel: 216
+   ❌ DESCUADRE: Faltan 96 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 533: cantidad = 20 (VISIBLE)
+     - Fila 654: cantidad = 100 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 860: cantidad = 1 (VISIBLE)
+     - Fila 864: cantidad = 1 (VISIBLE)
+     - Fila 867: cantidad = 1 (VISIBLE)
+     - Fila 869: cantidad = 1 (VISIBLE)
+     - Fila 874: cantidad = 1 (VISIBLE)
+     - Fila 884: cantidad = 1 (VISIBLE)
+     - Fila 896: cantidad = 1 (VISIBLE)
+     - Fila 900: cantidad = 1 (VISIBLE)
+     - Fila 918: cantidad = 1 (VISIBLE)
+     - Fila 921: cantidad = 2 (VISIBLE)
+     - Fila 926: cantidad = 2 (VISIBLE)
+     - Fila 934: cantidad = 1 (VISIBLE)
+     - Fila 937: cantidad = 1 (VISIBLE)
+     - Fila 939: cantidad = 1 (VISIBLE)
+     - Fila 947: cantidad = 1 (VISIBLE)
+     - Fila 948: cantidad = 1 (VISIBLE)
+     - Fila 954: cantidad = 1 (VISIBLE)
+     - Fila 961: cantidad = 1 (VISIBLE)
+     - Fila 962: cantidad = 1 (VISIBLE)
+     - Fila 966: cantidad = 2 (VISIBLE)
+     - Fila 990: cantidad = 2 (VISIBLE)
+     - Fila 993: cantidad = 2 (VISIBLE)
+     - Fila 999: cantidad = 1 (VISIBLE)
+     - Fila 1002: cantidad = 1 (VISIBLE)
+     - Fila 1011: cantidad = 1 (VISIBLE)
+     - Fila 1013: cantidad = 2 (VISIBLE)
+     - Fila 1019: cantidad = 2 (VISIBLE)
+     - Fila 1021: cantidad = 1 (VISIBLE)
+     - Fila 1025: cantidad = 2 (VISIBLE)
+     - Fila 1031: cantidad = 1 (VISIBLE)
+     - Fila 1055: cantidad = 1 (VISIBLE)
+     - Fila 1062: cantidad = 2 (VISIBLE)
+     - Fila 1065: cantidad = 2 (VISIBLE)
+     - Fila 1067: cantidad = 1 (VISIBLE)
+     - Fila 1072: cantidad = 1 (VISIBLE)
+     - Fila 1075: cantidad = 1 (VISIBLE)
+     - Fila 1076: cantidad = 2 (VISIBLE)
+     - Fila 1079: cantidad = 2 (VISIBLE)
+     - Fila 1082: cantidad = 2 (VISIBLE)
+     - Fila 1103: cantidad = 2 (VISIBLE)
+     - Fila 1105: cantidad = 1 (VISIBLE)
+     - Fila 1113: cantidad = 1 (VISIBLE)
+     - Fila 1128: cantidad = 1 (VISIBLE)
+     - Fila 1140: cantidad = 1 (VISIBLE)
+     - Fila 1143: cantidad = 1 (VISIBLE)
+     - Fila 1156: cantidad = 1 (VISIBLE)
+     - Fila 1159: cantidad = 1 (VISIBLE)
+     - Fila 1200: cantidad = 1 (VISIBLE)
+     - Fila 1241: cantidad = 1 (VISIBLE)
+     - Fila 1256: cantidad = 1 (VISIBLE)
+     - Fila 1259: cantidad = 2 (VISIBLE)
+     - Fila 1261: cantidad = 1 (VISIBLE)
+     - Fila 1262: cantidad = 1 (VISIBLE)
+     - Fila 1263: cantidad = 1 (VISIBLE)
+     - Fila 1271: cantidad = 1 (VISIBLE)
+     - Fila 1285: cantidad = 1 (VISIBLE)
+     - Fila 1287: cantidad = 1 (VISIBLE)
+     - Fila 1290: cantidad = 1 (VISIBLE)
+     - Fila 1301: cantidad = 1 (VISIBLE)
+     - Fila 1307: cantidad = 1 (VISIBLE)
+     - Fila 1311: cantidad = 1 (VISIBLE)
+     - Fila 1314: cantidad = 2 (VISIBLE)
+     - Fila 1319: cantidad = 1 (VISIBLE)
+     - Fila 1320: cantidad = 1 (VISIBLE)
+     - Fila 1341: cantidad = 1 (VISIBLE)
+     - Fila 1344: cantidad = 1 (VISIBLE)
+     - Fila 1349: cantidad = 10 (VISIBLE)
+     - Fila 1351: cantidad = 1 (VISIBLE)
+     - Fila 1355: cantidad = 1 (VISIBLE)
+     - Fila 1357: cantidad = 1 (VISIBLE)
+     - Fila 1362: cantidad = 1 (VISIBLE)
+     - Fila 1369: cantidad = 1 (VISIBLE)
+     - Fila 1370: cantidad = 1 (VISIBLE)
+     - Fila 1398: cantidad = 1 (VISIBLE)
+     - Fila 1411: cantidad = 1 (VISIBLE)
+     - Fila 1414: cantidad = 1 (VISIBLE)
+     - Fila 1416: cantidad = 1 (VISIBLE)
+     - Fila 1418: cantidad = 1 (VISIBLE)
+     - Fila 1422: cantidad = 1 (VISIBLE)
+     - Fila 1425: cantidad = 1 (VISIBLE)
+     - Fila 1435: cantidad = 1 (VISIBLE)
+     - Fila 1436: cantidad = 1 (VISIBLE)
+     - Fila 1439: cantidad = 1 (VISIBLE)
+     - Fila 1442: cantidad = 1 (VISIBLE)
+     - Fila 1445: cantidad = 1 (VISIBLE)
+     - Fila 1449: cantidad = 1 (VISIBLE)
+     - Fila 1453: cantidad = 1 (VISIBLE)
+     - Fila 1455: cantidad = 1 (VISIBLE)
+     - Fila 1463: cantidad = 1 (VISIBLE)
+     - Fila 1473: cantidad = 1 (VISIBLE)
+     - Fila 1479: cantidad = 1 (VISIBLE)
+     - Fila 1487: cantidad = 1 (VISIBLE)
+     - Fila 1492: cantidad = 1 (VISIBLE)
+     - Fila 1501: cantidad = 1 (VISIBLE)
+     - Fila 1504: cantidad = 1 (VISIBLE)
+     - Fila 1510: cantidad = 1 (VISIBLE)
+     - Fila 1517: cantidad = 1 (VISIBLE)
+     - Fila 1520: cantidad = 1 (VISIBLE)
+     - Fila 1521: cantidad = 1 (VISIBLE)
+     - Fila 1524: cantidad = 1 (VISIBLE)
+     - Fila 1537: cantidad = 1 (VISIBLE)
+     - Fila 1538: cantidad = 1 (VISIBLE)
+     - Fila 1557: cantidad = 1 (VISIBLE)
+     - Fila 1560: cantidad = 1 (VISIBLE)
+     - Fila 1568: cantidad = 1 (VISIBLE)
+     - Fila 1571: cantidad = 1 (VISIBLE)
+     - Fila 1573: cantidad = 1 (VISIBLE)
+     - Fila 1577: cantidad = 1 (VISIBLE)
+     - Fila 1603: cantidad = 5 (VISIBLE)
+     - Fila 1609: cantidad = 1 (VISIBLE)
+     - Fila 1620: cantidad = 1 (VISIBLE)
+     - Fila 1633: cantidad = 2 (VISIBLE)
+     - Fila 1659: cantidad = 1 (VISIBLE)
+     - Fila 1661: cantidad = 1 (VISIBLE)
+     - Fila 1685: cantidad = 1 (VISIBLE)
+     - Fila 1688: cantidad = 2 (VISIBLE)
+     - Fila 1689: cantidad = 1 (VISIBLE)
+     - Fila 1700: cantidad = 1 (VISIBLE)
+     - Fila 1704: cantidad = 1 (VISIBLE)
+     - Fila 1709: cantidad = 1 (VISIBLE)
+     - Fila 1711: cantidad = 1 (VISIBLE)
+     - Fila 1714: cantidad = 1 (VISIBLE)
+     - Fila 1724: cantidad = 1 (VISIBLE)
+     - Fila 1740: cantidad = 1 (VISIBLE)
+     - Fila 1745: cantidad = 1 (VISIBLE)
+     - Fila 1746: cantidad = 1 (VISIBLE)
+     - Fila 1765: cantidad = 1 (VISIBLE)
+     - Fila 1771: cantidad = 1 (VISIBLE)
+     - Fila 1777: cantidad = 1 (VISIBLE)
+     - Fila 1783: cantidad = 1 (VISIBLE)
+     - Fila 1784: cantidad = 2 (VISIBLE)
+     - Fila 1802: cantidad = 1 (VISIBLE)
+     - Fila 1807: cantidad = 1 (VISIBLE)
+     - Fila 1819: cantidad = 1 (VISIBLE)
+     - Fila 1827: cantidad = 1 (VISIBLE)
+     - Fila 1828: cantidad = 1 (VISIBLE)
+     - Fila 1832: cantidad = 2 (VISIBLE)
+     - Fila 1840: cantidad = 1 (VISIBLE)
+     - Fila 1843: cantidad = 1 (VISIBLE)
+     - Fila 1846: cantidad = 1 (VISIBLE)
+     - Fila 1858: cantidad = 2 (VISIBLE)
+     - Fila 1870: cantidad = 2 (VISIBLE)
+     - Fila 1876: cantidad = 1 (VISIBLE)
+     - Fila 1879: cantidad = 1 (VISIBLE)
+     - Fila 1884: cantidad = 1 (VISIBLE)
+     - Fila 1893: cantidad = 2 (VISIBLE)
+     - Fila 1898: cantidad = 1 (VISIBLE)
+     - Fila 1905: cantidad = 1 (VISIBLE)
+     - Fila 1913: cantidad = 2 (VISIBLE)
+     - Fila 1924: cantidad = 30 (VISIBLE)
+
+📌 Producto: "AHW14R001S" - "ASAHI SION"
+   Lote: "251219A191"
+   Cantidad TOTAL que Ingresó en Excel: 10
+   Cantidad TOTAL que se pide Salir en Excel: 11
+   ❌ DESCUADRE: Faltan 1 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 660: cantidad = 10 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 1096: cantidad = 1 (VISIBLE)
+     - Fila 1134: cantidad = 2 (VISIBLE)
+     - Fila 1375: cantidad = 1 (VISIBLE)
+     - Fila 1377: cantidad = 2 (VISIBLE)
+     - Fila 1459: cantidad = 1 (VISIBLE)
+     - Fila 1467: cantidad = 1 (VISIBLE)
+     - Fila 1648: cantidad = 1 (VISIBLE)
+     - Fila 1835: cantidad = 2 (VISIBLE)
+
+📌 Producto: "RS*R60N10MQ" - "KIT R INTRO FEMORAL 6FR X 10 X 01 UND. (RADIFOCUS OPTITORQUE)"
+   Lote: "250516"
+   Cantidad TOTAL que Ingresó en Excel: 20
+   Cantidad TOTAL que se pide Salir en Excel: 26
+   ❌ DESCUADRE: Faltan 6 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 668: cantidad = 10 (VISIBLE)
+     - Fila 916: cantidad = 10 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 1203: cantidad = 2 (VISIBLE)
+     - Fila 1333: cantidad = 8 (VISIBLE)
+     - Fila 1638: cantidad = 8 (VISIBLE)
+     - Fila 1698: cantidad = 1 (VISIBLE)
+     - Fila 1737: cantidad = 1 (VISIBLE)
+     - Fila 1769: cantidad = 1 (VISIBLE)
+     - Fila 1803: cantidad = 1 (VISIBLE)
+     - Fila 1808: cantidad = 1 (VISIBLE)
+     - Fila 1823: cantidad = 1 (VISIBLE)
+     - Fila 1863: cantidad = 2 (VISIBLE)
+
+📌 Producto: "53610009" - "CATÉTER GUÍA PARA ANGIOPLASTÍA CORONARIA TIPO JUDKINS DERECHA JR4 DE 6 FRENCH X 100 CCM"
+   Lote: "SP5324121808"
+   Cantidad TOTAL que Ingresó en Excel: 17
+   Cantidad TOTAL que se pide Salir en Excel: 18
+   ❌ DESCUADRE: Faltan 1 unidades (Salida supera al Ingreso).
+   Detalle de filas de Ingreso:
+     - Fila 744: cantidad = 9 (VISIBLE)
+     - Fila 803: cantidad = 3 (VISIBLE)
+     - Fila 909: cantidad = 5 (VISIBLE)
+   Detalle de filas de Salida:
+     - Fila 1338: cantidad = 5 (VISIBLE)
+     - Fila 1482: cantidad = 1 (VISIBLE)
+     - Fila 1563: cantidad = 1 (VISIBLE)
+     - Fila 1712: cantidad = 1 (VISIBLE)
+     - Fila 1741: cantidad = 1 (VISIBLE)
+     - Fila 1768: cantidad = 9 (VISIBLE)
+
+⚠️ CASO B: LOTES QUE TIENEN SALIDAS PERO NO SE REGISTRA NINGÚN INGRESO EN EL EXCEL (0):
+  ¡Ninguno! Todos los lotes solicitados en las salidas registran al menos un ingreso en el Excel.
