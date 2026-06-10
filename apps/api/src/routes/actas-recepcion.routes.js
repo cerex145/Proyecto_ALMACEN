@@ -572,8 +572,8 @@ module.exports = async function (fastify, opts) {
                                     { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '', style: 'tableCellSmall' },
                                     { text: parseFloat(d.cantidad_solicitada || 0).toFixed(0), style: 'tableCell' },
                                     { text: parseFloat(d.cantidad_recibida || 0).toFixed(0), style: 'tableCell' },
-                                    { text: d.aspecto === 'EMB' ? 'X' : '', style: 'tableCell' },
-                                    { text: d.aspecto === 'ENV' ? 'X' : '', style: 'tableCell' }
+                                    { text: '√', style: 'tableCell' },
+                                    { text: '√', style: 'tableCell' }
                                 ])
                             ]
                         },
@@ -672,6 +672,7 @@ module.exports = async function (fastify, opts) {
                                             {
                                                 columns: [
                                                     { text: 'EMB: Embalaje', width: 80, style: 'legendText' },
+                                                    { text: 'ENV: Envase', width: 70, style: 'legendText' },
                                                     { text: '√: Conforme', width: 70, style: 'legendText' },
                                                     { text: 'X: No Conforme', width: 80, style: 'legendText' },
                                                     { text: 'NA: No Aplica', width: 70, style: 'legendText' },

@@ -187,6 +187,7 @@ const ActaRecepcionLayout = () => {
                             <div className="font-bold underline mb-1">LEYENDA</div>
                             <div className="flex gap-4 mb-2 font-bold">
                                 <span>EMB: Embalaje</span>
+                                <span>ENV: Envase</span>
                                 <span>√: Conforme</span>
                                 <span>X: No Conforme</span>
                                 <span>NA: No Aplica</span>

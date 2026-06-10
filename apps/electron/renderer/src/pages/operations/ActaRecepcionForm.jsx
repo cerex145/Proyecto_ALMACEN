@@ -833,7 +833,7 @@ export const ActaRecepcionForm = () => {
                                 className="input-premium"
                             >
                                 <option value="EMB">EMB</option>
-                                <option value="ENB">ENB</option>
+                                <option value="ENV">ENV</option>
                             </select>
                         </div>
 
@@ -950,7 +950,7 @@ export const ActaRecepcionForm = () => {
                                         <td className="px-4 py-3 text-right text-orange-600 font-semibold">{field.cantidad_solicitada}</td>
                                         <td className="px-4 py-3 text-right text-green-600 font-bold">{field.cantidad_recibida}</td>
                                         <td className="px-4 py-3 text-center">
-                                            <span className={`px-2 py-1 rounded text-xs font-bold ${field.aspecto === 'EMB' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${['EMB', 'ENV'].includes(field.aspecto) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                 {field.aspecto}
                                             </span>
                                         </td>
