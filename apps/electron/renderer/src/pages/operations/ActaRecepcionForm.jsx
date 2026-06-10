@@ -29,6 +29,12 @@ export const ActaRecepcionForm = () => {
         name: 'detalles'
     });
 
+    const getFirstFabricanteFromFields = () => {
+        if (!fields || fields.length === 0) return '';
+        const found = fields.find(f => String(f.fabricante || '').trim() !== '');
+        return found ? String(found.fabricante).trim() : '';
+    };
+
     const [clients, setClients] = useState([]);
     const [selectedClient, setSelectedClient] = useState('');
     const [clienteRuc, setClienteRuc] = useState('');
@@ -189,10 +195,20 @@ export const ActaRecepcionForm = () => {
                 }
             }
 
+            let primerFabricante = '';
+            if (nota.detalles && nota.detalles.length > 0) {
+                const detConFab = nota.detalles.find(d => String(d.fabricante || d.producto?.fabricante || '').trim() !== '');
+                if (detConFab) {
+                    primerFabricante = String(detConFab.fabricante || detConFab.producto?.fabricante || '').trim();
+                }
+            }
+
             const proveedorNota = String(nota.proveedor || '').trim();
+            const proveedorAsignar = primerFabricante || proveedorNota;
+
             if (proveedorNota) {
-                setProveedorNombre(proveedorNota);
-                setValue('proveedor', proveedorNota);
+                setProveedorNombre(proveedorAsignar);
+                setValue('proveedor', proveedorAsignar);
 
                 const proveedorKey = proveedorNota.toLowerCase();
                 const clientMatch = clients.find((client) => {
@@ -204,9 +220,7 @@ export const ActaRecepcionForm = () => {
                     const clientId = String(clientMatch.id);
                     setSelectedClient(clientId);
                     setClienteRuc(clientMatch.cuit || '');
-                    setProveedorNombre(clientMatch.razon_social || proveedorNota);
                     setValue('cliente_id', clientId);
-                    setValue('proveedor', clientMatch.razon_social || proveedorNota);
                 } else {
                     alert(`El proveedor/cliente "${proveedorNota}" del ingreso no fue encontrado en el catálogo de clientes. Por favor, asigne el cliente manualmente.`);
                     setSelectedClient('');
@@ -361,6 +375,16 @@ export const ActaRecepcionForm = () => {
             cantidad_fraccion: parseFloat(fraccion || 0),
             aspecto: aspecto
         });
+
+        const currentProv = String(getValues('proveedor') || '').trim();
+        const clientObj = clients.find(c => String(c.id) === String(selectedClient));
+        const clientName = clientObj ? String(clientObj.razon_social).trim() : '';
+        const fabTrimmed = String(fabricante || '').trim();
+
+        if ((!currentProv || currentProv === clientName) && fabTrimmed !== '') {
+            setProveedorNombre(fabTrimmed);
+            setValue('proveedor', fabTrimmed);
+        }
 
         // Limpiar campos
         setSelectedProduct('');
@@ -659,9 +683,11 @@ export const ActaRecepcionForm = () => {
                                     const client = clients.find(c => String(c.id) === String(clientId));
                                     if (client) {
                                         setClienteRuc(client.cuit || '');
-                                        setProveedorNombre(client.razon_social || '');
+                                        const fab = getFirstFabricanteFromFields();
+                                        const prov = fab || client.razon_social || '';
+                                        setProveedorNombre(prov);
                                         setValue('cliente_id', clientId);
-                                        setValue('proveedor', client.razon_social);
+                                        setValue('proveedor', prov);
                                     }
                                 }}
                                 className="input-premium"
