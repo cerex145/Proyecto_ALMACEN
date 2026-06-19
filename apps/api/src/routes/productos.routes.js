@@ -653,11 +653,17 @@ async function productoRoutes(fastify, options) {
 
         // Verificar código único si se cambió
         if (codigo && codigo !== producto.codigo) {
-            const existente = await productoRepo.findOneBy({ codigo });
+            const queryConditions = { codigo };
+            if (producto.cliente_id) {
+                queryConditions.cliente_id = producto.cliente_id;
+            } else if (producto.cliente_ruc) {
+                queryConditions.cliente_ruc = producto.cliente_ruc;
+            }
+            const existente = await productoRepo.findOneBy(queryConditions);
             if (existente) {
                 return reply.status(400).send({
                     success: false,
-                    error: 'El código ya existe'
+                    error: 'El código ya existe para este cliente'
                 });
             }
             producto.codigo = codigo;
@@ -812,7 +818,13 @@ async function productoRoutes(fastify, options) {
                 const kardexRepo = tx.getRepository('Kardex');
 
                 // 1. Crear o actualizar producto
-                let producto = await productoRepo.findOneBy({ codigo });
+                const queryConditions = { codigo };
+                if (cliente_id) {
+                    queryConditions.cliente_id = Number(cliente_id);
+                } else if (cliente_ruc) {
+                    queryConditions.cliente_ruc = cliente_ruc;
+                }
+                let producto = await productoRepo.findOneBy(queryConditions);
 
                 if (!producto) {
                     producto = productoRepo.create({
@@ -1303,6 +1315,9 @@ async function productoRoutes(fastify, options) {
             return reply.status(400).send({ success: false, error: 'No se encontraron códigos válidos para procesar' });
         }
 
+        const clienteIdNum = cliente_id != null && cliente_id !== '' ? Number(cliente_id) : null;
+        const clienteRucNorm = normRuc(cliente_ruc);
+
         const specificCodes = claves.filter(k => !k.includes('|||'));
         const hasGenerics = claves.some(k => k.includes('|||'));
 
@@ -1323,8 +1338,13 @@ async function productoRoutes(fastify, options) {
 
         let existentes = [];
         if (conditions.length > 0) {
-            existentes = await query
-                .where(conditions.join(' OR '), params)
+            let baseQuery = query.where(`(${conditions.join(' OR ')})`, params);
+            if (clienteIdNum) {
+                baseQuery = baseQuery.andWhere('p.cliente_id = :clienteIdNum', { clienteIdNum });
+            } else if (clienteRucNorm) {
+                baseQuery = baseQuery.andWhere('p.cliente_ruc = :clienteRucNorm', { clienteRucNorm });
+            }
+            existentes = await baseQuery
                 .orderBy('p.updated_at', 'DESC')
                 .addOrderBy('p.id', 'DESC')
                 .getMany();
@@ -1339,9 +1359,6 @@ async function productoRoutes(fastify, options) {
             if (!agrupados.has(key)) agrupados.set(key, []);
             agrupados.get(key).push(p);
         }
-
-        const clienteIdNum = cliente_id != null && cliente_id !== '' ? Number(cliente_id) : null;
-        const clienteRucNorm = normRuc(cliente_ruc);
 
         const scoreExistente = (p) => {
             let score = 0;

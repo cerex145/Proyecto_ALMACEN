@@ -162,6 +162,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         if (previewRows.length === 0) { alert('No hay productos válidos en el archivo.'); return; }
 
         const globales = {
+            cliente_id: Number(clienteId) || null,
+            cliente_ruc: ruc || null,
             proveedor: proveedor || razonSocial,
             tipo_documento: tipoDocumento || null,
             numero_documento: numeroDocumento || null,
@@ -184,8 +186,11 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     insertados++;
                 } catch {
                     try {
-                        const existing = await productService.getProducts({ busqueda: prod.codigo });
-                        const found = (existing || []).find(p => p.codigo === prod.codigo);
+                        const existing = await productService.getProducts({ 
+                            busqueda: prod.codigo,
+                            cliente_id: globales.cliente_id 
+                        });
+                        const found = (existing || []).find(p => p.codigo === prod.codigo && Number(p.cliente_id) === Number(globales.cliente_id));
                         if (found) {
                             await productService.updateProduct(found.id, { ...prod });
                             actualizados++;
@@ -226,6 +231,8 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
         if (manualRows.length === 0) { alert('Agregue al menos un producto.'); return; }
 
         const globales = {
+            cliente_id: Number(clienteId) || null,
+            cliente_ruc: ruc || null,
             proveedor: proveedor || razonSocial,
             tipo_documento: tipoDocumento || null,
             numero_documento: numeroDocumento || null,
@@ -261,8 +268,11 @@ export const CargaMasivaForm = ({ onCancel, onSuccess }) => {
                     insertados++;
                 } catch {
                     try {
-                        const existing = await productService.getProducts({ busqueda: prod.codigo });
-                        const found = (existing || []).find(p => p.codigo === prod.codigo);
+                        const existing = await productService.getProducts({ 
+                            busqueda: prod.codigo,
+                            cliente_id: globales.cliente_id
+                        });
+                        const found = (existing || []).find(p => p.codigo === prod.codigo && Number(p.cliente_id) === Number(globales.cliente_id));
                         if (found) { await productService.updateProduct(found.id, prod); actualizados++; }
                     } catch (e2) { console.error('Error actualizando', prod.codigo, e2); }
                 }

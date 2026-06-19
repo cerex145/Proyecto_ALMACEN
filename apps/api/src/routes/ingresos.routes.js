@@ -1357,7 +1357,10 @@ async function ingresosRoutes(fastify, options) {
                 let faltanteProducto = false;
 
                 for (const detalle of grupo.detalles) {
-                    let producto = await productoRepo.findOneBy({ codigo: detalle.codigo_producto });
+                    let producto = await productoRepo.findOneBy({ 
+                        codigo: detalle.codigo_producto,
+                        cliente_id: grupo.cliente_id
+                    });
                     if (!producto) {
                         // Auto-crear el producto si no existe
                         producto = productoRepo.create({
@@ -1367,6 +1370,9 @@ async function ingresosRoutes(fastify, options) {
                             um: detalle.um || null,
                             temperatura_min_c: detalle.temperatura_min_c || null,
                             temperatura_max_c: detalle.temperatura_max_c || null,
+                            cliente_id: grupo.cliente_id,
+                            cliente_ruc: grupo.cliente_ruc || null,
+                            proveedor: grupo.proveedor || null,
                             activo: 1
                         });
                         await productoRepo.save(producto);

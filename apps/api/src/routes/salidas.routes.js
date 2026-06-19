@@ -1402,26 +1402,31 @@ async function salidasRoutes(fastify, options) {
                 const loteNumeroLimpio = String(loteNumero || '').trim();
 
                 if (loteNumeroLimpio) {
-                    // Buscar el producto que tiene ese codigo Y tiene ese lote en su tabla de lotes
+                    // Buscar el producto que tiene ese codigo Y tiene ese lote en su tabla de lotes Y corresponde al cliente
                     producto = await productoRepo
                         .createQueryBuilder('producto')
                         .innerJoin('producto.lotes', 'lote')
                         .where('producto.codigo = :codigo', { codigo: String(codigoProducto) })
                         .andWhere('lote.numero_lote = :lote', { lote: loteNumeroLimpio })
+                        .andWhere('(producto.cliente_id = :clienteId OR producto.cliente_ruc = :clienteRuc)', { clienteId: cliente.id, clienteRuc: cliente.cuit })
                         .getOne();
 
-                    // Si no encontró por lotes, intentar por el campo lote directo del producto
+                    // Si no encontró por lotes, intentar por el campo lote directo del producto Y cliente
                     if (!producto) {
                         producto = await productoRepo.findOneBy({
                             codigo: String(codigoProducto),
-                            lote: loteNumeroLimpio
+                            lote: loteNumeroLimpio,
+                            cliente_id: cliente.id
                         });
                     }
                 }
 
-                // Fallback: si no vino lote o no se encontró por lote, buscar solo por codigo
+                // Fallback: si no vino lote o no se encontró por lote, buscar solo por codigo Y cliente
                 if (!producto) {
-                    producto = await productoRepo.findOneBy({ codigo: String(codigoProducto) });
+                    producto = await productoRepo.findOneBy({ 
+                        codigo: String(codigoProducto),
+                        cliente_id: cliente.id
+                    });
                 }
 
                 if (!producto) {
