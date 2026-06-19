@@ -189,22 +189,35 @@ export const NotaSalidaForm = () => {
         const codigoCanonico = normalizeProductCode(codigoRaw);
         const codigoNoInformativo = !codigoCanonico || codigo === '-' || codigo === '--';
 
-        const candidatosPorCodigo = (Array.isArray(productos) ? productos : []).filter((p) => {
-            const codigoProducto = normalizeText(p?.codigo || '');
-            const codigoProductoCanonico = normalizeProductCode(p?.codigo || '');
+        let candidatosPorCodigo = [];
+        if (codigoNoInformativo) {
+            candidatosPorCodigo = (Array.isArray(productos) ? productos : []).filter((p) => {
+                const codigoProducto = normalizeText(p?.codigo || '');
+                const codigoProductoCanonico = normalizeProductCode(p?.codigo || '');
+                return !codigoProductoCanonico || codigoProducto === '-' || codigoProducto === '--';
+            });
+        } else {
+            // Primero, buscar coincidencias exactas por código
+            candidatosPorCodigo = (Array.isArray(productos) ? productos : []).filter((p) => {
+                const codigoProducto = normalizeText(p?.codigo || '');
+                const codigoProductoCanonico = normalizeProductCode(p?.codigo || '');
+                return (codigoProducto && codigoProducto === codigo)
+                    || (codigoProductoCanonico && codigoCanonico && codigoProductoCanonico === codigoCanonico);
+            });
 
-            if (codigoNoInformativo) {
-                const isProdCodeNoInformativo = !codigoProductoCanonico || codigoProducto === '-' || codigoProducto === '--';
-                return isProdCodeNoInformativo;
+            // Si no hay exactos, buscar coincidencias parciales (fuzzy)
+            if (candidatosPorCodigo.length === 0) {
+                candidatosPorCodigo = (Array.isArray(productos) ? productos : []).filter((p) => {
+                    const codigoProducto = normalizeText(p?.codigo || '');
+                    const codigoProductoCanonico = normalizeProductCode(p?.codigo || '');
+                    return (codigoProducto && (codigoProducto.includes(codigo) || codigo.includes(codigoProducto)))
+                        || (codigoProductoCanonico && codigoCanonico && (
+                            codigoProductoCanonico.includes(codigoCanonico)
+                            || codigoCanonico.includes(codigoProductoCanonico)
+                        ));
+                });
             }
-
-            return (codigoProducto && (codigoProducto === codigo || codigoProducto.includes(codigo) || codigo.includes(codigoProducto)))
-                || (codigoProductoCanonico && codigoCanonico && (
-                    codigoProductoCanonico === codigoCanonico
-                    || codigoProductoCanonico.includes(codigoCanonico)
-                    || codigoCanonico.includes(codigoProductoCanonico)
-                ));
-        });
+        }
 
         const candidatosCodigoUnicos = dedupeById(candidatosPorCodigo);
         if (candidatosCodigoUnicos.length === 0) {
