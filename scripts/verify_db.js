@@ -1,8 +1,15 @@
 const { Client } = require('pg');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', 'apps', 'api', '.env') });
+
+if (!process.env.DATABASE_URL) {
+  console.error('Falta DATABASE_URL. Configuralo en apps/api/.env antes de ejecutar este script.');
+  process.exit(1);
+}
 
 const client = new Client({
-  connectionString: 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres',
-  ssl: { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
 });
 
 async function verify() {

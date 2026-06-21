@@ -6,8 +6,14 @@
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', 'apps', 'api', '.env') });
 
-const DATABASE_URL = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+    console.error('Falta DATABASE_URL. Configuralo en apps/api/.env antes de ejecutar este script.');
+    process.exit(1);
+}
 
 // Tablas a exportar (en orden para respetar FK)
 const TABLAS = [
@@ -39,7 +45,7 @@ function escapeVal(val) {
 async function backup() {
     const client = new Client({
         connectionString: DATABASE_URL,
-        ssl: { rejectUnauthorized: false }
+        ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false }
     });
 
     await client.connect();

@@ -80,7 +80,8 @@ async function kardexRoutes(fastify, options) {
         return kardexSchemaInfo;
     };
 
-    // GET /api/kardex/testing/delete-hdm
+    // Maintenance-only cleanup route. Disabled unless explicitly enabled in development.
+    if (process.env.ENABLE_DANGEROUS_MAINTENANCE_ROUTES === 'true' && process.env.NODE_ENV !== 'production') {
     fastify.get('/api/kardex/testing/delete-hdm', async (request, reply) => {
         const queryRunner = kardexRepo.manager.connection.createQueryRunner();
         await queryRunner.connect();
@@ -126,6 +127,7 @@ async function kardexRoutes(fastify, options) {
             await queryRunner.release();
         }
     });
+    }
 
     // GET /api/kardex - Listar movimientos (con datos del producto)
     fastify.get('/api/kardex', {

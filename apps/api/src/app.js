@@ -6,13 +6,18 @@ const swaggerUi = require('@fastify/swagger-ui');
 const dbPlugin = require('./plugins/database.plugin');
 
 async function buildApp(fastify, options) {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret && process.env.NODE_ENV === 'production') {
+        throw new Error('JWT_SECRET es obligatorio en production');
+    }
+
     await fastify.register(cors, {
         origin: true, // Allow all origins for development/Electron
         credentials: true
     });
 
     await fastify.register(jwt, {
-        secret: process.env.JWT_SECRET || 'your-super-secret-key-change-this'
+        secret: jwtSecret || 'dev-only-jwt-secret-change-me'
     });
 
     await fastify.register(multipart, {
