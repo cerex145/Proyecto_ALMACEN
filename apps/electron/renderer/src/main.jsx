@@ -13,19 +13,31 @@ window.fetch = (input, init) => {
     return match ? `${API_ORIGIN}${match[2]}` : url
   }
 
+  const withAuthHeader = (requestInit = {}) => {
+    const token = localStorage.getItem('token')
+    if (!token) return requestInit
+
+    const headers = new Headers(requestInit.headers || {})
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+
+    return { ...requestInit, headers }
+  }
+
   if (typeof input === 'string') {
-    return originalFetch(toCloudUrl(input), init)
+    return originalFetch(toCloudUrl(input), withAuthHeader(init))
   }
 
   if (input instanceof Request) {
     const rewrittenUrl = toCloudUrl(input.url)
     if (rewrittenUrl !== input.url) {
       const rewrittenRequest = new Request(rewrittenUrl, input)
-      return originalFetch(rewrittenRequest, init)
+      return originalFetch(rewrittenRequest, withAuthHeader(init))
     }
   }
 
-  return originalFetch(input, init)
+  return originalFetch(input, withAuthHeader(init))
 }
 
 createRoot(document.getElementById('root')).render(

@@ -198,7 +198,9 @@ export const NotaIngresoForm = () => {
 
     const HEADER_ALIAS_CSV = {
         ruc: 'ruc_cliente',
-        ruc_proveedor: 'ruc_cliente',
+        ruc_proveedor: 'proveedor_ruc',
+        proveedor: 'proveedor',
+        fabricante_proveedor: 'proveedor',
         cod_producto: 'codigo_producto',
         codigo: 'codigo_producto',
         producto_codigo: 'codigo_producto',
@@ -400,7 +402,6 @@ export const NotaIngresoForm = () => {
         const client = clients.find(c => String(c.id) === String(selectedClient));
         if (client) {
             setClienteRuc(client.cuit || '');
-            setProveedorNombre(client.razon_social || '');
         }
     }, [selectedClient, clients]);
 
@@ -1365,6 +1366,8 @@ export const NotaIngresoForm = () => {
             producto_id: producto.id,
             producto_nombre: producto.descripcion,
             producto_codigo: producto.codigo,
+            proveedor: row.proveedor || producto.proveedor || '',
+            proveedor_ruc: row.proveedor_ruc || producto.proveedor_ruc || '',
             lote_numero: row.lote,
             fecha_vencimiento: normalizarFechaInput(row.fecha_vencimiento) || null,
             cantidad_bultos: parseNumber(row.cantidad_bultos, 0),
@@ -1560,7 +1563,17 @@ export const NotaIngresoForm = () => {
                         const loteBuscado = normalizarTexto(row.lote);
                         const isGeneric = !codigoBuscado || codigoBuscado === '-' || codigoBuscado === '--';
 
-                        let candidatosCodigo = deduplicarOpcionesCSV(products.filter(
+                        const rucFilaNormalizado = normalizarRuc(rucFila);
+                        const clienteFilaParaFiltro = buscarClientePorRuc(rucFilaNormalizado);
+                        const candidatosDelCliente = products.filter((p) => {
+                            if (!clienteFilaParaFiltro && !rucFila) return true;
+                            const prodClienteId = p?.cliente_id != null ? String(p.cliente_id) : '';
+                            const prodClienteRuc = normalizarRuc(p?.cliente_ruc || p?.cliente_cuit || p?.ruc_cliente || '');
+                            return (clienteFilaParaFiltro && prodClienteId === String(clienteFilaParaFiltro.id))
+                                || (rucFilaNormalizado && prodClienteRuc === rucFilaNormalizado);
+                        });
+
+                        let candidatosCodigo = deduplicarOpcionesCSV(candidatosDelCliente.filter(
                             (p) => {
                                 if (isGeneric) {
                                     const codeMatch = coincideCodigoProducto(p, codigoBuscado);
@@ -1580,11 +1593,12 @@ export const NotaIngresoForm = () => {
                             if (!cacheProductosResueltos.has(cacheKey)) {
                                 try {
                                     const clienteFila = buscarClientePorRuc(rucFila);
+                                    const proveedorFila = String(row.proveedor || row.fabricante || proveedorNombre || '').trim();
                                     const respuestaResolucion = await productService.resolveOrCreateProducts({
                                         cliente_id: clienteFila ? Number(clienteFila.id) : null,
                                         cliente_ruc: rucFila,
-                                        proveedor: String(proveedorNombre || clienteFila?.razon_social || '').trim() || null,
-                                        proveedor_ruc: rucFila,
+                                        proveedor: proveedorFila || null,
+                                        proveedor_ruc: normalizarRuc(row.proveedor_ruc || '') || null,
                                         productos: [{
                                             codigo: codigoBuscado,
                                             descripcion: row.nombre || row.descripcion || '',
@@ -1693,7 +1707,10 @@ export const NotaIngresoForm = () => {
 
                 setSelectedClient(String(clienteDetectado.id));
                 setClienteRuc(clienteDetectado.cuit || clienteDetectado.ruc || rucDetectado);
-                setProveedorNombre(clienteDetectado.razon_social || '');
+                const proveedorDetectado = productosImportados
+                    .map((item) => String(item.proveedor || item.fabricante || '').trim())
+                    .find(Boolean);
+                setProveedorNombre(proveedorDetectado || '');
                 if (fechaIngresoDetectada) {
                     setValue('fecha', fechaIngresoDetectada);
                 }
@@ -1997,7 +2014,7 @@ export const NotaIngresoForm = () => {
                                     setVencimiento('');
                                     const client = clients.find(c => String(c.id) === String(e.target.value));
                                     if (client) {
-                                        setProveedorNombre(client.razon_social || '');
+                                        setProveedorNombre('');
                                     }
                                 }}
                                 className="input-premium"

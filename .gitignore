@@ -28,6 +28,13 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Documentos locales, instaladores y temporales de Excel
+docs/*.exe
+docs/*.xlsx
+docs/*.xls
+docs/~$*
+docs/*_CORREGIDO.xlsx
+
 # Electron
 out/
 

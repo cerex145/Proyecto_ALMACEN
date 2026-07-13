@@ -164,8 +164,28 @@ async function buildApp(fastify, options) {
         try {
             await request.jwtVerify();
         } catch (err) {
-            reply.send(err);
+            reply.code(401).send({ success: false, error: 'No autorizado' });
         }
+    });
+
+    const requireAuth = process.env.REQUIRE_AUTH === 'true';
+    const publicApiRoutes = new Set([
+        '/api/usuarios/login',
+        '/api/usuarios/registro'
+    ]);
+
+    fastify.addHook('onRequest', async (request, reply) => {
+        if (!requireAuth || request.method === 'OPTIONS') return;
+
+        const currentPath = request.routerPath || request.url.split('?')[0];
+        const isPublic = currentPath === '/'
+            || currentPath === '/health'
+            || currentPath.startsWith('/docs')
+            || publicApiRoutes.has(currentPath);
+
+        if (isPublic) return;
+
+        await fastify.authenticate(request, reply);
     });
 
     // Register routes

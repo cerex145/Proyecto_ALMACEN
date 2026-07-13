@@ -760,7 +760,7 @@ async function ingresosRoutes(fastify, options) {
                 fecha,
                 cliente_id: Number(cliente.id),
                 cliente_ruc: cliente.cuit || null,
-                proveedor: cliente.razon_social || proveedor || null,
+                proveedor: proveedor || null,
                 tipo_documento: tipo_documento || null,
                 numero_documento: numero_documento || null,
                 responsable_id,
@@ -779,9 +779,56 @@ async function ingresosRoutes(fastify, options) {
                     // We need to fetch product again to ensure we have latest stock if we want to be strict, or just trust the check above?
                     // The loop above didn't fetching product! It fetched inside loop.
 
-                    const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
+                    let producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
                     if (!producto) {
                         throw new Error(`Producto ${detalle.producto_id} no encontrado`);
+                    }
+
+                    const productoClienteId = producto.cliente_id != null ? Number(producto.cliente_id) : null;
+                    const clienteIdNota = cliente.id != null ? Number(cliente.id) : null;
+                    const productoClienteRuc = normalizarRuc(producto.cliente_ruc || '');
+                    const clienteRucNota = normalizarRuc(cliente.cuit || '');
+                    const mismoCliente = (clienteIdNota != null && productoClienteId === clienteIdNota)
+                        || (clienteRucNota && productoClienteRuc === clienteRucNota);
+
+                    if (!mismoCliente) {
+                        const productoCorrecto = await transactionalEntityManager
+                            .getRepository('Producto')
+                            .createQueryBuilder('producto')
+                            .where('producto.codigo = :codigo', { codigo: producto.codigo })
+                            .andWhere('(producto.cliente_id = :clienteId OR producto.cliente_ruc = :clienteRuc)', {
+                                clienteId: cliente.id,
+                                clienteRuc: cliente.cuit || ''
+                            })
+                            .orderBy('producto.updated_at', 'DESC')
+                            .addOrderBy('producto.id', 'DESC')
+                            .getOne();
+
+                        if (productoCorrecto) {
+                            detalle.producto_id = productoCorrecto.id;
+                            producto = productoCorrecto;
+                        } else {
+                            const nuevoProducto = productoRepo.create({
+                                codigo: producto.codigo,
+                                descripcion: producto.descripcion,
+                                cliente_id: cliente.id,
+                                cliente_ruc: cliente.cuit || null,
+                                proveedor: proveedor || null,
+                                proveedor_ruc: null,
+                                fabricante: detalle.fabricante || producto.fabricante || null,
+                                procedencia: producto.procedencia || null,
+                                lote: detalle.lote_numero || producto.lote || null,
+                                numero_documento: numero_documento || producto.numero_documento || null,
+                                tipo_documento: tipo_documento || producto.tipo_documento || null,
+                                registro_sanitario: producto.registro_sanitario || null,
+                                temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || producto.temperatura_min_c || null,
+                                temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || producto.temperatura_max_c || null,
+                                unidad_medida: detalle.um || producto.unidad_medida || null,
+                                activo: producto.activo ?? 1
+                            });
+                            producto = await transactionalEntityManager.save('Producto', nuevoProducto);
+                            detalle.producto_id = producto.id;
+                        }
                     }
 
                     // Crear detalle
