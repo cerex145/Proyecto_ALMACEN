@@ -698,7 +698,8 @@ export const NotaSalidaForm = () => {
             const client = clients.find(c => String(c.id) === String(selectedClient));
             if (!client) { setCargandoNotas(false); return; }
 
-            const url = `${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}&busqueda=${encodeURIComponent(buscarNota.trim())}&include_detalles=true`;
+            const clientRuc = client.cuit || client.ruc || client.ruc_cliente || '';
+            const url = `${API_ORIGIN}/api/ingresos?cliente_id=${encodeURIComponent(client.id)}&cliente_ruc=${encodeURIComponent(clientRuc)}&busqueda=${encodeURIComponent(buscarNota.trim())}&include_detalles=true`;
             const response = await fetch(url);
             const result = await response.json();
             const notas = result.data || [];
@@ -760,7 +761,8 @@ export const NotaSalidaForm = () => {
             if (!client) { setCargandoLote(false); return; }
 
             // Busca notas del cliente con ese lote en sus detalles
-            const url = `${API_ORIGIN}/api/ingresos?proveedor=${encodeURIComponent(client.razon_social)}&busqueda=${encodeURIComponent(buscarLote.trim())}&include_detalles=true`;
+            const clientRuc = client.cuit || client.ruc || client.ruc_cliente || '';
+            const url = `${API_ORIGIN}/api/ingresos?cliente_id=${encodeURIComponent(client.id)}&cliente_ruc=${encodeURIComponent(clientRuc)}&busqueda=${encodeURIComponent(buscarLote.trim())}&include_detalles=true`;
             const response = await fetch(url);
             const result = await response.json();
             const notas = result.data || [];
