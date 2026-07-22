@@ -489,10 +489,24 @@ async function ingresosRoutes(fastify, options) {
         }
 
         if (proveedor) {
+            queryBuilder.leftJoin('clientes', 'clienteFiltroProveedor', 'clienteFiltroProveedor.id = nota.cliente_id');
+            const proveedorTexto = String(proveedor).trim();
             if (busqueda) {
-                queryBuilder.andWhere('nota.proveedor = :proveedor', { proveedor });
+                queryBuilder.andWhere(`
+                    (
+                        nota.proveedor = :proveedor
+                        OR clienteFiltroProveedor.razon_social = :proveedor
+                        OR regexp_replace(coalesce(clienteFiltroProveedor.cuit, ''), '\\D', '', 'g') = regexp_replace(:proveedor, '\\D', '', 'g')
+                    )
+                `, { proveedor: proveedorTexto });
             } else {
-                queryBuilder.where('nota.proveedor = :proveedor', { proveedor });
+                queryBuilder.where(`
+                    (
+                        nota.proveedor = :proveedor
+                        OR clienteFiltroProveedor.razon_social = :proveedor
+                        OR regexp_replace(coalesce(clienteFiltroProveedor.cuit, ''), '\\D', '', 'g') = regexp_replace(:proveedor, '\\D', '', 'g')
+                    )
+                `, { proveedor: proveedorTexto });
             }
         }
 
