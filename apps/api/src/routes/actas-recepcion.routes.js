@@ -513,7 +513,7 @@ module.exports = async function (fastify, opts) {
                                     { text: checkConteoMuestreo ? 'X' : '', style: 'checkbox', alignment: 'center' }
                                 ],
                                 [
-                                    { text: 'CONT. SIM APERT. DE CAJA', style: 'labelSmall' },
+                                    { text: 'CONT. SIN APERT. DE CAJA', style: 'labelSmall' },
                                     { text: 'C', style: 'labelBoldSmall', alignment: 'center' },
                                     { text: checkConteoSinApertura ? 'X' : '', style: 'checkbox', alignment: 'center' }
                                 ]

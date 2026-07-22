@@ -111,7 +111,7 @@ const ActaRecepcionLayout = () => {
                                 <div className="border-b border-r border-black p-1 text-center flex items-center justify-center font-bold">B</div>
                                 <div className="border-b border-black p-1 text-center flex items-center justify-center"></div>
 
-                                <div className="border-r border-black p-1 text-center flex items-center justify-center font-bold text-[8px]">CONT. SIM APERT. DE CAJA</div>
+                                <div className="border-r border-black p-1 text-center flex items-center justify-center font-bold text-[8px]">CONT. SIN APERT. DE CAJA</div>
                                 <div className="border-r border-black p-1 text-center flex items-center justify-center font-bold">C</div>
                                 <div className="border-black p-1 text-center flex items-center justify-center font-bold text-[9px]">15° - 25° C</div>
                             </div>
