@@ -1662,14 +1662,28 @@ async function ingresosRoutes(fastify, options) {
             });
         }
 
-        const proveedor = String(nota.proveedor || '').trim();
-        const cliente = proveedor
-            ? await clienteRepo
+        const notaClienteRuc = normalizarRuc(nota.cliente_ruc || '');
+        let cliente = null;
+
+        if (nota.cliente_id) {
+            cliente = await clienteRepo.findOneBy({ id: Number(nota.cliente_id) });
+        }
+
+        if (!cliente && notaClienteRuc) {
+            cliente = await clienteRepo
+                .createQueryBuilder('cliente')
+                .where("regexp_replace(coalesce(cliente.cuit, ''), '\\D', '', 'g') = :ruc", { ruc: notaClienteRuc })
+                .getOne();
+        }
+
+        if (!cliente && nota.proveedor) {
+            const proveedor = String(nota.proveedor || '').trim();
+            cliente = await clienteRepo
                 .createQueryBuilder('cliente')
                 .where('cliente.razon_social = :proveedor', { proveedor })
                 .orWhere('cliente.razon_social LIKE :proveedorLike', { proveedorLike: `%${proveedor}%` })
-                .getOne()
-            : null;
+                .getOne();
+        }
 
         const detalles = await notaIngresoDetalleRepo.find({
             where: {
@@ -1677,6 +1691,26 @@ async function ingresosRoutes(fastify, options) {
             },
             relations: ['producto']
         });
+
+        const formatFechaPdf = (value) => {
+            if (!value) return '-';
+            if (value instanceof Date) {
+                const y = value.getUTCFullYear();
+                const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+                const d = String(value.getUTCDate()).padStart(2, '0');
+                return `${d}/${m}/${y}`;
+            }
+            const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) {
+                const y = parsed.getUTCFullYear();
+                const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+                const d = String(parsed.getUTCDate()).padStart(2, '0');
+                return `${d}/${m}/${y}`;
+            }
+            return String(value);
+        };
 
         // Calcular totales para el footer
         const totalBultos = detalles.reduce((acc, d) => acc + Number(d.cantidad_bultos || 0), 0);
@@ -1740,7 +1774,7 @@ async function ingresosRoutes(fastify, options) {
                                 {
                                     columns: [
                                         { text: 'Razón Social :', width: 80, style: 'labelBold' },
-                                        { text: nota.proveedor || '-', style: 'labelText' }
+                                        { text: cliente?.razon_social || '-', style: 'labelText' }
                                     ]
                                 },
                                 {
@@ -1770,7 +1804,7 @@ async function ingresosRoutes(fastify, options) {
                                 {
                                     columns: [
                                         { text: 'Fecha de Ingreso:', width: '*', alignment: 'right', style: 'labelBold' },
-                                        { text: new Date(nota.fecha).toLocaleDateString('es-PE'), width: 100, alignment: 'right', style: 'labelText' }
+                                        { text: formatFechaPdf(nota.fecha), width: 100, alignment: 'right', style: 'labelText' }
                                     ]
                                 },
                                 {
@@ -1812,7 +1846,7 @@ async function ingresosRoutes(fastify, options) {
                                 { text: d.producto?.codigo || '-', style: 'tableCell' },
                                 { text: d.producto?.descripcion || '-', style: 'tableCell', alignment: 'left' },
                                 { text: d.lote_numero || '-', style: 'tableCell' },
-                                { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '-', style: 'tableCell' },
+                                { text: formatFechaPdf(d.fecha_vencimiento), style: 'tableCell' },
                                 { text: d.producto?.unidad || 'UND', style: 'tableCell' },
                                 { text: d.producto?.fabricante || '-', style: 'tableCell' },
                                 { text: '15°C a 25°C', style: 'tableCell' },
