@@ -81,6 +81,35 @@ export const ActaRecepcionForm = () => {
         }, 3500);
     };
 
+    const normalizeText = (value) => String(value || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\b(s\.?a\.?c\.?|e\.?i\.?r\.?l\.?|s\.?r\.?l\.?|s\.?a\.?)\b/g, '')
+        .replace(/[^a-z0-9]/g, '');
+
+    const normalizeRuc = (value) => String(value || '').replace(/\D/g, '');
+
+    const findClientForNota = (nota) => {
+        const notaClienteId = nota?.cliente_id != null ? String(nota.cliente_id) : '';
+        const notaClienteRuc = normalizeRuc(nota?.cliente_ruc || nota?.ruc_cliente || '');
+        const proveedorText = String(nota?.proveedor || '').trim();
+        const proveedorRuc = normalizeRuc(proveedorText);
+        const proveedorKey = normalizeText(proveedorText);
+
+        return clients.find((client) => {
+            const clientId = client?.id != null ? String(client.id) : '';
+            const clientRuc = normalizeRuc(client?.cuit || client?.ruc || '');
+            const clientNameKey = normalizeText(client?.razon_social || client?.nombre || '');
+
+            return (notaClienteId && clientId === notaClienteId)
+                || (notaClienteRuc && clientRuc === notaClienteRuc)
+                || (proveedorRuc && clientRuc === proveedorRuc)
+                || (proveedorKey && clientNameKey === proveedorKey);
+        });
+    };
+
     useEffect(() => {
         loadClients();
         loadNotasIngreso();
@@ -158,7 +187,7 @@ export const ActaRecepcionForm = () => {
 
     const loadNotasIngreso = async () => {
         try {
-            const result = await ingresosService.listar();
+            const result = await ingresosService.listar({ limit: 500 });
             const notas = result.data || [];
             setNotasIngreso(notas);
         } catch (error) {
@@ -205,16 +234,11 @@ export const ActaRecepcionForm = () => {
 
             const proveedorNota = String(nota.proveedor || '').trim();
             const proveedorAsignar = primerFabricante || proveedorNota;
+            const clientMatch = findClientForNota(nota);
 
-            if (proveedorNota) {
+            if (proveedorAsignar || clientMatch) {
                 setProveedorNombre(proveedorAsignar);
                 setValue('proveedor', proveedorAsignar);
-
-                const proveedorKey = proveedorNota.toLowerCase();
-                const clientMatch = clients.find((client) => {
-                    const razon = String(client.razon_social || '').trim().toLowerCase();
-                    return razon && razon === proveedorKey;
-                });
 
                 if (clientMatch) {
                     const clientId = String(clientMatch.id);
@@ -222,7 +246,7 @@ export const ActaRecepcionForm = () => {
                     setClienteRuc(clientMatch.cuit || '');
                     setValue('cliente_id', clientId);
                 } else {
-                    alert(`El proveedor/cliente "${proveedorNota}" del ingreso no fue encontrado en el catálogo de clientes. Por favor, asigne el cliente manualmente.`);
+                    alert(`No se pudo identificar el cliente de la nota de ingreso "${nota.numero_ingreso || nota.id}". Por favor, asigne el cliente manualmente.`);
                     setSelectedClient('');
                     setClienteRuc('');
                     setValue('cliente_id', '');
@@ -296,7 +320,7 @@ export const ActaRecepcionForm = () => {
 
     const loadClients = async () => {
         try {
-            const clientsResponse = await clientesService.listar();
+            const clientsResponse = await clientesService.listar({ limit: 1000, activo: true });
             const clientsArray = Array.isArray(clientsResponse) ? clientsResponse : (clientsResponse.data || []);
             setClients(clientsArray);
         } catch (error) {

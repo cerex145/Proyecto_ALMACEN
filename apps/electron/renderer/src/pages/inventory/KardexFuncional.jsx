@@ -507,6 +507,7 @@ export const KardexFuncional = () => {
                                     <th style={s.th}>Lote</th>
                                     <th style={s.th}>Documento</th>
                                     <th style={s.th}>N° Doc.</th>
+                                    <th style={s.th}>Guia</th>
                                     <th style={s.thRight}>Ingreso</th>
                                     <th style={s.thRight}>Salida</th>
                                     <th style={s.thRight}>Saldo</th>
@@ -579,6 +580,10 @@ export const KardexFuncional = () => {
                                                 {mov.documento_numero || '—'}
                                             </td>
 
+                                            <td style={{ ...s.tdBase, fontWeight: 700, fontSize: '0.82rem', whiteSpace: 'nowrap', color: '#0f766e' }}>
+                                                {mov.numero_guia || '-'}
+                                            </td>
+
                                             {/* Ingreso */}
                                             <td style={{ ...s.tdBase, textAlign: 'right', fontWeight: 700, color: isIng ? '#16a34a' : '#cbd5e1', fontSize: '0.9rem' }}>
                                                 {isIng ? Number(mov.cantidad).toLocaleString('es-PE', { minimumFractionDigits: 2 }) : '—'}
@@ -638,7 +643,7 @@ export const KardexFuncional = () => {
                             {/* ── Fila de totales ── */}
                             <tfoot>
                                 <tr style={{ background: '#1e3a5f', color: 'white' }}>
-                                    <td colSpan="8" style={{ padding: '0.7rem 0.75rem', fontWeight: 700, fontSize: '0.85rem' }}>
+                                    <td colSpan="9" style={{ padding: '0.7rem 0.75rem', fontWeight: 700, fontSize: '0.85rem' }}>
                                         TOTALES ({movimientos.length} movimientos)
                                     </td>
                                     <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', fontWeight: 800, color: '#86efac', fontSize: '0.9rem' }}>

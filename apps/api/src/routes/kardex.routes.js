@@ -12,6 +12,7 @@ const KardexMovimientoSchema = {
         saldo: { type: 'number' },
         documento_tipo: { type: 'string', nullable: true },
         documento_numero: { type: 'string', nullable: true },
+        numero_guia: { type: 'string', nullable: true },
         referencia_id: { type: 'integer', nullable: true },
         observaciones: { type: 'string', nullable: true },
         created_at: { type: 'string', format: 'date-time' },
@@ -204,6 +205,7 @@ async function kardexRoutes(fastify, options) {
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 p.unidad_medida,
                 ni.numero_ingreso,
+                ni.numero_guia,
                 ni.proveedor as proveedor_ingreso,
                 ni.fecha as fecha_nota_ingreso,
                 ns.numero_salida,
@@ -239,8 +241,9 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (documento_numero) {
-            sql += ` AND k.documento_numero ILIKE $${paramIndex++}`;
+            sql += ` AND (k.documento_numero ILIKE $${paramIndex} OR ni.numero_guia ILIKE $${paramIndex})`;
             params.push(`%${documento_numero}%`);
+            paramIndex++;
         }
 
         if (cliente_nombre) {
@@ -313,6 +316,7 @@ async function kardexRoutes(fastify, options) {
             saldo: Number(row.saldo || 0),
             documento_tipo: row.documento_tipo || null,
             documento_numero: row.documento_numero || null,
+            numero_guia: row.numero_guia || null,
             observaciones: row.observaciones || '-',
             created_at: row.created_at,
             fecha_ingreso: row.fecha_nota_ingreso,
@@ -439,6 +443,7 @@ async function kardexRoutes(fastify, options) {
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 ni.proveedor as proveedor_ingreso,
+                ni.numero_guia,
                 ni.fecha as fecha_nota_ingreso,
                 ns.fecha as fecha_nota_salida,
                 ${clienteSelect} as cliente_nombre_salida
@@ -503,6 +508,7 @@ async function kardexRoutes(fastify, options) {
         worksheet.columns = [
             { header: 'Fecha', key: 'fecha', width: 20 },
             { header: 'Documento', key: 'documento', width: 25 },
+            { header: 'Guia', key: 'numero_guia', width: 18 },
             { header: 'Cliente / Proveedor', key: 'cliente_nombre', width: 40 },
             { header: 'Código Producto', key: 'codigo_producto', width: 15 },
             { header: 'Producto', key: 'descripcion', width: 40 },
@@ -575,6 +581,7 @@ async function kardexRoutes(fastify, options) {
             worksheet.addRow({
                 fecha: fechaFormateada,
                 documento: mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : 'N/A',
+                numero_guia: mov.numero_guia || '',
                 cliente_nombre: mov.proveedor_ingreso || mov.cliente_nombre_salida || 'N/A',
                 codigo_producto: mov.codigo_producto || 'N/A',
                 descripcion: mov.descripcion_producto || 'N/A',
