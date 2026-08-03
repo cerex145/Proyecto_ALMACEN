@@ -41,7 +41,6 @@ export const KardexFuncional = () => {
     const [movimientos, setMovimientos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [clientes, setClientes] = useState([]);
-    const [proveedores, setProveedores] = useState([]);
     const printRef = useRef(null);
 
     // Filtros
@@ -58,7 +57,6 @@ export const KardexFuncional = () => {
 
     useEffect(() => {
         cargarClientes();
-        cargarProveedores();
     }, []);
 
     useEffect(() => {
@@ -70,16 +68,6 @@ export const KardexFuncional = () => {
             const res = await fetch(`${API_ORIGIN}/api/clientes?limit=500&activo=true`);
             const d = await res.json();
             setClientes(d.data || []);
-        } catch (e) { console.error(e); }
-    };
-
-    const cargarProveedores = async () => {
-        try {
-            const res = await fetch(`${API_ORIGIN}/api/ingresos?limit=500`);
-            const d = await res.json();
-            const set = new Set();
-            (d.data || []).forEach(n => { if (n.proveedor) set.add(n.proveedor); });
-            setProveedores([...set].sort());
         } catch (e) { console.error(e); }
     };
 
@@ -395,29 +383,18 @@ export const KardexFuncional = () => {
                         />
                     </div>
 
-                    {/* Cliente / Proveedor */}
+                    {/* Cliente */}
                     <div style={s.filterGroup}>
-                        <label style={s.filterLabel}>🏢 Cliente / Proveedor</label>
+                        <label style={s.filterLabel}>🏢 Cliente</label>
                         <select
                             style={s.filterInput}
                             value={filtroCliente}
                             onChange={e => setFiltroCliente(e.target.value)}
                         >
                             <option value="">Todos</option>
-                            {clientes.length > 0 && (
-                                <optgroup label="— Clientes —">
-                                    {clientes.map(c => (
-                                        <option key={`c-${c.id}`} value={c.razon_social}>{c.razon_social}</option>
-                                    ))}
-                                </optgroup>
-                            )}
-                            {proveedores.filter(p => !clientes.some(c => c.razon_social === p)).length > 0 && (
-                                <optgroup label="— Proveedores —">
-                                    {proveedores
-                                        .filter(p => !clientes.some(c => c.razon_social === p))
-                                        .map((p, i) => <option key={`p-${i}`} value={p}>{p}</option>)}
-                                </optgroup>
-                            )}
+                            {clientes.map(c => (
+                                <option key={`c-${c.id}`} value={c.razon_social}>{c.razon_social}</option>
+                            ))}
                         </select>
                     </div>
 
@@ -512,7 +489,7 @@ export const KardexFuncional = () => {
                                     <th style={s.thRight}>Salida</th>
                                     <th style={s.thRight}>Saldo</th>
                                     <th style={s.th}>UM</th>
-                                    <th style={{ ...s.th, minWidth: 200 }}>Proveedor / Cliente</th>
+                                    <th style={{ ...s.th, minWidth: 200 }}>Cliente</th>
                                     <th style={{ ...s.th, minWidth: 160 }}>Observaciones</th>
                                 </tr>
                             </thead>
@@ -609,18 +586,18 @@ export const KardexFuncional = () => {
                                                 {mov.unidad_medida || 'UND'}
                                             </td>
 
-                                            {/* Proveedor / Cliente ← COLUMNA CLAVE */}
+                                            {/* Cliente */}
                                             <td style={{ ...s.tdBase, maxWidth: 220 }}>
                                                 {mov.cliente_nombre && mov.cliente_nombre !== 'N/A' && mov.cliente_nombre !== '-' ? (
                                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                                                         <span style={{
                                                             fontSize: '0.68rem', fontWeight: 700, padding: '0.1rem 0.35rem',
                                                             borderRadius: 4,
-                                                            color: isIng ? '#0369a1' : '#b45309',
-                                                            background: isIng ? '#e0f2fe' : '#fef3c7',
+                                                            color: '#0369a1',
+                                                            background: '#e0f2fe',
                                                             whiteSpace: 'nowrap', marginTop: 1,
                                                         }}>
-                                                            {isIng ? 'PROV.' : 'CLIE.'}
+                                                            CLIE.
                                                         </span>
                                                         <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', lineHeight: 1.3 }}>
                                                             {mov.cliente_nombre}

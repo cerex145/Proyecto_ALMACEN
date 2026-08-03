@@ -187,16 +187,6 @@ async function kardexRoutes(fastify, options) {
 
         // Query raw SQL para asegurar que trae los datos del producto
         const connection = kardexRepo.manager.connection;
-        const clienteSelect = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
-            ? 'c.razon_social'
-            : 'NULL';
-        const clienteJoin = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
-            ? 'LEFT JOIN clientes c ON ns.cliente_id = c.id'
-            : '';
-        const clienteFilterExpr = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
-            ? 'COALESCE(ni.proveedor, c.razon_social)'
-            : 'ni.proveedor';
-
         let sql = `
             SELECT 
                 k.id, k.producto_id, k.lote_numero, k.tipo_movimiento,
@@ -205,12 +195,17 @@ async function kardexRoutes(fastify, options) {
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 p.unidad_medida,
                 ni.numero_ingreso,
-                ni.numero_guia,
+                ni.numero_guia as numero_guia_sistema,
+                ni.tipo_documento as tipo_documento_ingreso,
+                ni.numero_documento as numero_documento_ingreso,
                 ni.proveedor as proveedor_ingreso,
                 ni.fecha as fecha_nota_ingreso,
                 ns.numero_salida,
+                ns.tipo_documento as tipo_documento_salida,
+                ns.numero_documento as numero_documento_salida,
                 ns.fecha as fecha_nota_salida,
-                ${clienteSelect} as cliente_nombre_salida
+                COALESCE(cliente_ingreso.razon_social, cliente_ingreso_ruc.razon_social) as cliente_nombre_ingreso,
+                COALESCE(cliente_salida.razon_social, cliente_origen_salida.razon_social) as cliente_nombre_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
             LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
@@ -219,7 +214,27 @@ async function kardexRoutes(fastify, options) {
             LEFT JOIN notas_salida ns ON k.documento_tipo IN ('NOTA_SALIDA', 'NOTA_SALIDA_CANCELADA')
                 AND k.referencia_id = ns.id
                 AND k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')
-            ${clienteJoin}
+            LEFT JOIN clientes cliente_ingreso ON ni.cliente_id = cliente_ingreso.id
+            LEFT JOIN clientes cliente_ingreso_ruc ON ni.cliente_id IS NULL
+                AND regexp_replace(coalesce(cliente_ingreso_ruc.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(ni.cliente_ruc, ''), '\\D', '', 'g')
+            LEFT JOIN clientes cliente_salida ON ns.cliente_id = cliente_salida.id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(cliente_lote.razon_social, cliente_lote_ruc.razon_social) as razon_social,
+                    COALESCE(cliente_lote.cuit, cliente_lote_ruc.cuit) as cuit
+                FROM lotes lote_salida
+                JOIN notas_ingreso ni_lote ON lote_salida.nota_ingreso_id = ni_lote.id
+                LEFT JOIN clientes cliente_lote ON ni_lote.cliente_id = cliente_lote.id
+                LEFT JOIN clientes cliente_lote_ruc ON ni_lote.cliente_id IS NULL
+                    AND regexp_replace(coalesce(cliente_lote_ruc.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(ni_lote.cliente_ruc, ''), '\\D', '', 'g')
+                WHERE k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')
+                    AND k.lote_numero IS NOT NULL
+                    AND k.lote_numero != '-'
+                    AND lote_salida.producto_id = k.producto_id
+                    AND lote_salida.numero_lote = k.lote_numero
+                ORDER BY lote_salida.id DESC
+                LIMIT 1
+            ) cliente_origen_salida ON true
             WHERE 1=1
         `;
 
@@ -241,7 +256,12 @@ async function kardexRoutes(fastify, options) {
         }
 
         if (documento_numero) {
-            sql += ` AND (k.documento_numero ILIKE $${paramIndex} OR ni.numero_guia ILIKE $${paramIndex})`;
+            sql += ` AND (
+                k.documento_numero ILIKE $${paramIndex}
+                OR ni.numero_documento ILIKE $${paramIndex}
+                OR ns.numero_documento ILIKE $${paramIndex}
+                OR ni.numero_guia ILIKE $${paramIndex}
+            )`;
             params.push(`%${documento_numero}%`);
             paramIndex++;
         }
@@ -249,20 +269,10 @@ async function kardexRoutes(fastify, options) {
         if (cliente_nombre) {
             // Mostrar INGRESO directo + SALIDA del cliente + SALIDA de productos que ese cliente ingresó
             sql += ` AND (
-                ni.proveedor ILIKE $${paramIndex}
-                OR c.razon_social ILIKE $${paramIndex}
-                OR (
-                    k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
-                    AND k.lote_numero IS NOT NULL
-                    AND k.lote_numero != '-'
-                    AND EXISTS (
-                        SELECT 1 FROM lotes l__cf
-                        JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
-                        WHERE l__cf.producto_id = k.producto_id
-                        AND l__cf.numero_lote = k.lote_numero
-                        AND ni__cf.proveedor ILIKE $${paramIndex}
-                    )
-                )
+                COALESCE(cliente_ingreso.razon_social, cliente_ingreso_ruc.razon_social, '') ILIKE $${paramIndex}
+                OR COALESCE(cliente_salida.razon_social, '') ILIKE $${paramIndex}
+                OR COALESCE(cliente_origen_salida.razon_social, '') ILIKE $${paramIndex}
+                OR COALESCE(cliente_ingreso.cuit, cliente_ingreso_ruc.cuit, cliente_salida.cuit, cliente_origen_salida.cuit, '') ILIKE $${paramIndex}
             )`;
             params.push(`%${cliente_nombre}%`);
             paramIndex++;
@@ -306,32 +316,40 @@ async function kardexRoutes(fastify, options) {
 
         const movimientos = await connection.query(sql, params);
 
+        const isGuiaDocumento = (tipo) => String(tipo || '').toLowerCase().includes('gu');
+        const cleanText = (value) => String(value || '').trim();
+
         // Mapear a estructura esperada
-        const data = movimientos.map(row => ({
-            id: row.id,
-            producto_id: row.producto_id,
-            lote_numero: row.lote_numero || null,
-            tipo_movimiento: row.tipo_movimiento,
-            cantidad: Number(row.cantidad),
-            saldo: Number(row.saldo || 0),
-            documento_tipo: row.documento_tipo || null,
-            documento_numero: row.documento_numero || null,
-            numero_guia: row.numero_guia || null,
-            observaciones: row.observaciones || '-',
-            created_at: row.created_at,
-            fecha_ingreso: row.fecha_nota_ingreso,
-            fecha_salida: row.fecha_nota_salida,
-            numero_ingreso: row.numero_ingreso || null,
-            numero_salida: row.numero_salida || null,
-            proveedor: row.proveedor_ingreso || null,
-            cliente_nombre: row.proveedor_ingreso || row.cliente_nombre_salida || null,
-            unidad_medida: row.unidad_medida || null,
-            producto: {
-                id: row.producto_id,
-                codigo: row.codigo_producto || 'N/A',
-                descripcion: row.descripcion_producto || 'N/A'
-            }
-        }));
+        const data = movimientos.map(row => {
+            const tipoDocumentoDigitado = row.tipo_documento_ingreso || row.tipo_documento_salida || null;
+            const numeroDocumentoDigitado = row.numero_documento_ingreso || row.numero_documento_salida || null;
+
+            return {
+                id: row.id,
+                producto_id: row.producto_id,
+                lote_numero: row.lote_numero || null,
+                tipo_movimiento: row.tipo_movimiento,
+                cantidad: Number(row.cantidad),
+                saldo: Number(row.saldo || 0),
+                documento_tipo: row.documento_tipo || null,
+                documento_numero: numeroDocumentoDigitado || row.documento_numero || null,
+                numero_guia: isGuiaDocumento(tipoDocumentoDigitado) ? numeroDocumentoDigitado : null,
+                observaciones: row.observaciones || '-',
+                created_at: row.created_at,
+                fecha_ingreso: row.fecha_nota_ingreso,
+                fecha_salida: row.fecha_nota_salida,
+                numero_ingreso: row.numero_ingreso || null,
+                numero_salida: row.numero_salida || null,
+                proveedor: row.proveedor_ingreso || null,
+                cliente_nombre: cleanText(row.cliente_nombre_ingreso || row.cliente_nombre_salida) || null,
+                unidad_medida: row.unidad_medida || null,
+                producto: {
+                    id: row.producto_id,
+                    codigo: row.codigo_producto || 'N/A',
+                    descripcion: row.descripcion_producto || 'N/A'
+                }
+            };
+        });
 
         return {
             success: true,
@@ -425,16 +443,7 @@ async function kardexRoutes(fastify, options) {
         let paramIndex = 1;
 
         const connection = kardexRepo.manager.connection;
-        const schemaInfo = await getKardexSchemaInfo();
-        const clienteSelect = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
-            ? 'c.razon_social'
-            : 'NULL';
-        const clienteJoin = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
-            ? 'LEFT JOIN clientes c ON ns.cliente_id = c.id'
-            : '';
-        const clienteFilterExpr = schemaInfo.hasNotaSalidaClienteId && schemaInfo.hasClienteRazonSocial
-            ? 'COALESCE(ni.proveedor, c.razon_social)'
-            : 'ni.proveedor';
+        await getKardexSchemaInfo();
 
         let sql = `
             SELECT 
@@ -443,15 +452,40 @@ async function kardexRoutes(fastify, options) {
                 k.referencia_id, k.observaciones, k.created_at,
                 p.codigo as codigo_producto, p.descripcion as descripcion_producto,
                 ni.proveedor as proveedor_ingreso,
-                ni.numero_guia,
+                ni.numero_guia as numero_guia_sistema,
+                ni.tipo_documento as tipo_documento_ingreso,
+                ni.numero_documento as numero_documento_ingreso,
                 ni.fecha as fecha_nota_ingreso,
+                ns.tipo_documento as tipo_documento_salida,
+                ns.numero_documento as numero_documento_salida,
                 ns.fecha as fecha_nota_salida,
-                ${clienteSelect} as cliente_nombre_salida
+                COALESCE(cliente_ingreso.razon_social, cliente_ingreso_ruc.razon_social) as cliente_nombre_ingreso,
+                COALESCE(cliente_salida.razon_social, cliente_origen_salida.razon_social) as cliente_nombre_salida
             FROM kardex k
             LEFT JOIN productos p ON k.producto_id = p.id
             LEFT JOIN notas_ingreso ni ON k.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente') AND k.referencia_id = ni.id AND k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
             LEFT JOIN notas_salida ns ON k.documento_tipo IN ('NOTA_SALIDA', 'NOTA_SALIDA_CANCELADA') AND k.referencia_id = ns.id AND k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')
-            ${clienteJoin}
+            LEFT JOIN clientes cliente_ingreso ON ni.cliente_id = cliente_ingreso.id
+            LEFT JOIN clientes cliente_ingreso_ruc ON ni.cliente_id IS NULL
+                AND regexp_replace(coalesce(cliente_ingreso_ruc.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(ni.cliente_ruc, ''), '\\D', '', 'g')
+            LEFT JOIN clientes cliente_salida ON ns.cliente_id = cliente_salida.id
+            LEFT JOIN LATERAL (
+                SELECT
+                    COALESCE(cliente_lote.razon_social, cliente_lote_ruc.razon_social) as razon_social,
+                    COALESCE(cliente_lote.cuit, cliente_lote_ruc.cuit) as cuit
+                FROM lotes lote_salida
+                JOIN notas_ingreso ni_lote ON lote_salida.nota_ingreso_id = ni_lote.id
+                LEFT JOIN clientes cliente_lote ON ni_lote.cliente_id = cliente_lote.id
+                LEFT JOIN clientes cliente_lote_ruc ON ni_lote.cliente_id IS NULL
+                    AND regexp_replace(coalesce(cliente_lote_ruc.cuit, ''), '\\D', '', 'g') = regexp_replace(coalesce(ni_lote.cliente_ruc, ''), '\\D', '', 'g')
+                WHERE k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')
+                    AND k.lote_numero IS NOT NULL
+                    AND k.lote_numero != '-'
+                    AND lote_salida.producto_id = k.producto_id
+                    AND lote_salida.numero_lote = k.lote_numero
+                ORDER BY lote_salida.id DESC
+                LIMIT 1
+            ) cliente_origen_salida ON true
             WHERE 1=1
         `;
 
@@ -469,20 +503,10 @@ async function kardexRoutes(fastify, options) {
 
         if (cliente_nombre) {
             sql += ` AND (
-                ni.proveedor ILIKE $${paramIndex}
-                OR c.razon_social ILIKE $${paramIndex}
-                OR (
-                    k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
-                    AND k.lote_numero IS NOT NULL
-                    AND k.lote_numero != '-'
-                    AND EXISTS (
-                        SELECT 1 FROM lotes l__cf
-                        JOIN notas_ingreso ni__cf ON l__cf.nota_ingreso_id = ni__cf.id
-                        WHERE l__cf.producto_id = k.producto_id
-                        AND l__cf.numero_lote = k.lote_numero
-                        AND ni__cf.proveedor ILIKE $${paramIndex}
-                    )
-                )
+                COALESCE(cliente_ingreso.razon_social, cliente_ingreso_ruc.razon_social, '') ILIKE $${paramIndex}
+                OR COALESCE(cliente_salida.razon_social, '') ILIKE $${paramIndex}
+                OR COALESCE(cliente_origen_salida.razon_social, '') ILIKE $${paramIndex}
+                OR COALESCE(cliente_ingreso.cuit, cliente_ingreso_ruc.cuit, cliente_salida.cuit, cliente_origen_salida.cuit, '') ILIKE $${paramIndex}
             )`;
             params.push(`%${cliente_nombre}%`);
             paramIndex++;
@@ -509,7 +533,7 @@ async function kardexRoutes(fastify, options) {
             { header: 'Fecha', key: 'fecha', width: 20 },
             { header: 'Documento', key: 'documento', width: 25 },
             { header: 'Guia', key: 'numero_guia', width: 18 },
-            { header: 'Cliente / Proveedor', key: 'cliente_nombre', width: 40 },
+            { header: 'Cliente', key: 'cliente_nombre', width: 40 },
             { header: 'Código Producto', key: 'codigo_producto', width: 15 },
             { header: 'Producto', key: 'descripcion', width: 40 },
             { header: 'Lote', key: 'lote_numero', width: 20 },
@@ -571,18 +595,23 @@ async function kardexRoutes(fastify, options) {
             }
         };
 
+        const isGuiaDocumento = (tipo) => String(tipo || '').toLowerCase().includes('gu');
+        const cleanText = (value) => String(value || '').trim();
+
         movimientos.forEach(mov => {
             const isIngreso = mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION';
             const isSalida = mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO' || mov.tipo_movimiento === 'SALIDA_REVERSA';
             
             const fechaDoc = isIngreso ? mov.fecha_nota_ingreso : (isSalida ? mov.fecha_nota_salida : null);
             const fechaFormateada = fechaDoc ? formatFecha(fechaDoc, true) : formatFecha(mov.created_at, false);
+            const tipoDocumentoDigitado = mov.tipo_documento_ingreso || mov.tipo_documento_salida || null;
+            const numeroDocumentoDigitado = mov.numero_documento_ingreso || mov.numero_documento_salida || null;
 
             worksheet.addRow({
                 fecha: fechaFormateada,
-                documento: mov.documento_numero ? `${mov.documento_tipo}: ${mov.documento_numero}` : 'N/A',
-                numero_guia: mov.numero_guia || '',
-                cliente_nombre: mov.proveedor_ingreso || mov.cliente_nombre_salida || 'N/A',
+                documento: (numeroDocumentoDigitado || mov.documento_numero) ? `${mov.documento_tipo}: ${numeroDocumentoDigitado || mov.documento_numero}` : 'N/A',
+                numero_guia: isGuiaDocumento(tipoDocumentoDigitado) ? (numeroDocumentoDigitado || '') : '',
+                cliente_nombre: cleanText(mov.cliente_nombre_ingreso || mov.cliente_nombre_salida) || 'N/A',
                 codigo_producto: mov.codigo_producto || 'N/A',
                 descripcion: mov.descripcion_producto || 'N/A',
                 lote_numero: mov.lote_numero || '-',
