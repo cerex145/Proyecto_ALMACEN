@@ -1239,15 +1239,39 @@ export const NotaSalidaForm = () => {
                 }
 
                 const motivoHeader = headers.includes('motivo_salida') ? 'motivo_salida' : '';
+                const valuesPrimeraFila = Array.isArray(rows[1]) ? rows[1] : [];
+                const primeraFila = {};
+                headers.forEach((header, index) => {
+                    primeraFila[header] = valuesPrimeraFila[index] || '';
+                });
+
                 if (motivoHeader) {
-                    const values = Array.isArray(rows[1]) ? rows[1] : [];
-                    const row = {};
-                    headers.forEach((header, index) => {
-                        row[header] = values[index] || '';
-                    });
+                    const row = primeraFila;
                     if (String(row.motivo_salida || '').trim()) {
                         setValue('motivo_salida', String(row.motivo_salida || '').trim());
                     }
+                }
+
+                const obtenerCampoPrimeraFila = (aliases) => {
+                    for (const alias of aliases) {
+                        const valor = primeraFila[normalizeText(alias)];
+                        if (String(valor || '').trim()) return String(valor).trim();
+                    }
+                    return '';
+                };
+
+                const tipoDocumentoImportado = obtenerCampoPrimeraFila(['tipo_documento', 'tipo documento', 'tipo doc', 'tipo de documento']);
+                const numeroDocumentoImportado = obtenerCampoPrimeraFila(['numero_documento', 'numero documento', 'nro_documento', 'nro documento', 'num_documento', 'num documento', 'numero_guia', 'numero guia', 'nro_guia', 'nro guia', 'n guia', 'n° guia', 'n° guía', 'guia', 'guía', 'guia salida', 'guía salida', 'guia de salida', 'guía de salida']);
+                const fechaIngresoImportada = normalizarFechaInput(obtenerCampoPrimeraFila(['fecha_ingreso', 'fecha ingreso']));
+
+                if (tipoDocumentoImportado || numeroDocumentoImportado) {
+                    setValue('tipo_documento', tipoDocumentoImportado || 'Guía de Remisión Remitente');
+                }
+                if (numeroDocumentoImportado) {
+                    setValue('numero_documento', numeroDocumentoImportado);
+                }
+                if (fechaIngresoImportada) {
+                    setValue('fecha_ingreso', fechaIngresoImportada);
                 }
 
                 const lotesCache = new Map();
@@ -1482,6 +1506,8 @@ export const NotaSalidaForm = () => {
         const headers = [
             'ruc_cliente',
             'fecha',
+            'tipo_documento',
+            'numero_documento',
             'motivo_salida',
             'codigo_producto',
             'lote',
@@ -1496,6 +1522,8 @@ export const NotaSalidaForm = () => {
         const ejemplo = [
             '20600124871',
             '2026-03-17',
+            'Guía de Remisión Remitente',
+            'T001-00000123',
             'Despacho comercial',
             'MED-001',
             'LOTE-2026-001',
@@ -1515,8 +1543,10 @@ export const NotaSalidaForm = () => {
         if (!ws['!cols']) ws['!cols'] = [];
         ws['!cols'][1] = { wch: 14 };
         ws['!cols'][0] = { wch: 15 };
-        ws['!cols'][3] = { wch: 18 };
-        ws['!cols'][4] = { wch: 16 };
+        ws['!cols'][2] = { wch: 28 };
+        ws['!cols'][3] = { wch: 20 };
+        ws['!cols'][5] = { wch: 18 };
+        ws['!cols'][6] = { wch: 16 };
 
         XLSX.utils.book_append_sheet(wb, ws, 'Salidas');
         XLSX.writeFile(wb, 'plantilla_nota_salida.xlsx');

@@ -78,7 +78,7 @@ module.exports = new EntitySchema({
         detalles: {
             type: 'one-to-many',
             target: 'NotaSalidaDetalle',
-            inverseSide: 'nota_salida'
+            inverseSide: 'notaSalida'
         }
     }
 });

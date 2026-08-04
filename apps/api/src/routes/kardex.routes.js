@@ -332,7 +332,7 @@ async function kardexRoutes(fastify, options) {
                 cantidad: Number(row.cantidad),
                 saldo: Number(row.saldo || 0),
                 documento_tipo: row.documento_tipo || null,
-                documento_numero: numeroDocumentoDigitado || row.documento_numero || null,
+                documento_numero: row.documento_numero || null,
                 numero_guia: isGuiaDocumento(tipoDocumentoDigitado) ? numeroDocumentoDigitado : null,
                 observaciones: row.observaciones || '-',
                 created_at: row.created_at,
@@ -532,6 +532,7 @@ async function kardexRoutes(fastify, options) {
         worksheet.columns = [
             { header: 'Fecha', key: 'fecha', width: 20 },
             { header: 'Documento', key: 'documento', width: 25 },
+            { header: 'N Doc', key: 'documento_numero', width: 15 },
             { header: 'Guia', key: 'numero_guia', width: 18 },
             { header: 'Cliente', key: 'cliente_nombre', width: 40 },
             { header: 'Código Producto', key: 'codigo_producto', width: 15 },
@@ -609,7 +610,8 @@ async function kardexRoutes(fastify, options) {
 
             worksheet.addRow({
                 fecha: fechaFormateada,
-                documento: (numeroDocumentoDigitado || mov.documento_numero) ? `${mov.documento_tipo}: ${numeroDocumentoDigitado || mov.documento_numero}` : 'N/A',
+                documento: mov.documento_tipo || 'N/A',
+                documento_numero: mov.documento_numero || '',
                 numero_guia: isGuiaDocumento(tipoDocumentoDigitado) ? (numeroDocumentoDigitado || '') : '',
                 cliente_nombre: cleanText(mov.cliente_nombre_ingreso || mov.cliente_nombre_salida) || 'N/A',
                 codigo_producto: mov.codigo_producto || 'N/A',

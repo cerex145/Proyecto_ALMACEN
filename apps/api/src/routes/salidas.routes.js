@@ -11,6 +11,10 @@ const NotaSalidaSchema = {
         fecha: { type: 'string', format: 'date' },
         cliente_id: { type: 'integer', nullable: true },
         cliente_ruc: { type: 'string', nullable: true },
+        tipo_documento: { type: 'string', nullable: true },
+        numero_documento: { type: 'string', nullable: true },
+        fecha_ingreso: { type: 'string', format: 'date', nullable: true },
+        motivo_salida: { type: 'string', nullable: true },
         estado: { type: 'string' },
         observaciones: { type: 'string', nullable: true }
     }
@@ -877,6 +881,10 @@ async function salidasRoutes(fastify, options) {
                 properties: {
                     estado: { type: 'string' },
                     observaciones: { type: 'string' },
+                    tipo_documento: { type: 'string', nullable: true },
+                    numero_documento: { type: 'string', nullable: true },
+                    fecha_ingreso: { type: 'string', nullable: true },
+                    motivo_salida: { type: 'string', nullable: true },
                     detalles: {
                         type: 'array',
                         items: {
@@ -902,7 +910,7 @@ async function salidasRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { estado, observaciones, detalles } = request.body;
+        const { estado, observaciones, detalles, tipo_documento, numero_documento, fecha_ingreso, motivo_salida } = request.body;
 
         const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
         if (!nota) {
@@ -913,7 +921,11 @@ async function salidasRoutes(fastify, options) {
             await fastify.db.transaction(async (transactionalEntityManager) => {
                 // Actualizar campos básicos de la nota
                 if (estado) nota.estado = estado;
-                if (observaciones) nota.observaciones = observaciones;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'observaciones')) nota.observaciones = observaciones || null;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'tipo_documento')) nota.tipo_documento = tipo_documento || null;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'numero_documento')) nota.numero_documento = numero_documento || null;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'fecha_ingreso')) nota.fecha_ingreso = fecha_ingreso || null;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'motivo_salida')) nota.motivo_salida = motivo_salida || null;
 
                 await transactionalEntityManager.save('NotaSalida', nota);
 
@@ -1344,6 +1356,9 @@ async function salidasRoutes(fastify, options) {
                 const cantXCajaTexto = obtenerValor(fila.valores, headerMap, ['cant x caja', 'cant.x caja', 'cant_x_caja', 'cantidad_por_caja'], null);
                 const cantFraccionTexto = obtenerValor(fila.valores, headerMap, ['cant.fraccion', 'cant_fraccion', 'cantidad_fraccion'], null);
                 const motivoSalida = obtenerValor(fila.valores, headerMap, ['motivo de salida', 'motivo_salida'], null);
+                const tipoDocumentoSalida = obtenerValor(fila.valores, headerMap, ['tipo_documento', 'tipo documento', 'tipo doc', 'tipo de documento'], null);
+                const numeroDocumentoSalida = obtenerValor(fila.valores, headerMap, ['numero_documento', 'numero documento', 'nro_documento', 'nro documento', 'num_documento', 'num documento', 'numero_guia', 'numero guia', 'nro_guia', 'nro guia', 'n guia', 'n° guia', 'guia', 'guia salida', 'guia de salida'], null);
+                const fechaIngresoTexto = obtenerValor(fila.valores, headerMap, ['fecha_ingreso', 'fecha ingreso'], null);
                 const loteNumero = obtenerValor(fila.valores, headerMap, ['lote', 'numero_lote'], null);
                 const fechaVctoTexto = obtenerValor(fila.valores, headerMap, ['fecha vcto', 'fecha_vencimiento'], null);
                 const umTexto = obtenerValor(fila.valores, headerMap, ['um', 'unidad_medida', 'unidad de medida'], null);
@@ -1366,6 +1381,8 @@ async function salidasRoutes(fastify, options) {
                 const cantCaja = parsearNumero(cantCajaTexto);
                 const cantXCaja = parsearNumero(cantXCajaTexto);
                 const cantFraccion = parsearNumero(cantFraccionTexto);
+                const numeroDocumentoLimpio = String(numeroDocumentoSalida || '').trim();
+                const tipoDocumentoFinal = String(tipoDocumentoSalida || '').trim() || (numeroDocumentoLimpio ? 'Guía de Remisión Remitente' : null);
 
                 if (!fechaSql || !codigoProducto || cantidad <= 0) {
                     errores.push(`Fila ${fila.rowNumber}: Faltan datos obligatorios (fecha/código producto/cantidad)`);
@@ -1439,7 +1456,10 @@ async function salidasRoutes(fastify, options) {
                     cliente,
                     producto,
                     fechaSql,
+                    fechaIngresoSql: toSqlDate(parsearFecha(fechaIngresoTexto)),
                     motivoSalida: motivoSalida || null,
+                    tipoDocumentoSalida: tipoDocumentoFinal,
+                    numeroDocumentoSalida: numeroDocumentoLimpio || null,
                     loteNumero: loteNumero || null,
                     fechaVencimientoSql: toSqlDate(parsearFecha(fechaVctoTexto)),
                     um: umTexto || producto.unidad_medida || null,
@@ -1454,13 +1474,16 @@ async function salidasRoutes(fastify, options) {
 
             const grupos = new Map();
             for (const item of detallesParseados) {
-                const key = `${item.cliente.id}|${item.fechaSql}|${item.motivoSalida || ''}`;
+                const key = `${item.cliente.id}|${item.fechaSql}|${item.motivoSalida || ''}|${item.tipoDocumentoSalida || ''}|${item.numeroDocumentoSalida || ''}|${item.fechaIngresoSql || ''}`;
                 if (!grupos.has(key)) {
                     grupos.set(key, {
                         cliente_id: item.cliente.id,
                         cliente_ruc: item.cliente.cuit || null,
                         fecha: item.fechaSql,
+                        fecha_ingreso: item.fechaIngresoSql,
                         motivo_salida: item.motivoSalida,
+                        tipo_documento: item.tipoDocumentoSalida,
+                        numero_documento: item.numeroDocumentoSalida,
                         detalles: []
                     });
                 }
@@ -1477,7 +1500,10 @@ async function salidasRoutes(fastify, options) {
                             cliente_id: grupo.cliente_id,
                             cliente_ruc: grupo.cliente_ruc || null,
                             fecha: grupo.fecha,
+                            fecha_ingreso: grupo.fecha_ingreso,
                             responsable_id: 1,
+                            tipo_documento: grupo.tipo_documento,
+                            numero_documento: grupo.numero_documento,
                             motivo_salida: grupo.motivo_salida,
                             observaciones: null,
                             estado: 'REGISTRADA'
@@ -1646,6 +1672,8 @@ async function salidasRoutes(fastify, options) {
         worksheet.columns = [
             { header: 'ruc_cliente', key: 'ruc_cliente', width: 16 },
             { header: 'fecha', key: 'fecha', width: 15 },
+            { header: 'tipo_documento', key: 'tipo_documento', width: 28 },
+            { header: 'numero_documento', key: 'numero_documento', width: 22 },
             { header: 'motivo_salida', key: 'motivo_salida', width: 20 },
             { header: 'codigo_producto', key: 'codigo_producto', width: 20 },
             { header: 'lote', key: 'lote', width: 20 },
@@ -1660,6 +1688,8 @@ async function salidasRoutes(fastify, options) {
         worksheet.addRow({
             ruc_cliente: '20606511991',
             fecha: '17/03/2026',
+            tipo_documento: 'Guía de Remisión Remitente',
+            numero_documento: 'T001-00000123',
             motivo_salida: 'VENTA',
             codigo_producto: 'MED-001',
             lote: 'L-2026',
