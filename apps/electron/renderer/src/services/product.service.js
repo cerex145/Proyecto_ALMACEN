@@ -40,6 +40,11 @@ export const productService = {
         return response.data.data || response.data;
     },
 
+    renameProduct: async (id, descripcion) => {
+        const response = await api.patch(`/productos/${id}/nombre`, { descripcion });
+        return response.data.data || response.data;
+    },
+
     deleteProduct: async (id) => {
         const response = await api.delete(`/productos/${id}`);
         return response.data;

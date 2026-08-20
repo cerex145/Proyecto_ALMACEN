@@ -725,6 +725,67 @@ async function productoRoutes(fastify, options) {
     });
 
     // DELETE /api/productos/:id - Eliminar (lógico)
+    // PATCH /api/productos/:id/nombre - Cambiar solo el nombre/descripción del producto
+    fastify.patch('/api/productos/:id/nombre', {
+        schema: {
+            tags: ['Productos'],
+            description: 'Cambiar únicamente el nombre/descripción de un producto',
+            params: {
+                type: 'object',
+                required: ['id'],
+                properties: {
+                    id: { type: 'integer' }
+                }
+            },
+            body: {
+                type: 'object',
+                required: ['descripcion'],
+                properties: {
+                    descripcion: { type: 'string', minLength: 1, maxLength: 300 }
+                }
+            },
+            response: {
+                200: ProductoResponseWithMessageSchema,
+                400: ErrorResponseSchema,
+                404: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
+        const { id } = request.params;
+        const nuevaDescripcion = String(request.body?.descripcion || '').trim();
+
+        if (!nuevaDescripcion) {
+            return reply.status(400).send({
+                success: false,
+                error: 'El nombre del producto es obligatorio'
+            });
+        }
+
+        if (nuevaDescripcion.length > 300) {
+            return reply.status(400).send({
+                success: false,
+                error: 'El nombre del producto no debe superar 300 caracteres'
+            });
+        }
+
+        const producto = await productoRepo.findOneBy({ id: Number(id) });
+        if (!producto) {
+            return reply.status(404).send({ success: false, error: 'Producto no encontrado' });
+        }
+
+        const descripcionAnterior = producto.descripcion;
+        producto.descripcion = nuevaDescripcion;
+        await productoRepo.save(producto);
+
+        return {
+            success: true,
+            data: mapProductoSalida(producto),
+            message: descripcionAnterior === nuevaDescripcion
+                ? 'El producto ya tenía ese nombre'
+                : 'Nombre de producto actualizado exitosamente'
+        };
+    });
+
     fastify.delete('/api/productos/:id', {
         schema: {
             tags: ['Productos'],

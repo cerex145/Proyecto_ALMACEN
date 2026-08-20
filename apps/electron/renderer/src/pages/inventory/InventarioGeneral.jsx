@@ -98,6 +98,9 @@ export const InventarioGeneral = () => {
     const [clienteFiltro, setClienteFiltro] = useState('');
     const [stockFiltro, setStockFiltro] = useState('');
     const [vencimientoFiltro, setVencimientoFiltro] = useState('');
+    const [productoRenombrar, setProductoRenombrar] = useState(null);
+    const [nuevoNombre, setNuevoNombre] = useState('');
+    const [guardandoNombre, setGuardandoNombre] = useState(false);
 
     const normalizarRuc = (value) => String(value || '').replace(/\D/g, '');
 
@@ -139,6 +142,49 @@ export const InventarioGeneral = () => {
             console.error('Error cargando inventario:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const abrirRenombrarProducto = (producto) => {
+        setProductoRenombrar(producto);
+        setNuevoNombre(producto?.descripcion || '');
+    };
+
+    const cerrarRenombrarProducto = () => {
+        setProductoRenombrar(null);
+        setNuevoNombre('');
+    };
+
+    const guardarNuevoNombre = async (event) => {
+        event.preventDefault();
+        if (!productoRenombrar?.id) return;
+
+        const nombreLimpio = nuevoNombre.trim();
+        if (!nombreLimpio) {
+            alert('Ingrese el nuevo nombre del producto.');
+            return;
+        }
+
+        if (nombreLimpio.length > 300) {
+            alert('El nombre no debe superar 300 caracteres.');
+            return;
+        }
+
+        try {
+            setGuardandoNombre(true);
+            const productoActualizado = await productService.renameProduct(productoRenombrar.id, nombreLimpio);
+            setInventario((prev) => prev.map((producto) => (
+                Number(producto.id) === Number(productoRenombrar.id)
+                    ? { ...producto, descripcion: productoActualizado.descripcion || nombreLimpio }
+                    : producto
+            )));
+            cerrarRenombrarProducto();
+            await loadInventario();
+        } catch (error) {
+            console.error('Error renombrando producto:', error);
+            alert(error?.response?.data?.error || 'No se pudo cambiar el nombre del producto.');
+        } finally {
+            setGuardandoNombre(false);
         }
     };
 
@@ -496,6 +542,9 @@ export const InventarioGeneral = () => {
                                         <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                             Estado
                                         </th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                            Acciones
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-slate-200">
@@ -584,6 +633,19 @@ export const InventarioGeneral = () => {
                                                 <td className="px-6 py-4 whitespace-nowrap text-center">
                                                     <Badge variant={status.variant}>{status.label}</Badge>
                                                 </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                    <button
+                                                        type="button"
+                                                        title="Cambiar nombre"
+                                                        aria-label={`Cambiar nombre de ${fila.descripcion || 'producto'}`}
+                                                        onClick={() => abrirRenombrarProducto(fila)}
+                                                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                                                    >
+                                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.862 4.487l1.651-1.651a2.121 2.121 0 013 3L9.75 17.6 4 19l1.4-5.75L16.862 4.487z" />
+                                                        </svg>
+                                                    </button>
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -593,6 +655,81 @@ export const InventarioGeneral = () => {
                     )}
                 </CardContent>
             </Card>
+
+            {productoRenombrar && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4">
+                    <form
+                        onSubmit={guardarNuevoNombre}
+                        className="w-full max-w-xl rounded-xl bg-white shadow-2xl"
+                    >
+                        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Cambiar nombre</h2>
+                                <p className="text-sm text-slate-500">{productoRenombrar.codigo || '-'}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={cerrarRenombrarProducto}
+                                disabled={guardandoNombre}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                                aria-label="Cerrar"
+                            >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 px-5 py-5">
+                            <div>
+                                <label className="mb-2 block text-sm font-semibold text-slate-700">Nombre actual</label>
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                    {productoRenombrar.descripcion}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="mb-2 block text-sm font-semibold text-slate-700" htmlFor="nuevo-nombre-producto">
+                                    Nuevo nombre
+                                </label>
+                                <textarea
+                                    id="nuevo-nombre-producto"
+                                    value={nuevoNombre}
+                                    onChange={(event) => setNuevoNombre(event.target.value)}
+                                    maxLength={300}
+                                    rows={3}
+                                    className="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                    autoFocus
+                                />
+                                <div className="mt-1 text-right text-xs text-slate-400">{nuevoNombre.length}/300</div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 border-t border-slate-200 px-5 py-4">
+                            <button
+                                type="button"
+                                onClick={cerrarRenombrarProducto}
+                                disabled={guardandoNombre}
+                                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={guardandoNombre || !nuevoNombre.trim()}
+                                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {guardandoNombre && (
+                                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                    </svg>
+                                )}
+                                Guardar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };
