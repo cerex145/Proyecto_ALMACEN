@@ -7,7 +7,8 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env'), override: t
 const fastify = require('fastify')({
     logger: {
         level: 'info',
-    }
+    },
+    pluginTimeout: 60000 // 60 segundos — tiempo para que las migraciones de Supabase terminen
 });
 
 const buildApp = require('./app');

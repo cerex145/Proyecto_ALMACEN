@@ -1697,67 +1697,70 @@ async function productoRoutes(fastify, options) {
             idx += 1;
         }
 
-        if (clienteNombreFiltro) {
-            sql += `
-                AND (
-                    EXISTS (
-                        SELECT 1
-                        FROM kardex kf
-                        LEFT JOIN notas_ingreso ni
-                            ON kf.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
-                            AND kf.referencia_id = ni.id
-                            AND kf.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
-                        LEFT JOIN notas_salida ns
-                            ON kf.documento_tipo = 'NOTA_SALIDA'
-                            AND kf.referencia_id = ns.id
-                            AND kf.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
-                        LEFT JOIN clientes c ON ns.cliente_id = c.id
-                        WHERE kf.producto_id = p.id
-                          AND (
-                                                        ni.proveedor ILIKE $${idx}
-                                                        OR c.razon_social ILIKE $${idx}
-                            OR EXISTS (
-                                SELECT 1
-                                FROM lotes lcf
-                                JOIN notas_ingreso nicf ON lcf.nota_ingreso_id = nicf.id
-                                WHERE lcf.producto_id = p.id
-                                                                    AND nicf.proveedor ILIKE $${idx}
-                            )
-                          )
-                    )
-                )
-            `;
-            params.push(`%${clienteNombreFiltro}%`);
-            idx += 1;
-        }
+        if (clienteNombreFiltro || clienteRucFiltro || cliente_id) {
+            // Determinar el cliente_id numérico si viene en el query
+            const clienteIdNum = cliente_id ? Number(cliente_id) : null;
+            const condiciones = [];
 
-        if (clienteRucFiltro) {
-            sql += `
-                AND (
-                    regexp_replace(upper(coalesce(p.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
-                    OR regexp_replace(upper(coalesce(cd.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
-                    OR EXISTS (
-                        SELECT 1
-                        FROM kardex kf2
-                        LEFT JOIN notas_ingreso ni2
-                            ON kf2.documento_tipo IN ('NOTA_INGRESO', 'Factura', 'Boleta de Venta', 'Guía de Remisión Remitente')
-                            AND kf2.referencia_id = ni2.id
-                            AND kf2.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')
-                        LEFT JOIN notas_salida ns2
-                            ON kf2.documento_tipo = 'NOTA_SALIDA'
-                            AND kf2.referencia_id = ns2.id
-                            AND kf2.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO')
-                        LEFT JOIN clientes c2 ON ns2.cliente_id = c2.id
-                        WHERE kf2.producto_id = p.id
-                          AND (
-                            regexp_replace(upper(coalesce(ni2.cliente_ruc, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
-                            OR regexp_replace(upper(coalesce(c2.cuit, '')), '[^A-Z0-9]', '', 'g') = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
-                          )
-                    )
-                )
-            `;
-            params.push(clienteRucFiltro);
-            idx += 1;
+            // 1) Vínculo directo por p.cliente_id
+            if (clienteIdNum) {
+                condiciones.push(`p.cliente_id = $${idx}`);
+                params.push(clienteIdNum);
+                idx += 1;
+            }
+
+            // 2) RUC del cliente coincide con p.cliente_ruc o cd.cuit
+            if (clienteRucFiltro) {
+                condiciones.push(`
+                    regexp_replace(upper(coalesce(p.cliente_ruc, '')), '[^A-Z0-9]', '', 'g')
+                    = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                `);
+                condiciones.push(`
+                    regexp_replace(upper(coalesce(cd.cuit, '')), '[^A-Z0-9]', '', 'g')
+                    = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                `);
+                params.push(clienteRucFiltro);
+                params.push(clienteRucFiltro);
+                idx += 2;
+            }
+
+            // 3) Buscar en lotes → notas_ingreso por cliente_id o cliente_ruc
+            {
+                const subCondLote = [];
+                if (clienteIdNum) {
+                    subCondLote.push(`ni_lote.cliente_id = $${idx}`);
+                    params.push(clienteIdNum);
+                    idx += 1;
+                }
+                if (clienteRucFiltro) {
+                    subCondLote.push(`
+                        regexp_replace(upper(coalesce(ni_lote.cliente_ruc, '')), '[^A-Z0-9]', '', 'g')
+                        = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                    `);
+                    params.push(clienteRucFiltro);
+                    idx += 1;
+                }
+                if (clienteNombreFiltro && !clienteIdNum) {
+                    subCondLote.push(`ni_lote.proveedor ILIKE $${idx}`);
+                    params.push(`%${clienteNombreFiltro}%`);
+                    idx += 1;
+                }
+                if (subCondLote.length > 0) {
+                    condiciones.push(`
+                        EXISTS (
+                            SELECT 1
+                            FROM lotes l_sub
+                            JOIN notas_ingreso ni_lote ON l_sub.nota_ingreso_id = ni_lote.id
+                            WHERE l_sub.producto_id = p.id
+                              AND (${subCondLote.join(' OR ')})
+                        )
+                    `);
+                }
+            }
+
+            if (condiciones.length > 0) {
+                sql += ` AND (${condiciones.join(' OR ')})`;
+            }
         }
 
         sql += ` ORDER BY p.descripcion ASC`;

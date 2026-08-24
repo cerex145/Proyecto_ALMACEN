@@ -1013,28 +1013,34 @@ async function ingresosRoutes(fastify, options) {
                         where: { nota_ingreso_id: Number(id) }
                     });
 
-                    // Eliminar directamente los registros de Kardex de este ingreso (sin dejar rastro de reversa)
-                    await transactionalEntityManager.delete('Kardex', {
-                        documento_tipo: 'NOTA_INGRESO',
-                        referencia_id: Number(id)
-                    });
-
-                    // Revertir stock en lotes de los detalles anteriores
+                    // Guardar el estado real de cada lote ANTES de cualquier cambio
+                    // Clave: "producto_id|numero_lote" → { disponible, cantidadIngresada }
+                    const oldLoteStates = new Map();
                     for (const detalleAntiguo of detallesAntiguos) {
-                        const lotes = await transactionalEntityManager.find('Lote', {
+                        const lotesAntiguos = await transactionalEntityManager.find('Lote', {
                             where: {
                                 nota_ingreso_id: Number(id),
                                 producto_id: detalleAntiguo.producto_id,
                                 numero_lote: detalleAntiguo.lote_numero
                             }
                         });
-                        for (const lote of lotes) {
-                            lote.cantidad_disponible = Math.max(0, Number(lote.cantidad_disponible) - Number(detalleAntiguo.cantidad));
-                            await transactionalEntityManager.save('Lote', lote);
+                        for (const lote of lotesAntiguos) {
+                            const key = `${detalleAntiguo.producto_id}|${detalleAntiguo.lote_numero}`;
+                            oldLoteStates.set(key, {
+                                disponible: Number(lote.cantidad_disponible),
+                                cantidadIngresada: Number(detalleAntiguo.cantidad)
+                            });
                         }
                     }
 
+                    // Eliminar directamente los registros de Kardex de este ingreso (sin dejar rastro de reversa)
+                    await transactionalEntityManager.delete('Kardex', {
+                        documento_tipo: 'NOTA_INGRESO',
+                        referencia_id: Number(id)
+                    });
+
                     // Eliminar detalles antiguos
+                    // (los lotes se ajustan en el paso de inserción con la fórmula correcta)
                     await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: Number(id) });
 
                     // Insertar nuevos detalles
@@ -1074,8 +1080,14 @@ async function ingresosRoutes(fastify, options) {
                         });
 
                         if (loteExistente) {
-                            loteExistente.cantidad_ingresada = Number(loteExistente.cantidad_ingresada) + Number(detalle.cantidad);
-                            loteExistente.cantidad_disponible = Number(loteExistente.cantidad_disponible) + Number(detalle.cantidad);
+                            // Fórmula correcta: preserva las salidas ya registradas
+                            // disponible_nuevo = max(0, disponible_antes_de_editar - cantidad_ingresada_antigua + cantidad_nueva)
+                            const loteKey = `${detalle.producto_id}|${detalle.lote_numero}`;
+                            const oldState = oldLoteStates.get(loteKey);
+                            const oldDisponible = oldState !== undefined ? oldState.disponible : Number(loteExistente.cantidad_disponible);
+                            const oldCantidad = oldState !== undefined ? oldState.cantidadIngresada : Number(loteExistente.cantidad_ingresada);
+                            loteExistente.cantidad_ingresada = Number(detalle.cantidad);
+                            loteExistente.cantidad_disponible = Math.max(0, oldDisponible - oldCantidad + Number(detalle.cantidad));
                             loteExistente.fecha_vencimiento = fechaVencimiento;
                             await transactionalEntityManager.save('Lote', loteExistente);
                         } else {
