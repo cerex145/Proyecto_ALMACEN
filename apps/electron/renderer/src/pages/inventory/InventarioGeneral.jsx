@@ -135,11 +135,15 @@ export const InventarioGeneral = () => {
                 if (clienteSel?.razon_social) {
                     filtros.cliente_nombre = clienteSel.razon_social;
                 }
+                if (clienteSel?.cuit) {
+                    filtros.cliente_ruc = clienteSel.cuit;
+                }
             }
             const data = await productService.getInventario(filtros);
             setInventario(data);
         } catch (error) {
             console.error('Error cargando inventario:', error);
+            setInventario([]);
         } finally {
             setLoading(false);
         }
@@ -202,9 +206,33 @@ export const InventarioGeneral = () => {
     // Primero aplanamos TODO el inventario para calcular stats correctamente
     const inventarioAplanado = aplanarPorLote(inventario);
     const busquedaNormalizada = busqueda.trim().toLowerCase();
+    const clienteSeleccionado = clienteFiltro
+        ? clientes.find((c) => String(c.id) === String(clienteFiltro))
+        : null;
+    const clienteFiltroRuc = normalizarRuc(clienteSeleccionado?.cuit);
+    const clienteFiltroNombre = String(
+        clienteSeleccionado?.razon_social || clienteSeleccionado?.nombre || ''
+    ).trim().toLowerCase();
+
+    const perteneceAlClienteSeleccionado = (producto) => {
+        if (!clienteSeleccionado) return true;
+
+        const productoClienteId = producto?.cliente_id != null ? String(producto.cliente_id) : '';
+        const productoRuc = normalizarRuc(producto?.cliente_ruc);
+        const productoClienteNombre = String(
+            producto?.cliente_nombre || obtenerNombreCliente(producto) || ''
+        ).trim().toLowerCase();
+
+        return productoClienteId === String(clienteSeleccionado.id)
+            || (!!clienteFiltroRuc && productoRuc === clienteFiltroRuc)
+            || (!!clienteFiltroNombre && productoClienteNombre === clienteFiltroNombre);
+    };
+    const inventarioBaseCliente = clienteSeleccionado
+        ? inventarioAplanado.filter(perteneceAlClienteSeleccionado)
+        : inventarioAplanado;
 
     // Filtrado sobre la lista aplanada
-    const inventarioFiltrado = inventarioAplanado.filter(p => {
+    const inventarioFiltrado = inventarioBaseCliente.filter(p => {
         if (busquedaNormalizada) {
             const camposBusqueda = [
                 p.codigo,
@@ -260,11 +288,11 @@ export const InventarioGeneral = () => {
     });
 
     // Stats sobre inventario aplanado total
-    const totalFilas = inventarioAplanado.length;
-    const filasSinStock = inventarioAplanado.filter(p => p._lote_disponible <= 0).length;
-    const filasStockBajo = inventarioAplanado.filter(p => p._lote_disponible > 0 && p._lote_disponible <= p.stock_minimo).length;
-    const stockTotal = inventarioAplanado.reduce((sum, p) => sum + (p._lote_disponible || 0), 0);
-    const filasConStock = inventarioAplanado.filter(p => p._lote_disponible > 0).length;
+    const totalFilas = inventarioBaseCliente.length;
+    const filasSinStock = inventarioBaseCliente.filter(p => p._lote_disponible <= 0).length;
+    const filasStockBajo = inventarioBaseCliente.filter(p => p._lote_disponible > 0 && p._lote_disponible <= p.stock_minimo).length;
+    const stockTotal = inventarioBaseCliente.reduce((sum, p) => sum + (p._lote_disponible || 0), 0);
+    const filasConStock = inventarioBaseCliente.filter(p => p._lote_disponible > 0).length;
 
     // ─── Exportar Excel ──────────────────────────────────────────────────────
     const exportarExcel = () => {

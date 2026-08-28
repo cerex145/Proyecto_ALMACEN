@@ -1552,6 +1552,7 @@ async function productoRoutes(fastify, options) {
                                     id: { type: 'integer' },
                                     codigo: { type: 'string' },
                                     descripcion: { type: 'string' },
+                                    cliente_id: { type: 'integer', nullable: true },
                                     cliente_nombre: { type: 'string', nullable: true },
                                     cliente_ruc: { type: 'string', nullable: true },
                                     proveedor: { type: 'string', nullable: true },
@@ -1586,8 +1587,10 @@ async function productoRoutes(fastify, options) {
 
         let clienteNombreFiltro = String(cliente_nombre || '').trim();
         let clienteRucFiltro = String(cliente_ruc || '').trim();
-        if (cliente_id) {
-            const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
+        let clienteIdFiltro = null;
+        if (cliente_id !== undefined && cliente_id !== null && cliente_id !== '') {
+            clienteIdFiltro = Number(cliente_id);
+            const cliente = await clienteRepo.findOneBy({ id: clienteIdFiltro });
             if (!cliente) {
                 return { success: true, data: [] };
             }
@@ -1604,6 +1607,7 @@ async function productoRoutes(fastify, options) {
                 p.id AS id,
                 p.codigo AS codigo,
                 p.descripcion AS descripcion,
+                p.cliente_id AS cliente_id,
                 COALESCE(cd.razon_social, cr.razon_social) AS cliente_nombre,
                 COALESCE(NULLIF(p.cliente_ruc, ''), cd.cuit, cr.cuit) AS cliente_ruc,
                 p.proveedor AS proveedor,
@@ -1697,65 +1701,28 @@ async function productoRoutes(fastify, options) {
             idx += 1;
         }
 
-        if (clienteNombreFiltro || clienteRucFiltro || cliente_id) {
-            // Determinar el cliente_id numérico si viene en el query
-            const clienteIdNum = cliente_id ? Number(cliente_id) : null;
+        if (clienteIdFiltro || clienteRucFiltro || clienteNombreFiltro) {
             const condiciones = [];
 
-            // 1) Vínculo directo por p.cliente_id
-            if (clienteIdNum) {
+            if (clienteIdFiltro) {
                 condiciones.push(`p.cliente_id = $${idx}`);
-                params.push(clienteIdNum);
+                params.push(clienteIdFiltro);
                 idx += 1;
             }
 
-            // 2) RUC del cliente coincide con p.cliente_ruc o cd.cuit
             if (clienteRucFiltro) {
                 condiciones.push(`
-                    regexp_replace(upper(coalesce(p.cliente_ruc, '')), '[^A-Z0-9]', '', 'g')
-                    = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
-                `);
-                condiciones.push(`
-                    regexp_replace(upper(coalesce(cd.cuit, '')), '[^A-Z0-9]', '', 'g')
-                    = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
+                    regexp_replace(coalesce(p.cliente_ruc, cd.cuit, cr.cuit, ''), '\\D', '', 'g')
+                    = regexp_replace(coalesce($${idx}, ''), '\\D', '', 'g')
                 `);
                 params.push(clienteRucFiltro);
-                params.push(clienteRucFiltro);
-                idx += 2;
+                idx += 1;
             }
 
-            // 3) Buscar en lotes → notas_ingreso por cliente_id o cliente_ruc
-            {
-                const subCondLote = [];
-                if (clienteIdNum) {
-                    subCondLote.push(`ni_lote.cliente_id = $${idx}`);
-                    params.push(clienteIdNum);
-                    idx += 1;
-                }
-                if (clienteRucFiltro) {
-                    subCondLote.push(`
-                        regexp_replace(upper(coalesce(ni_lote.cliente_ruc, '')), '[^A-Z0-9]', '', 'g')
-                        = regexp_replace(upper($${idx}), '[^A-Z0-9]', '', 'g')
-                    `);
-                    params.push(clienteRucFiltro);
-                    idx += 1;
-                }
-                if (clienteNombreFiltro && !clienteIdNum) {
-                    subCondLote.push(`ni_lote.proveedor ILIKE $${idx}`);
-                    params.push(`%${clienteNombreFiltro}%`);
-                    idx += 1;
-                }
-                if (subCondLote.length > 0) {
-                    condiciones.push(`
-                        EXISTS (
-                            SELECT 1
-                            FROM lotes l_sub
-                            JOIN notas_ingreso ni_lote ON l_sub.nota_ingreso_id = ni_lote.id
-                            WHERE l_sub.producto_id = p.id
-                              AND (${subCondLote.join(' OR ')})
-                        )
-                    `);
-                }
+            if (!clienteIdFiltro && !clienteRucFiltro && clienteNombreFiltro) {
+                condiciones.push(`COALESCE(cd.razon_social, cr.razon_social, '') ILIKE $${idx}`);
+                params.push(`%${clienteNombreFiltro}%`);
+                idx += 1;
             }
 
             if (condiciones.length > 0) {
@@ -1771,6 +1738,7 @@ async function productoRoutes(fastify, options) {
             id: Number(row.id),
             codigo: row.codigo,
             descripcion: row.descripcion,
+            cliente_id: row.cliente_id != null ? Number(row.cliente_id) : null,
             cliente_nombre: row.cliente_nombre || null,
             cliente_ruc: row.cliente_ruc || null,
             proveedor: row.proveedor || null,
