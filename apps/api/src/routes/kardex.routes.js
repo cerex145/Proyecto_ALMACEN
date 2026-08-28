@@ -316,12 +316,10 @@ async function kardexRoutes(fastify, options) {
 
         const movimientos = await connection.query(sql, params);
 
-        const isGuiaDocumento = (tipo) => String(tipo || '').toLowerCase().includes('gu');
         const cleanText = (value) => String(value || '').trim();
 
         // Mapear a estructura esperada
         const data = movimientos.map(row => {
-            const tipoDocumentoDigitado = row.tipo_documento_ingreso || row.tipo_documento_salida || null;
             const numeroDocumentoDigitado = row.numero_documento_ingreso || row.numero_documento_salida || null;
 
             return {
@@ -333,7 +331,7 @@ async function kardexRoutes(fastify, options) {
                 saldo: Number(row.saldo || 0),
                 documento_tipo: row.documento_tipo || null,
                 documento_numero: row.documento_numero || null,
-                numero_guia: isGuiaDocumento(tipoDocumentoDigitado) ? numeroDocumentoDigitado : null,
+                numero_guia: cleanText(numeroDocumentoDigitado) || null,
                 observaciones: row.observaciones || '-',
                 created_at: row.created_at,
                 fecha_ingreso: row.fecha_nota_ingreso,
@@ -596,7 +594,6 @@ async function kardexRoutes(fastify, options) {
             }
         };
 
-        const isGuiaDocumento = (tipo) => String(tipo || '').toLowerCase().includes('gu');
         const cleanText = (value) => String(value || '').trim();
 
         movimientos.forEach(mov => {
@@ -605,14 +602,13 @@ async function kardexRoutes(fastify, options) {
             
             const fechaDoc = isIngreso ? mov.fecha_nota_ingreso : (isSalida ? mov.fecha_nota_salida : null);
             const fechaFormateada = fechaDoc ? formatFecha(fechaDoc, true) : formatFecha(mov.created_at, false);
-            const tipoDocumentoDigitado = mov.tipo_documento_ingreso || mov.tipo_documento_salida || null;
             const numeroDocumentoDigitado = mov.numero_documento_ingreso || mov.numero_documento_salida || null;
 
             worksheet.addRow({
                 fecha: fechaFormateada,
                 documento: mov.documento_tipo || 'N/A',
                 documento_numero: mov.documento_numero || '',
-                numero_guia: isGuiaDocumento(tipoDocumentoDigitado) ? (numeroDocumentoDigitado || '') : '',
+                numero_guia: cleanText(numeroDocumentoDigitado) || '',
                 cliente_nombre: cleanText(mov.cliente_nombre_ingreso || mov.cliente_nombre_salida) || 'N/A',
                 codigo_producto: mov.codigo_producto || 'N/A',
                 descripcion: mov.descripcion_producto || 'N/A',
