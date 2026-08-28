@@ -525,6 +525,7 @@ export const NotaSalidaForm = () => {
     };
 
     const { id: salidaId } = useParams();
+    const isEditMode = Boolean(salidaId);
 
     useEffect(() => {
         loadClients();
@@ -558,15 +559,35 @@ export const NotaSalidaForm = () => {
                             numero_documento: nota.numero_documento || '',
                             fecha_ingreso: nota.fecha_ingreso || '',
                             motivo_salida: nota.motivo_salida || '',
-                            detalles: nota.detalles.map(det => ({
-                                producto_id: det.producto_id,
-                                cantidad: det.cantidad || 0,
-                                cant_bulto: det.cant_bulto || 0,
-                                cant_caja: det.cant_caja || 0,
-                                cant_x_caja: det.cant_x_caja || 0,
-                                cant_fraccion: det.cant_fraccion || 0,
-                                lote_id: det.lote_id || null
-                            }))
+                            detalles: nota.detalles.map(det => {
+                                const cantidadOriginal = Number(det.cantidad_total ?? det.cantidad ?? 0);
+                                const stockActualLote = det.lote
+                                    ? Number(det.lote.cantidad_disponible || 0)
+                                    : Number(det.cantidad_disponible || 0);
+                                const producto = det.producto || {};
+
+                                return {
+                                    producto_id: Number(det.producto_id),
+                                    producto_codigo: producto.codigo || '',
+                                    producto_nombre: producto.descripcion || producto.nombre || '',
+                                    lote_id: det.lote_id ? Number(det.lote_id) : null,
+                                    lote_numero: det.lote_numero || det.lote?.numero_lote || '',
+                                    fecha_vencimiento: normalizeDateInput(det.fecha_vencimiento || det.lote?.fecha_vencimiento),
+                                    um: det.um || producto.unidad_medida || producto.um || producto.unidad || '',
+                                    fabricante: det.fabricante || producto.fabricante || '',
+                                    cantidad: cantidadOriginal,
+                                    cant_total: cantidadOriginal,
+                                    cantidad_inicial: cantidadOriginal,
+                                    cantidad_original_salida: cantidadOriginal,
+                                    cantidad_disponible_actual: stockActualLote,
+                                    cantidad_disponible: stockActualLote + cantidadOriginal,
+                                    cant_bulto: det.cant_bulto || 0,
+                                    cant_caja: det.cant_caja || 0,
+                                    cant_x_caja: det.cant_x_caja || 0,
+                                    cant_por_caja: det.cant_x_caja || 0,
+                                    cant_fraccion: det.cant_fraccion || 0
+                                };
+                            })
                         });
                     }
                 }
@@ -1623,6 +1644,11 @@ export const NotaSalidaForm = () => {
                 return;
             }
 
+            const disponibleParaDetalle = (det) => {
+                if (det.cantidad_disponible == null) return Number.POSITIVE_INFINITY;
+                return Number(det.cantidad_disponible);
+            };
+
             // Validar que cada detalle tiene datos válidos
             for (let i = 0; i < data.detalles.length; i++) {
                 const det = data.detalles[i];
@@ -1638,8 +1664,9 @@ export const NotaSalidaForm = () => {
                     showToast(`Detalle ${i + 1}: Cantidad debe ser mayor a 0.`, 'error');
                     return;
                 }
-                if (det.cantidad_disponible != null && Number(det.cantidad) > Number(det.cantidad_disponible)) {
-                    showToast(`Detalle ${i + 1}: Cantidad supera el disponible (${det.cantidad_disponible}).`, 'error');
+                const disponible = disponibleParaDetalle(det);
+                if (Number.isFinite(disponible) && Number(det.cantidad) > disponible + 0.001) {
+                    showToast(`Detalle ${i + 1}: Cantidad supera el disponible (${disponible.toFixed(2)}).`, 'error');
                     return;
                 }
             }
@@ -1649,11 +1676,21 @@ export const NotaSalidaForm = () => {
                 const det = data.detalles[i];
                 const clave = `${Number(det.producto_id || 0)}__${det.lote_id ? Number(det.lote_id) : 'FIFO'}`;
                 const cantidad = Number(det.cantidad || 0);
-                const disponible = Number(det.cantidad_disponible ?? Number.POSITIVE_INFINITY);
-                const actual = acumuladoPorClave.get(clave) || { cantidad: 0, disponible };
+                const disponibleBase = Number(det.cantidad_disponible_actual ?? det.cantidad_disponible ?? Number.POSITIVE_INFINITY);
+                const cantidadOriginal = isEditMode ? Number(det.cantidad_original_salida || 0) : 0;
+                const actual = acumuladoPorClave.get(clave) || {
+                    cantidad: 0,
+                    disponible: Number.POSITIVE_INFINITY,
+                    disponibleActual: 0,
+                    cantidadOriginal: 0,
+                    tieneDisponibleFinito: false
+                };
                 actual.cantidad += cantidad;
-                if (Number.isFinite(disponible)) {
-                    actual.disponible = Math.min(Number(actual.disponible), disponible);
+                if (Number.isFinite(disponibleBase)) {
+                    actual.tieneDisponibleFinito = true;
+                    actual.disponibleActual = Math.max(Number(actual.disponibleActual || 0), disponibleBase);
+                    actual.cantidadOriginal += cantidadOriginal;
+                    actual.disponible = actual.disponibleActual + actual.cantidadOriginal;
                 }
                 acumuladoPorClave.set(clave, actual);
             }
@@ -1666,10 +1703,17 @@ export const NotaSalidaForm = () => {
             }
 
             const totalPorProducto = new Map();
+            const cantidadOriginalPorProducto = new Map();
             for (const det of (data.detalles || [])) {
                 const pid = Number(det.producto_id || 0);
                 if (!pid) continue;
                 totalPorProducto.set(pid, (totalPorProducto.get(pid) || 0) + Number(det.cantidad || 0));
+                if (isEditMode) {
+                    cantidadOriginalPorProducto.set(
+                        pid,
+                        (cantidadOriginalPorProducto.get(pid) || 0) + Number(det.cantidad_original_salida || 0)
+                    );
+                }
             }
 
             const chequeosStock = await Promise.all(
@@ -1677,7 +1721,8 @@ export const NotaSalidaForm = () => {
                     const lotes = await productService.getLotesByProduct(pid);
                     const disponible = (Array.isArray(lotes) ? lotes : [])
                         .reduce((acc, lote) => acc + Number(lote.cantidad_disponible || 0), 0);
-                    return { pid, solicitado: Number(solicitado || 0), disponible: Number(disponible || 0) };
+                    const disponibleEdicion = Number(disponible || 0) + Number(cantidadOriginalPorProducto.get(pid) || 0);
+                    return { pid, solicitado: Number(solicitado || 0), disponible: disponibleEdicion };
                 })
             );
 
@@ -1699,6 +1744,7 @@ export const NotaSalidaForm = () => {
             const detallesSanitizados = (data.detalles || []).map((det) => ({
                 producto_id: Number(det.producto_id),
                 lote_id: det.lote_id ? Number(det.lote_id) : null,
+                lote_numero: det.lote_numero || null,
                 cantidad: Number(det.cantidad),
                 precio_unitario: det.precio_unitario ? Number(det.precio_unitario) : null,
                 cant_bulto: Number(det.cant_bulto || 0),
@@ -1724,9 +1770,12 @@ export const NotaSalidaForm = () => {
             };
 
             console.log('📤 Enviando payload:', JSON.stringify(payload, null, 2));
-            const created = await operationService.createSalida(payload);
-            setLastSalidaId(created?.id || null);
-            showToast('Nota de salida registrada correctamente.', 'success');
+            const result = isEditMode
+                ? await operationService.updateSalida(salidaId, payload)
+                : await operationService.createSalida(payload);
+
+            setLastSalidaId(result?.id || (isEditMode ? Number(salidaId) : null));
+            showToast(isEditMode ? 'Nota de salida actualizada correctamente.' : 'Nota de salida registrada correctamente.', 'success');
             resetAllStates();
         } catch (error) {
             console.error(error);
@@ -2539,7 +2588,7 @@ export const NotaSalidaForm = () => {
                         size="lg"
                         className="btn-gradient-primary shadow-lg shadow-blue-500/30"
                     >
-                        💾 Guardar Nota de Salida
+                        {isEditMode ? '💾 Actualizar Nota de Salida' : '💾 Guardar Nota de Salida'}
                     </Button>
                 </div>
             </form>

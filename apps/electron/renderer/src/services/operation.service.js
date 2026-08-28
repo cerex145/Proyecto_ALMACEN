@@ -41,5 +41,12 @@ export const operationService = {
             timeout: 120000
         });
         return response.data.data || response.data;
+    },
+
+    updateSalida: async (id, data) => {
+        const response = await api.put(`/salidas/${id}`, data, {
+            timeout: 120000
+        });
+        return response.data.data || response.data;
     }
 };

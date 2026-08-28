@@ -578,6 +578,7 @@ async function salidasRoutes(fastify, options) {
         const detalles = await notaSalidaDetalleRepo
             .createQueryBuilder('detalle')
             .leftJoinAndSelect('detalle.producto', 'producto')
+            .leftJoinAndSelect('detalle.lote', 'lote')
             .where('detalle.nota_salida_id = :notaId', { notaId: Number(id) })
             .getMany();
 
@@ -616,7 +617,8 @@ async function salidasRoutes(fastify, options) {
                                 cant_caja: { type: 'number', minimum: 0 },
                                 cant_x_caja: { type: 'number', minimum: 0 },
                                 cant_fraccion: { type: 'number', minimum: 0 },
-                                lote_id: { type: 'integer' }
+                                lote_id: { type: ['integer', 'null'] },
+                                lote_numero: { type: ['string', 'null'] }
                             }
                         }
                     },
@@ -881,6 +883,10 @@ async function salidasRoutes(fastify, options) {
                 properties: {
                     estado: { type: 'string' },
                     observaciones: { type: 'string' },
+                    cliente_id: { type: ['integer', 'string', 'null'] },
+                    cliente_ruc: { type: ['string', 'null'] },
+                    fecha: { type: ['string', 'null'] },
+                    responsable_id: { type: ['integer', 'string', 'null'] },
                     tipo_documento: { type: 'string', nullable: true },
                     numero_documento: { type: 'string', nullable: true },
                     fecha_ingreso: { type: 'string', nullable: true },
@@ -897,7 +903,8 @@ async function salidasRoutes(fastify, options) {
                                 cant_caja: { type: 'number' },
                                 cant_x_caja: { type: 'number' },
                                 cant_fraccion: { type: 'number' },
-                                lote_id: { type: 'integer' }
+                                lote_id: { type: ['integer', 'null'] },
+                                lote_numero: { type: ['string', 'null'] }
                             }
                         }
                     }
@@ -910,7 +917,19 @@ async function salidasRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { estado, observaciones, detalles, tipo_documento, numero_documento, fecha_ingreso, motivo_salida } = request.body;
+        const {
+            estado,
+            observaciones,
+            detalles,
+            cliente_id,
+            cliente_ruc,
+            fecha,
+            responsable_id,
+            tipo_documento,
+            numero_documento,
+            fecha_ingreso,
+            motivo_salida
+        } = request.body;
 
         const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
         if (!nota) {
@@ -921,6 +940,26 @@ async function salidasRoutes(fastify, options) {
             await fastify.db.transaction(async (transactionalEntityManager) => {
                 // Actualizar campos básicos de la nota
                 if (estado) nota.estado = estado;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'fecha')) nota.fecha = fecha || nota.fecha;
+                if (Object.prototype.hasOwnProperty.call(request.body, 'cliente_id')) {
+                    const clienteIdNumero = Number(cliente_id || 0);
+                    if (!clienteIdNumero || Number.isNaN(clienteIdNumero)) {
+                        throw new Error('Cliente no válido para la nota de salida');
+                    }
+
+                    const cliente = await transactionalEntityManager.findOne('Cliente', {
+                        where: { id: clienteIdNumero }
+                    });
+                    if (!cliente) {
+                        throw new Error('Cliente no encontrado');
+                    }
+
+                    nota.cliente_id = clienteIdNumero;
+                    nota.cliente_ruc = cliente.cuit || cliente_ruc || null;
+                } else if (Object.prototype.hasOwnProperty.call(request.body, 'cliente_ruc')) {
+                    nota.cliente_ruc = cliente_ruc || null;
+                }
+                if (Object.prototype.hasOwnProperty.call(request.body, 'responsable_id')) nota.responsable_id = responsable_id ? Number(responsable_id) : null;
                 if (Object.prototype.hasOwnProperty.call(request.body, 'observaciones')) nota.observaciones = observaciones || null;
                 if (Object.prototype.hasOwnProperty.call(request.body, 'tipo_documento')) nota.tipo_documento = tipo_documento || null;
                 if (Object.prototype.hasOwnProperty.call(request.body, 'numero_documento')) nota.numero_documento = numero_documento || null;
@@ -936,7 +975,7 @@ async function salidasRoutes(fastify, options) {
                         where: { nota_salida_id: Number(id) }
                     });
 
-                    // Revertir cambios en lotes y Kardex de los detalles anteriores
+                    // Revertir cambios en lotes de los detalles anteriores
                     for (const detalleAntiguo of detallesAntiguos) {
                         // Restaurar stock: usar lote_id si existe (exacto), si no buscar por numero_lote+producto_id
                         let lotesParaRevertir = [];
@@ -945,13 +984,17 @@ async function salidasRoutes(fastify, options) {
                                 where: { id: Number(detalleAntiguo.lote_id) }
                             });
                             if (loteExacto) lotesParaRevertir = [loteExacto];
-                        } else {
-                            lotesParaRevertir = await transactionalEntityManager.find('Lote', {
+                        } else if (detalleAntiguo.lote_numero) {
+                            const loteFallback = await transactionalEntityManager.findOne('Lote', {
                                 where: {
                                     numero_lote: detalleAntiguo.lote_numero,
                                     producto_id: detalleAntiguo.producto_id
+                                },
+                                order: {
+                                    id: 'DESC'
                                 }
                             });
+                            if (loteFallback) lotesParaRevertir = [loteFallback];
                         }
 
                         for (const lote of lotesParaRevertir) {
@@ -959,20 +1002,12 @@ async function salidasRoutes(fastify, options) {
                             lote.cantidad_disponible = Number(lote.cantidad_disponible) + Number(detalleAntiguo.cantidad);
                             await transactionalEntityManager.save('Lote', lote);
                         }
-
-                        // Crear movimiento de reversa en Kardex
-                        const movimientoReversa = kardexRepo.create({
-                            producto_id: detalleAntiguo.producto_id,
-                            lote_numero: detalleAntiguo.lote_numero,
-                            tipo_movimiento: 'SALIDA_REVERSA',
-                            cantidad: -Number(detalleAntiguo.cantidad),
-                            saldo: Number(detalleAntiguo.cantidad),
-                            documento_tipo: 'NOTA_SALIDA',
-                            documento_numero: nota.numero_salida,
-                            referencia_id: nota.id
-                        });
-                        await transactionalEntityManager.save('Kardex', movimientoReversa);
                     }
+
+                    await transactionalEntityManager.delete('Kardex', {
+                        documento_tipo: 'NOTA_SALIDA',
+                        referencia_id: Number(id)
+                    });
 
                     // Eliminar detalles antiguos
                     await transactionalEntityManager.delete('NotaSalidaDetalle', { nota_salida_id: Number(id) });
@@ -1006,10 +1041,23 @@ async function salidasRoutes(fastify, options) {
                             throw new Error(`Producto ${pid} no encontrado`);
                         }
 
-                        // CASO 1: Lote específico seleccionado
-                        if (detalle.lote_id) {
-                            const lote = await transactionalEntityManager.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
-                            if (!lote) throw new Error(`Lote ${detalle.lote_id} no encontrado`);
+                        const loteNumeroSolicitado = String(detalle.lote_numero || '').trim();
+                        const loteIdSolicitado = detalle.lote_id ? Number(detalle.lote_id) : null;
+
+                        // CASO 1: Lote específico seleccionado o preservado desde una salida antigua
+                        if (loteIdSolicitado || loteNumeroSolicitado) {
+                            const lote = loteIdSolicitado
+                                ? await transactionalEntityManager.findOne('Lote', { where: { id: loteIdSolicitado } })
+                                : await transactionalEntityManager.findOne('Lote', {
+                                    where: {
+                                        producto_id: pid,
+                                        numero_lote: loteNumeroSolicitado
+                                    },
+                                    order: {
+                                        id: 'DESC'
+                                    }
+                                });
+                            if (!lote) throw new Error(`Lote ${loteIdSolicitado || loteNumeroSolicitado} no encontrado`);
 
                             if (Number(lote.cantidad_disponible) + EPSILON < cantidadSolicitada) {
                                 throw new Error(`Stock insuficiente en lote ${lote.numero_lote}. Disponible: ${Number(lote.cantidad_disponible).toFixed(2)}`);

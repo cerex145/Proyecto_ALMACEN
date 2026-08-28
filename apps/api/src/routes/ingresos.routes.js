@@ -1008,40 +1008,68 @@ async function ingresosRoutes(fastify, options) {
 
                 // Si se envían detalles, actualizar toda la estructura
                 if (detalles && Array.isArray(detalles) && detalles.length > 0) {
-                    // Obtener detalles antiguos para limpiar Kardex y lotes
-                    const detallesAntiguos = await transactionalEntityManager.find('NotaIngresoDetalle', {
-                        where: { nota_ingreso_id: Number(id) }
-                    });
+                    const notaId = Number(id);
 
-                    // Guardar el estado real de cada lote ANTES de cualquier cambio
-                    // Clave: "producto_id|numero_lote" → { disponible, cantidadIngresada }
-                    const oldLoteStates = new Map();
-                    for (const detalleAntiguo of detallesAntiguos) {
-                        const lotesAntiguos = await transactionalEntityManager.find('Lote', {
-                            where: {
-                                nota_ingreso_id: Number(id),
-                                producto_id: detalleAntiguo.producto_id,
-                                numero_lote: detalleAntiguo.lote_numero
-                            }
-                        });
-                        for (const lote of lotesAntiguos) {
-                            const key = `${detalleAntiguo.producto_id}|${detalleAntiguo.lote_numero}`;
-                            oldLoteStates.set(key, {
-                                disponible: Number(lote.cantidad_disponible),
-                                cantidadIngresada: Number(detalleAntiguo.cantidad)
-                            });
+                    // Revisar lotes antiguos antes de reconstruir el detalle de la nota.
+                    const lotesAntiguos = await transactionalEntityManager.find('Lote', {
+                        where: { nota_ingreso_id: notaId }
+                    });
+                    const loteIdsAntiguos = lotesAntiguos.map((lote) => Number(lote.id)).filter(Number.isFinite);
+
+                    const lotesConStockConsumido = lotesAntiguos.filter((lote) => (
+                        Number(lote.cantidad_disponible) < Number(lote.cantidad_ingresada)
+                    ));
+                    if (lotesConStockConsumido.length > 0) {
+                        const lotesBloqueados = lotesConStockConsumido
+                            .slice(0, 5)
+                            .map((lote) => `${lote.numero_lote} (${Number(lote.cantidad_disponible)}/${Number(lote.cantidad_ingresada)})`)
+                            .join(', ');
+                        throw new Error(`No se puede editar esta nota porque tiene lotes con stock ya consumido: ${lotesBloqueados}. Anule o ajuste las salidas asociadas antes de cambiar los detalles.`);
+                    }
+
+                    if (loteIdsAntiguos.length > 0) {
+                        const salidasRelacionadas = await transactionalEntityManager.query(`
+                            SELECT
+                                l.id AS lote_id,
+                                p.codigo AS producto_codigo,
+                                l.numero_lote,
+                                COUNT(DISTINCT nsd.id)::int AS movimientos_salida
+                            FROM lotes l
+                            JOIN productos p ON p.id = l.producto_id
+                            JOIN nota_salida_detalles nsd ON (
+                                nsd.lote_id = l.id
+                                OR (
+                                    nsd.lote_id IS NULL
+                                    AND nsd.producto_id = l.producto_id
+                                    AND COALESCE(nsd.lote_numero, '') = COALESCE(l.numero_lote, '')
+                                )
+                            )
+                            WHERE l.id = ANY($1::int[])
+                            GROUP BY l.id, p.codigo, l.numero_lote
+                            ORDER BY p.codigo, l.numero_lote
+                        `, [loteIdsAntiguos]);
+
+                        if (salidasRelacionadas.length > 0) {
+                            const referencias = salidasRelacionadas
+                                .slice(0, 5)
+                                .map((row) => `${row.producto_codigo || 'SIN CODIGO'} / ${row.numero_lote || 'SIN LOTE'}`)
+                                .join(', ');
+                            throw new Error(`No se puede editar esta nota porque existen salidas asociadas a sus lotes: ${referencias}. Anule o ajuste esas salidas antes de cambiar los detalles.`);
                         }
                     }
 
                     // Eliminar directamente los registros de Kardex de este ingreso (sin dejar rastro de reversa)
                     await transactionalEntityManager.delete('Kardex', {
                         documento_tipo: 'NOTA_INGRESO',
-                        referencia_id: Number(id)
+                        referencia_id: notaId
                     });
 
+                    // Eliminar los lotes antiguos de la nota. Si un producto/lote cambio en la edicion,
+                    // no debe quedar como stock disponible fantasma en inventario.
+                    await transactionalEntityManager.delete('Lote', { nota_ingreso_id: notaId });
+
                     // Eliminar detalles antiguos
-                    // (los lotes se ajustan en el paso de inserción con la fórmula correcta)
-                    await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: Number(id) });
+                    await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: notaId });
 
                     // Insertar nuevos detalles
                     for (const detalle of detalles) {
@@ -1080,14 +1108,8 @@ async function ingresosRoutes(fastify, options) {
                         });
 
                         if (loteExistente) {
-                            // Fórmula correcta: preserva las salidas ya registradas
-                            // disponible_nuevo = max(0, disponible_antes_de_editar - cantidad_ingresada_antigua + cantidad_nueva)
-                            const loteKey = `${detalle.producto_id}|${detalle.lote_numero}`;
-                            const oldState = oldLoteStates.get(loteKey);
-                            const oldDisponible = oldState !== undefined ? oldState.disponible : Number(loteExistente.cantidad_disponible);
-                            const oldCantidad = oldState !== undefined ? oldState.cantidadIngresada : Number(loteExistente.cantidad_ingresada);
-                            loteExistente.cantidad_ingresada = Number(detalle.cantidad);
-                            loteExistente.cantidad_disponible = Math.max(0, oldDisponible - oldCantidad + Number(detalle.cantidad));
+                            loteExistente.cantidad_ingresada = Number(loteExistente.cantidad_ingresada) + Number(detalle.cantidad);
+                            loteExistente.cantidad_disponible = Number(loteExistente.cantidad_disponible) + Number(detalle.cantidad);
                             loteExistente.fecha_vencimiento = fechaVencimiento;
                             await transactionalEntityManager.save('Lote', loteExistente);
                         } else {
