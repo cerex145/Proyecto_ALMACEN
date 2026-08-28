@@ -504,13 +504,13 @@ export const InventarioGeneral = () => {
                     </div>
 
                     {/* Resultados visibles + botón reset */}
-                    {(stockFiltro || vencimientoFiltro || clienteFiltro) && (
+                    {(busqueda || stockFiltro || vencimientoFiltro || clienteFiltro) && (
                         <div className="mt-3 flex items-center justify-between">
                             <span className="text-xs text-slate-500">
                                 Mostrando <strong className="text-slate-700">{inventarioFiltrado.length}</strong> de {totalFilas} registros
                             </span>
                             <button
-                                onClick={() => { setStockFiltro(''); setVencimientoFiltro(''); setClienteFiltro(''); }}
+                                onClick={() => { setBusqueda(''); setStockFiltro(''); setVencimientoFiltro(''); setClienteFiltro(''); }}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
                             >
                                 Limpiar filtros
