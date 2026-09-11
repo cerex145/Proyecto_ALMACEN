@@ -18,6 +18,13 @@ build/
 npm-debug.log*
 logs/
 
+# Backups locales de base de datos
+backups/
+apps/backups/
+database/backup.sql
+*.dump
+*.backup
+
 # IDE
 .vscode/
 .idea/

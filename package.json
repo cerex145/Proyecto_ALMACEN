@@ -19,6 +19,7 @@
     "dev:electron": "wait-on http://localhost:5173 && npm run dev --workspace=@sistema-almacen/electron",
     "migrate:supabase": "npm run migrate:mysql-to-postgres:init --workspace=@sistema-almacen/api",
     "verify:migrate:supabase": "npm run verify:mysql-to-postgres --workspace=@sistema-almacen/api",
+    "verify:inventory-reversal": "node scripts/verify-inventory-reversal-stock.js",
     "stock:rebuild": "npm run stock:rebuild --workspace=@sistema-almacen/api",
     "validate:inventory": "node scripts/validate-inventory-import.js",
     "build": "npm run build:renderer && npm run build:electron",
