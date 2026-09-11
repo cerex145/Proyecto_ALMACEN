@@ -12,18 +12,41 @@ const resolveRoboto = (fileName) => {
 
 const localFontPath = path.join(__dirname, '../assets/fonts/');
 
-const robotoFonts = {
-    normal: resolveRoboto('Roboto-Regular.ttf') || path.join(localFontPath, 'Roboto-Regular.ttf'),
-    bold: resolveRoboto('Roboto-Medium.ttf') || path.join(localFontPath, 'Roboto-Medium.ttf'),
-    italics: resolveRoboto('Roboto-Italic.ttf') || path.join(localFontPath, 'Roboto-Italic.ttf'),
-    bolditalics: resolveRoboto('Roboto-MediumItalic.ttf') || path.join(localFontPath, 'Roboto-MediumItalic.ttf')
+const isValidFontFile = (fontFile) => {
+    if (!fontFile || !fs.existsSync(fontFile)) return false;
+
+    const fd = fs.openSync(fontFile, 'r');
+    try {
+        const header = Buffer.alloc(4);
+        fs.readSync(fd, header, 0, 4, 0);
+        return header.equals(Buffer.from([0x00, 0x01, 0x00, 0x00]))
+            || header.equals(Buffer.from('OTTO'))
+            || header.equals(Buffer.from('ttcf'));
+    } finally {
+        fs.closeSync(fd);
+    }
 };
 
-const robotoDisponible = Object.values(robotoFonts).every((fontFile) => fs.existsSync(fontFile));
+const resolveFont = (fileName) => {
+    const candidates = [
+        resolveRoboto(fileName),
+        path.join(localFontPath, fileName)
+    ].filter(Boolean);
 
-if (!robotoDisponible) {
-    throw new Error('No se encontraron fuentes Roboto válidas para PDF');
-}
+    const fontFile = candidates.find(isValidFontFile);
+    if (!fontFile) {
+        throw new Error(`No se encontro una fuente Roboto valida: ${fileName}`);
+    }
+
+    return fontFile;
+};
+
+const robotoFonts = {
+    normal: resolveFont('Roboto-Regular.ttf'),
+    bold: resolveFont('Roboto-Medium.ttf'),
+    italics: resolveFont('Roboto-Italic.ttf'),
+    bolditalics: resolveFont('Roboto-MediumItalic.ttf')
+};
 
 const fonts = { Roboto: robotoFonts };
 const defaultFontName = 'Roboto';
