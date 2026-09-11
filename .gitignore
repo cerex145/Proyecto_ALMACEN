@@ -22,8 +22,17 @@ logs/
 backups/
 apps/backups/
 database/backup.sql
+backup*.sql
+*_backup*.sql
+supabase_backup*.sql
 *.dump
 *.backup
+
+# Archivos locales de análisis/carga/documentos pesados
+*.xlsx
+*.xls
+*.pdf
+~$*
 
 # IDE
 .vscode/
@@ -66,3 +75,21 @@ verify_fifo.js
 check_stock.js
 ingreso.csv
 salida.csv
+
+# Scripts locales de diagnóstico en la raíz
+/analyze_*.js
+/check_*.js
+/compare_*.js
+/delete_*.js
+/find_*.js
+/generate_*.js
+/inspect_*.js
+/list_*.js
+/migrate_*.js
+/print_*.js
+/read_*.js
+/run_*.js
+/search_*.js
+/separar_*.js
+/simulate_*.js
+/verify_*.js
