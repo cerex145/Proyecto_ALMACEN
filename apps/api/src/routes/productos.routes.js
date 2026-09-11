@@ -1627,7 +1627,7 @@ async function productoRoutes(fastify, options) {
                     COALESCE(SUM(
                         CASE
                             WHEN k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION') THEN k.cantidad
-                            WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO') THEN -k.cantidad
+                            WHEN k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA') THEN -k.cantidad
                             ELSE 0
                         END
                     ), 0) AS stock_calculado
