@@ -288,13 +288,17 @@ async function kardexRoutes(fastify, options) {
             params.push(tipo_movimiento);
         }
 
+        // Filtrar por la misma fecha que se muestra en el Kardex: la fecha de la
+        // nota de ingreso/salida. created_at solo respalda movimientos sin nota.
+        const fechaMovimientoSql = 'DATE(COALESCE(ni.fecha, ns.fecha, k.created_at))';
+
         if (fecha_desde) {
-            sql += ` AND DATE(k.created_at) >= $${paramIndex++}`;
+            sql += ` AND ${fechaMovimientoSql} >= $${paramIndex++}`;
             params.push(fecha_desde);
         }
 
         if (fecha_hasta) {
-            sql += ` AND DATE(k.created_at) <= $${paramIndex++}`;
+            sql += ` AND ${fechaMovimientoSql} <= $${paramIndex++}`;
             params.push(fecha_hasta);
         }
 
@@ -510,13 +514,16 @@ async function kardexRoutes(fastify, options) {
             paramIndex++;
         }
 
+        // Mantener la exportacion alineada con el filtro visible del Kardex.
+        const fechaMovimientoSql = 'DATE(COALESCE(ni.fecha, ns.fecha, k.created_at))';
+
         if (fecha_desde) {
-            sql += ` AND DATE(k.created_at) >= $${paramIndex++}`;
+            sql += ` AND ${fechaMovimientoSql} >= $${paramIndex++}`;
             params.push(fecha_desde);
         }
 
         if (fecha_hasta) {
-            sql += ` AND DATE(k.created_at) <= $${paramIndex++}`;
+            sql += ` AND ${fechaMovimientoSql} <= $${paramIndex++}`;
             params.push(fecha_hasta);
         }
 
