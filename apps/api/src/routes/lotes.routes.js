@@ -1,3 +1,4 @@
+const { correctLotData } = require('../services/lotes-datos.service');
 const { quantity, lockProducts, stock, audit } = require('../utils/inventory');
 // Schemas para documentación Swagger
 const LoteSchema = {
@@ -236,6 +237,40 @@ async function lotesRoutes(fastify, options) {
             });
             return reply.code(201).send({ success: true, data: result, message: 'Lote creado y registrado en Kardex' });
         } catch (error) { return reply.code(400).send({ success: false, error: error.message }); }
+    });
+
+    // Metadata corrections preserve all stock quantities and synchronize document snapshots.
+    fastify.patch('/api/lotes/:id/datos', {
+        schema: {
+            tags: ['Lotes'], description: 'Corregir número de lote y vencimiento sin modificar cantidades',
+            params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
+            body: {
+                type: 'object', additionalProperties: false,
+                required: ['numero_lote', 'fecha_vencimiento', 'motivo', 'anterior'],
+                properties: {
+                    numero_lote: { type: 'string', minLength: 1, maxLength: 100 },
+                    fecha_vencimiento: { type: ['string', 'null'], format: 'date' },
+                    motivo: { type: 'string', minLength: 3, maxLength: 500 },
+                    anterior: { type: 'object', additionalProperties: false,
+                        required: ['numero_lote', 'fecha_vencimiento'], properties: {
+                            numero_lote: { type: 'string' }, fecha_vencimiento: { type: ['string', 'null'], format: 'date' }
+                        } }
+                }
+            },
+            response: {
+                200: { type: 'object', properties: { success: { type: 'boolean' }, data: LoteSchema, message: { type: 'string' } } },
+                400: ErrorResponseSchema, 404: ErrorResponseSchema, 409: ErrorResponseSchema
+            }
+        }
+    }, async (request, reply) => {
+        try {
+            const data = await correctLotData(fastify.db, request, request.params.id, request.body);
+            return { success: true, data, message: 'Lote y documentos corregidos. Cantidades conservadas.' };
+        } catch (error) {
+            if (!error.statusCode || error.statusCode >= 500) request.log.error(error);
+            return reply.code(error.statusCode || 500).send({ success: false,
+                error: error.statusCode && error.statusCode < 500 ? error.message : 'No se pudo guardar la corrección. Intente nuevamente.' });
+        }
     });
 
     // PUT /api/lotes/:id - Actualizar lote

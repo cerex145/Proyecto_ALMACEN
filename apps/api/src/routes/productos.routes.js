@@ -1,3 +1,4 @@
+const { canAccess } = require('../utils/authorization');
 const { lockProducts, stock, quantity } = require('../utils/inventory');
 const ExcelJS = require('exceljs');
 const { Brackets, Like } = require('typeorm');
@@ -1567,6 +1568,7 @@ async function productoRoutes(fastify, options) {
                                     registro_sanitario: { type: 'string', nullable: true },
                                     stock_minimo: { type: 'number' },
                                     stock_calculado: { type: 'number' },
+                                    puede_editar_lotes: { type: 'boolean' },
                                     total_lotes: { type: 'integer' },
                                     proximo_vencimiento: { type: 'string', nullable: true },
                                     activo: { type: 'boolean' },
@@ -1653,6 +1655,8 @@ async function productoRoutes(fastify, options) {
                     ) AS proximo_vencimiento,
                     json_agg(
                         json_build_object(
+                            'id', l.id,
+                            'nota_ingreso_id', l.nota_ingreso_id,
                             'numero_lote', l.numero_lote,
                             'fecha_vencimiento', l.fecha_vencimiento,
                             'cantidad_ingresada', COALESCE(l.cantidad_ingresada, 0),
@@ -1753,6 +1757,7 @@ async function productoRoutes(fastify, options) {
             registro_sanitario: row.registro_sanitario || null,
             stock_minimo: 0,
             stock_calculado: Number(row.stock_calculado || 0),
+            puede_editar_lotes: canAccess(request.user, 'PATCH', '/api/lotes/:id/datos'),
             total_lotes: Number(row.total_lotes || 0),
             proximo_vencimiento: row.proximo_vencimiento || null,
             activo: Number(row.activo || 0) === 1,

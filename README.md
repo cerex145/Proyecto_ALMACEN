@@ -70,3 +70,9 @@ La restauración crea primero un respaldo de seguridad. Los archivos SQL histór
 stock:rebuild funciona como diagnóstico por defecto. --apply requiere un respaldo previo y rechaza ajustes o referencias antiguas ambiguas que no puedan reconstruirse con certeza.
 
 Esta corrección no cambia las entidades, el esquema de Supabase, Docker, Electron ni dependencias. No aplica reparaciones retroactivas a los datos de la nube.
+
+## Corregir lote y vencimiento
+
+En **Stock de inventario**, pulse **Editar lote** en la fila del ingreso que desea corregir. Cambie el número de lote o su fecha de vencimiento, indique el motivo y pulse **Guardar corrección**. La fecha puede quedar vacía para productos sin vencimiento.
+
+La opción requiere permiso de actualización de productos/lotes; los usuarios de consulta no pueden guardar cambios. La corrección conserva cantidades y saldos, actualiza los documentos asociados y registra usuario, motivo y valores anteriores en auditoría. Si otro usuario modificó el lote, debe actualizar el inventario antes de intentarlo nuevamente. Los documentos antiguos que no identifican un ingreso con certeza requieren revisión y bloquean toda la corrección.
