@@ -1,3 +1,5 @@
+import { todayCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useParams } from 'react-router-dom';
@@ -70,11 +72,11 @@ export const NotaSalidaForm = () => {
     const { register, control, handleSubmit, reset, setValue, getValues, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
             cliente_id: '',
-            fecha: new Date().toISOString().split('T')[0],
+            fecha: todayCalendarDate(),
             responsable_id: 1,
             tipo_documento: '',
             numero_documento: '',
-            fecha_ingreso: new Date().toISOString().split('T')[0],
+            fecha_ingreso: todayCalendarDate(),
             motivo_salida: '',
             detalles: []
         }
@@ -1753,6 +1755,10 @@ export const NotaSalidaForm = () => {
                 cant_fraccion: Number(det.cant_fraccion || 0)
             })).filter((det) => Number.isFinite(det.producto_id) && Number(det.producto_id) > 0 && Number(det.cantidad) > 0);
 
+            if (detallesSanitizados.length !== (data.detalles || []).length) {
+                showToast('Hay filas sin producto o cantidad válida; corríjalas antes de guardar.', 'error');
+                return;
+            }
             if (detallesSanitizados.length === 0) {
                 showToast('No hay detalles válidos para guardar.', 'error');
                 return;
@@ -1760,7 +1766,7 @@ export const NotaSalidaForm = () => {
 
             const payload = {
                 cliente_id: clienteIdFinal,
-                fecha: data.fecha || new Date().toISOString().split('T')[0],
+                fecha: data.fecha || todayCalendarDate(),
                 responsable_id: Number(data.responsable_id || 1),
                 tipo_documento: data.tipo_documento || null,
                 numero_documento: data.numero_documento || null,
@@ -1811,7 +1817,7 @@ export const NotaSalidaForm = () => {
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
             } else {
-                const opened = window.open(pdfUrl, '_blank');
+                const opened = await openApiDocument(pdfUrl);
                 if (!opened) {
                     showToast('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.', 'warning');
                 }

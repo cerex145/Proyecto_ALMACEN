@@ -1,3 +1,4 @@
+const { quantity, lockProducts, stock, audit } = require('../utils/inventory');
 // Schemas para documentación Swagger
 const LoteSchema = {
     type: 'object',
@@ -216,52 +217,25 @@ async function lotesRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const {
-            producto_id,
-            numero_lote,
-            fecha_vencimiento,
-            cantidad_ingresada,
-            nota_ingreso_id
-        } = request.body;
-
-        // Validaciones
-        if (!producto_id || !numero_lote || !cantidad_ingresada) {
-            return reply.status(400).send({
-                success: false,
-                error: 'Producto ID, número de lote y cantidad son obligatorios'
-            });
-        }
-
         try {
-            // Verificar producto
-            const producto = await productoRepo.findOneBy({ id: Number(producto_id) });
-            if (!producto) {
-                return reply.status(404).send({ success: false, error: 'Producto no encontrado' });
-            }
-
-            const lote = loteRepo.create({
-                producto_id: Number(producto_id),
-                numero_lote,
-                fecha_vencimiento,
-                cantidad_ingresada: Number(cantidad_ingresada),
-                cantidad_disponible: Number(cantidad_ingresada),
-                nota_ingreso_id: nota_ingreso_id ? Number(nota_ingreso_id) : null
+            const result = await fastify.db.transaction(async tx => {
+                const body = request.body;
+                const amount = quantity(body.cantidad_ingresada);
+                if (!String(body.numero_lote || '').trim()) throw new Error('El número de lote es obligatorio');
+                if (body.nota_ingreso_id) throw new Error('Los lotes vinculados a ingresos deben registrarse desde la nota de ingreso');
+                await lockProducts(tx, [body.producto_id]);
+                if (!await tx.findOne('Producto', { where: { id: Number(body.producto_id) } })) throw new Error('Producto no encontrado');
+                const lote = await tx.save('Lote', loteRepo.create({ producto_id: Number(body.producto_id),
+                    numero_lote: String(body.numero_lote).trim(), fecha_vencimiento: body.fecha_vencimiento || null,
+                    cantidad_ingresada: amount, cantidad_disponible: amount, nota_ingreso_id: null }));
+                await tx.save('Kardex', { producto_id: lote.producto_id, lote_numero: lote.numero_lote,
+                    tipo_movimiento: 'AJUSTE_POSITIVO', cantidad: amount, saldo: await stock(tx, lote.producto_id),
+                    documento_tipo: 'LOTE_MANUAL', documento_numero: String(lote.id), referencia_id: lote.id });
+                await audit(tx, request, 'CREAR', 'lotes', lote.id, null, lote);
+                return lote;
             });
-
-            const loteGuardado = await loteRepo.save(lote);
-
-            return reply.status(201).send({
-                success: true,
-                data: loteGuardado,
-                message: 'Lote creado exitosamente'
-            });
-
-        } catch (error) {
-            return reply.status(400).send({
-                success: false,
-                error: error.message
-            });
-        }
+            return reply.code(201).send({ success: true, data: result, message: 'Lote creado y registrado en Kardex' });
+        } catch (error) { return reply.code(400).send({ success: false, error: error.message }); }
     });
 
     // PUT /api/lotes/:id - Actualizar lote
@@ -296,24 +270,30 @@ async function lotesRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-        const { fecha_vencimiento, cantidad_disponible } = request.body;
-
-        const lote = await loteRepo.findOneBy({ id: Number(id) });
-        if (!lote) {
-            return reply.status(404).send({ success: false, error: 'Lote no encontrado' });
-        }
-
-        if (fecha_vencimiento) lote.fecha_vencimiento = fecha_vencimiento;
-        if (cantidad_disponible !== undefined) lote.cantidad_disponible = Number(cantidad_disponible);
-
-        await loteRepo.save(lote);
-
-        return {
-            success: true,
-            data: lote,
-            message: 'Lote actualizado exitosamente'
-        };
+        try {
+            const result = await fastify.db.transaction(async tx => {
+                let lote = await tx.findOne('Lote', { where: { id: Number(request.params.id) } });
+                if (!lote) throw Object.assign(new Error('Lote no encontrado'), { statusCode: 404 });
+                await lockProducts(tx, [lote.producto_id]);
+                lote = await tx.findOne('Lote', { where: { id: Number(request.params.id) } });
+                const before = { ...lote };
+                const value = request.body.cantidad_disponible === undefined ? Number(lote.cantidad_disponible) : Number(request.body.cantidad_disponible);
+                if (!Number.isFinite(value) || value < 0) throw new Error('Cantidad inválida');
+                if (value > 0) quantity(value);
+                const delta = Math.round((value - Number(lote.cantidad_disponible)) * 100) / 100;
+                lote.cantidad_disponible = value;
+                if (delta > 0) lote.cantidad_ingresada = Number(lote.cantidad_ingresada) + delta;
+                if (request.body.fecha_vencimiento !== undefined) lote.fecha_vencimiento = request.body.fecha_vencimiento || null;
+                await tx.save('Lote', lote);
+                if (delta) await tx.save('Kardex', { producto_id: lote.producto_id, lote_numero: lote.numero_lote,
+                    tipo_movimiento: delta > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO', cantidad: Math.abs(delta),
+                    saldo: await stock(tx, lote.producto_id), documento_tipo: 'LOTE_MANUAL',
+                    documento_numero: String(lote.id), referencia_id: lote.id });
+                await audit(tx, request, 'ACTUALIZAR', 'lotes', lote.id, before, lote);
+                return lote;
+            });
+            return { success: true, data: result, message: 'Lote actualizado y Kardex sincronizado' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // DELETE /api/lotes/:id - Eliminar lote (lógico)
@@ -340,20 +320,30 @@ async function lotesRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-
-        const lote = await loteRepo.findOneBy({ id: Number(id) });
-        if (!lote) {
-            return reply.status(404).send({ success: false, error: 'Lote no encontrado' });
-        }
-
-        lote.cantidad_disponible = 0;
-        await loteRepo.save(lote);
-
-        return {
-            success: true,
-            message: 'Lote desactivado exitosamente'
-        };
+        try {
+            const result = await fastify.db.transaction(async tx => {
+                let lote = await tx.findOne('Lote', { where: { id: Number(request.params.id) } });
+                if (!lote) throw Object.assign(new Error('Lote no encontrado'), { statusCode: 404 });
+                await lockProducts(tx, [lote.producto_id]);
+                lote = await tx.findOne('Lote', { where: { id: Number(request.params.id) } });
+                const before = { ...lote };
+                const value = 0;
+                if (!Number.isFinite(value) || value < 0) throw new Error('Cantidad inválida');
+                if (value > 0) quantity(value);
+                const delta = Math.round((value - Number(lote.cantidad_disponible)) * 100) / 100;
+                lote.cantidad_disponible = value;
+                if (delta > 0) lote.cantidad_ingresada = Number(lote.cantidad_ingresada) + delta;
+                
+                await tx.save('Lote', lote);
+                if (delta) await tx.save('Kardex', { producto_id: lote.producto_id, lote_numero: lote.numero_lote,
+                    tipo_movimiento: delta > 0 ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO', cantidad: Math.abs(delta),
+                    saldo: await stock(tx, lote.producto_id), documento_tipo: 'LOTE_MANUAL',
+                    documento_numero: String(lote.id), referencia_id: lote.id });
+                await audit(tx, request, 'DESACTIVAR', 'lotes', lote.id, before, lote);
+                return lote;
+            });
+            return { success: true, data: result, message: 'Lote desactivado y Kardex sincronizado' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // GET /api/lotes/producto/:producto_id - Lotes de un producto

@@ -1,3 +1,4 @@
+import { parseNumber as parseLocalizedNumber } from '../../utils/numbers';
 export const detectarDelimitadorCSV = (line) => {
     const raw = String(line || '');
     const comas = (raw.match(/,/g) || []).length;
@@ -96,15 +97,7 @@ export const parseCSVDocument = (content) => {
     return { delimiter, rows };
 };
 
-export const parseNumber = (value, fallback = 0) => {
-    if (value === null || value === undefined || value === '') {
-        return fallback;
-    }
-
-    const normalized = String(value).replace(',', '.').trim();
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : fallback;
-};
+export const parseNumber = parseLocalizedNumber;
 
 const isValidDateParts = (year, month, day) => {
     if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
@@ -177,7 +170,8 @@ export const normalizarFechaInput = (value) => {
     }
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-        return raw;
+        const [year, month, day] = raw.split('-').map(Number);
+        return buildIsoDate(year, month, day);
     }
 
     const ymd = raw.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);

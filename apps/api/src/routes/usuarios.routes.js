@@ -79,6 +79,12 @@ async function usuariosRoutes(fastify, options) {
         }
     };
 
+    fastify.get('/api/usuarios/me', async (request) => ({
+        success: true,
+        usuario: { id: request.user.id, nombre: request.user.nombre, usuario: request.user.usuario,
+            email: request.user.email, rol: request.user.rol }
+    }));
+
     // POST /api/usuarios/registro - Registro de nuevo usuario
     fastify.post('/api/usuarios/registro', {
         schema: {
@@ -131,7 +137,7 @@ async function usuariosRoutes(fastify, options) {
 
             // Verificar rol
             const rol = await rolRepo.findOneBy({ id: Number(rol_id) });
-            if (!rol) {
+            if (!rol || !rol.activo) {
                 return reply.status(404).send({
                     success: false,
                     error: 'Rol no encontrado'
@@ -197,7 +203,7 @@ async function usuariosRoutes(fastify, options) {
                 relations: ['rol']
             });
 
-            if (!usuarioEncontrado || !usuarioEncontrado.activo) {
+            if (!usuarioEncontrado || !usuarioEncontrado.activo || !usuarioEncontrado.rol || !usuarioEncontrado.rol.activo) {
                 return reply.status(401).send({
                     success: false,
                     error: 'Usuario o contraseña inválidos'
@@ -225,6 +231,7 @@ async function usuariosRoutes(fastify, options) {
                 id: usuarioEncontrado.id,
                 usuario: usuarioEncontrado.usuario,
                 rol_id: usuarioEncontrado.rol_id,
+                rol: usuarioEncontrado.rol?.nombre,
                 permisos: usuarioEncontrado.rol?.permisos || {}
             });
 
@@ -258,7 +265,7 @@ async function usuariosRoutes(fastify, options) {
                 type: 'object',
                 properties: {
                     activo: { type: 'boolean', description: 'Filtrar por estado activo' },
-                    rol: { type: 'string', description: 'Filtrar por rol' },
+                    rol_id: { type: 'integer', minimum: 1, description: 'Filtrar por rol' },
                     page: { type: 'integer', minimum: 1, default: 1 },
                     limit: { type: 'integer', minimum: 1, default: 50 }
                 }
@@ -281,7 +288,7 @@ async function usuariosRoutes(fastify, options) {
         const queryBuilder = usuarioRepo.createQueryBuilder('usuario');
 
         if (activo !== undefined) {
-            queryBuilder.where('usuario.activo = :activo', { activo: activo === 'true' });
+            queryBuilder.where('usuario.activo = :activo', { activo: activo === true || activo === 'true' ? 1 : 0 });
         }
 
         if (rol_id) {
@@ -383,7 +390,8 @@ async function usuariosRoutes(fastify, options) {
                 properties: {
                     nombre: { type: 'string' },
                     email: { type: 'string', format: 'email' },
-                    rol_id: { type: 'integer' }
+                    rol_id: { type: 'integer' },
+                    activo: { type: 'boolean' }
                 }
             },
             response: {
@@ -400,7 +408,7 @@ async function usuariosRoutes(fastify, options) {
         }
     }, async (request, reply) => {
         const { id } = request.params;
-        const { nombre, email, activo } = request.body;
+        const { nombre, email, activo, rol_id } = request.body;
 
         const usuario = await usuarioRepo.findOneBy({ id: Number(id) });
         if (!usuario) {
@@ -413,6 +421,11 @@ async function usuariosRoutes(fastify, options) {
             activo: usuario.activo
         };
 
+        if (rol_id !== undefined) {
+            const rol = await rolRepo.findOneBy({ id: Number(rol_id) });
+            if (!rol || !rol.activo) return reply.code(400).send({ success: false, error: 'Rol inválido o inactivo' });
+            usuario.rol_id = rol.id;
+        }
         if (nombre) usuario.nombre = nombre;
         if (email) usuario.email = email;
         if (activo !== undefined) usuario.activo = activo;

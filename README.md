@@ -42,3 +42,31 @@ Para revisar que no quedaron archivos accidentales:
 ```bash
 git status --short
 ```
+
+## Correcciones operativas
+
+La API exige una sesión vigente. El registro de usuarios y los roles requieren administrador. Las sesiones duran ocho horas por defecto y se validan con el usuario y su rol actuales.
+
+Los movimientos de stock usan bloqueos por producto, lotes exactos y auditoría. Las salidas importadas conservan un detalle por lote consumido. Las operaciones antiguas sin trazabilidad suficiente se bloquean para revisión. Los ajustes se registran también en Kardex.
+
+Las alertas se calculan desde lotes con existencias y fechas actuales. Lecturas, descartes y anticipación se guardan como eventos en la tabla existente de auditoría, sin migraciones.
+
+Pruebas de regresión sin acceso a Supabase:
+
+```bash
+npm run test:regression
+npm run verify:safe
+```
+
+Los respaldos usan pg_dump en formato nativo e incluyen el esquema público, JSON, restricciones y secuencias. Se requieren pg_dump y pg_restore en PATH (o PG_DUMP_BIN y PG_RESTORE_BIN). DATABASE_URL se lee de apps/api/.env; las credenciales no se pasan por argumentos de proceso.
+
+```bash
+node scripts/backup-db.js
+node scripts/restore-db.js --file backups/RESPALDO.dump --confirm-restore
+```
+
+La restauración crea primero un respaldo de seguridad. Los archivos SQL históricos necesitan revisión explícita; no se selecciona ni restaura uno automáticamente.
+
+stock:rebuild funciona como diagnóstico por defecto. --apply requiere un respaldo previo y rechaza ajustes o referencias antiguas ambiguas que no puedan reconstruirse con certeza.
+
+Esta corrección no cambia las entidades, el esquema de Supabase, Docker, Electron ni dependencias. No aplica reparaciones retroactivas a los datos de la nube.

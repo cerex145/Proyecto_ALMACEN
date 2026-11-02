@@ -1,3 +1,5 @@
+import { parseCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
@@ -41,7 +43,7 @@ const getDetalleLote = (detalle) => (
 
 const getDetalleVencimiento = (detalle) => {
     const fecha = detalle?.fecha_vencimiento || detalle?.lote?.fecha_vencimiento;
-    return fecha ? new Date(fecha).toLocaleDateString('es-PE') : '-';
+    return fecha ? parseCalendarDate(fecha).toLocaleDateString('es-PE') : '-';
 };
 
 const getDetalleFabricante = (detalle) => (
@@ -135,7 +137,7 @@ export const HistorialIngresosFuncional = () => {
 
             const rows = [];
             notas.forEach((nota) => {
-                const fechaObj = new Date(nota.fecha);
+                const fechaObj = parseCalendarDate(nota.fecha);
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
@@ -158,7 +160,7 @@ export const HistorialIngresosFuncional = () => {
                         cantPorCaja: '-',
                         cantFraccion: '-',
                         cantTotal: '-',
-                        fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
+                        fechaIngreso: parseCalendarDate(nota.fecha).toLocaleDateString('es-PE'),
                         mes,
                         dia,
                         ruc,
@@ -186,7 +188,7 @@ export const HistorialIngresosFuncional = () => {
                         cantPorCaja: toNumberSafe(d.cantidad_por_caja).toFixed(0),
                         cantFraccion: toNumberSafe(d.cantidad_fraccion).toFixed(0),
                         cantTotal: toNumberSafe(d.cantidad_total ?? d.cantidad ?? d.cantidad_inicial ?? d.cantidad_disponible).toFixed(2),
-                        fechaIngreso: new Date(nota.fecha).toLocaleDateString('es-PE'),
+                        fechaIngreso: parseCalendarDate(nota.fecha).toLocaleDateString('es-PE'),
                         mes,
                         dia,
                         ruc,
@@ -207,13 +209,11 @@ export const HistorialIngresosFuncional = () => {
         }
     };
 
-    const handleDescargarPdf = (ingresoId) => {
+    const handleDescargarPdf = async (ingresoId) => {
         if (!ingresoId) return;
         const pdfUrl = `${API_ORIGIN}/api/ingresos/${ingresoId}/pdf`;
-        const opened = window.open(pdfUrl, '_blank');
-        if (!opened) {
-            alert('No se pudo abrir el PDF. Verifica bloqueadores de ventanas emergentes.');
-        }
+        try { await openApiDocument(pdfUrl); }
+        catch (error) { alert(error.message || 'No se pudo descargar el PDF de ingreso.'); }
     };
 
     const handleEditarIngreso = (ingresoId) => {

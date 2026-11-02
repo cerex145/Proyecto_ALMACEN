@@ -1,3 +1,7 @@
+const { formatCalendarDate } = require('../utils/calendar');
+const { quantity, lockProducts, lockDocumentNumbers, stock, audit } = require('../utils/inventory');
+const { applyDetails, restoreDetails } = require('../services/salidas-stock.service');
+const { parseNumber, parseCSV } = require('../utils/import');
 const ExcelJS = require('exceljs');
 const { MoreThan, In } = require('typeorm');
 const { generatePDF } = require('../services/pdf.service');
@@ -133,35 +137,7 @@ async function salidasRoutes(fastify, options) {
         return '';
     };
 
-    const parsearNumero = (valor) => {
-        if (valor === null || valor === undefined || valor === '') return 0;
-        const texto = String(valor).trim();
-        if (texto === '-' || texto.toLowerCase() === 'n/a') return 0;
-
-        const sinEspacios = texto.replace(/\s/g, '');
-        const tieneComa = sinEspacios.includes(',');
-        const tienePunto = sinEspacios.includes('.');
-
-        let normalizado = sinEspacios;
-        if (tieneComa && tienePunto) {
-            normalizado = normalizado.replace(/\./g, '').replace(',', '.');
-        } else if (tieneComa) {
-            normalizado = normalizado.replace(',', '.');
-        }
-
-        normalizado = normalizado.replace(/[^0-9.-]/g, '');
-        return Number.parseFloat(normalizado) || 0;
-    };
-
-    const obtenerStockDisponiblePorLotes = async (entityManager, productoId) => {
-        const resultado = await entityManager
-            .createQueryBuilder('Lote', 'lote')
-            .select('COALESCE(SUM(lote.cantidad_disponible), 0)', 'stock')
-            .where('lote.producto_id = :productoId', { productoId: Number(productoId) })
-            .getRawOne();
-
-        return Number(resultado?.stock || 0);
-    };
+    const parsearNumero = parseNumber;
 
     const parsearFecha = (valor, mesAux = '', diaAux = '') => {
         if (valor instanceof Date) return valor;
@@ -612,7 +588,8 @@ async function salidasRoutes(fastify, options) {
                             required: ['producto_id', 'cantidad'],
                             properties: {
                                 producto_id: { type: 'integer' },
-                                cantidad: { type: 'number', minimum: 0 },
+                                cantidad: { type: 'number', exclusiveMinimum: 0 },
+                                precio_unitario: { type: 'number', minimum: 0, nullable: true },
                                 cant_bulto: { type: 'number', minimum: 0 },
                                 cant_caja: { type: 'number', minimum: 0 },
                                 cant_x_caja: { type: 'number', minimum: 0 },
@@ -642,228 +619,30 @@ async function salidasRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const {
-            cliente_id,
-            cliente_ruc,
-            fecha,
-            responsable_id,
-            detalles,
-            observaciones,
-            tipo_documento,
-            numero_documento,
-            fecha_ingreso,
-            motivo_salida
-        } = request.body;
-
-        // Debug: loguear request
-        console.log('📝 POST /api/salidas body:', JSON.stringify({ cliente_id, fecha, detalles, responsable_id }, null, 2));
-
-        // Validaciones detalladas
-        if (!cliente_id) {
-            return reply.status(400).send({ success: false, error: 'Campo obligatorio: cliente_id' });
+        const { cliente_id, cliente_ruc, fecha, responsable_id, detalles, observaciones,
+            tipo_documento, numero_documento, fecha_ingreso, motivo_salida } = request.body;
+        if (!cliente_id || !Array.isArray(detalles) || !detalles.length) {
+            return reply.code(400).send({ success: false, error: 'Cliente y detalles son obligatorios' });
         }
-        if (!detalles || !Array.isArray(detalles) || detalles.length === 0) {
-            return reply.status(400).send({ success: false, error: 'Detalles debe ser un array con al menos un item' });
-        }
-
-        const fechaFinal = fecha || new Date().toISOString().split('T')[0];
-
         try {
-            // Verificar cliente
             const cliente = await clienteRepo.findOneBy({ id: Number(cliente_id) });
-            if (!cliente) {
-                return reply.status(404).send({ success: false, error: 'Cliente no encontrado' });
-            }
-
-            // Validar estructura de detalles
-            for (const detalle of detalles) {
-                if (!detalle.producto_id || !detalle.cantidad || Number(detalle.cantidad) <= 0) {
-                    return reply.status(400).send({ success: false, error: 'Cada detalle debe incluir producto_id y cantidad > 0' });
-                }
-            }
-
-            // Validar stock por lotes por producto (Primera barrera)
-            const EPSILON = 0.001; // Margen para flotantes
-            const totalPorProducto = new Map();
-            for (const detalle of detalles) {
-                const pid = Number(detalle.producto_id);
-                totalPorProducto.set(pid, (totalPorProducto.get(pid) || 0) + Number(detalle.cantidad));
-            }
-
-            for (const [pid, totalCantidad] of totalPorProducto.entries()) {
-                const producto = await productoRepo.findOneBy({ id: pid });
-                if (!producto) {
-                    throw new Error(`Producto ${pid} no encontrado`);
-                }
-                const stock = await obtenerStockDisponiblePorLotes(fastify.db, pid);
-                // Validación con epsilon
-                if (stock + EPSILON < totalCantidad) {
-                    throw new Error(`Stock insuficiente para ${producto.descripcion}. Disponible: ${stock.toFixed(2)}, Solicitado: ${totalCantidad.toFixed(2)}`);
-                }
-            }
-
-            const numeroSalida = await generarNumeroSalida();
-
-            // Crear objeto nota base
-            const nota = notaSalidaRepo.create({
-                numero_salida: numeroSalida,
-                cliente_id: Number(cliente_id),
-                cliente_ruc: cliente.cuit || cliente_ruc || null,
-                fecha: fechaFinal,
-                responsable_id,
-                tipo_documento: tipo_documento || null,
-                numero_documento: numero_documento || null,
-                fecha_ingreso: fecha_ingreso || null,
-                motivo_salida: motivo_salida || null,
-                observaciones,
-                estado: 'REGISTRADA'
+            if (!cliente) return reply.code(404).send({ success: false, error: 'Cliente no encontrado' });
+            const notaGuardada = await fastify.db.transaction(async tx => {
+                await lockDocumentNumbers(tx);
+                const numeroSalida = await generarNumeroSalida();
+                const nota = await tx.save('NotaSalida', notaSalidaRepo.create({
+                    numero_salida: numeroSalida, cliente_id: cliente.id, cliente_ruc: cliente.cuit || cliente_ruc || null,
+                    fecha: fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' }),
+                    responsable_id: request.user.id, tipo_documento: tipo_documento || null,
+                    numero_documento: numero_documento || null, fecha_ingreso: fecha_ingreso || null,
+                    motivo_salida: motivo_salida || null, observaciones: observaciones || null, estado: 'REGISTRADA'
+                }));
+                await applyDetails(tx, nota, detalles, cliente);
+                await audit(tx, request, 'CREAR', 'notas_salida', nota.id, null, { ...nota, detalles });
+                return nota;
             });
-
-            // TRANSACCIÓN PRINCIPAL
-            let notaGuardada = null;
-            await fastify.db.transaction(async (tx) => {
-                notaGuardada = await tx.save('NotaSalida', nota);
-
-                for (const detalle of detalles) {
-                    const pid = Number(detalle.producto_id);
-                    const cantidadSolicitada = Number(detalle.cantidad);
-                    const precioUnitario = detalle.precio_unitario;
-                    const cantBulto = parsearNumero(detalle.cant_bulto);
-                    const cantCaja = parsearNumero(detalle.cant_caja);
-                    const cantXCaja = parsearNumero(detalle.cant_x_caja);
-                    const cantFraccion = parsearNumero(detalle.cant_fraccion);
-
-                    const producto = await tx.findOne('Producto', { where: { id: pid } });
-
-                    // CASO 1: Lote específico seleccionado
-                    if (detalle.lote_id) {
-                        const lote = await tx.findOne('Lote', { where: { id: Number(detalle.lote_id) } });
-                        if (!lote) throw new Error(`Lote ${detalle.lote_id} no encontrado`);
-
-                        if (Number(lote.cantidad_disponible) + EPSILON < cantidadSolicitada) {
-                            throw new Error(`Stock insuficiente en lote ${lote.numero_lote}. Disponible: ${Number(lote.cantidad_disponible).toFixed(2)}`);
-                        }
-
-                        // Actualizar Lote
-                        lote.cantidad_disponible = Number(lote.cantidad_disponible) - cantidadSolicitada;
-                        if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
-                        await tx.save('Lote', lote);
-
-                        // Crear Detalle
-                        const detalleNota = notaSalidaDetalleRepo.create({
-                            nota_salida_id: notaGuardada.id,
-                            producto_id: pid,
-                            lote_id: lote.id,                          // ← FK exacta al lote
-                            lote_numero: lote.numero_lote || null,
-                            fecha_vencimiento: lote.fecha_vencimiento || null,
-                            um: producto.unidad_medida || null,
-                            fabricante: producto.fabricante || null,
-                            cantidad: cantidadSolicitada,
-                            cant_bulto: detalle.cant_bulto != null ? Number(cantBulto) : null,
-                            cant_caja: detalle.cant_caja != null ? Number(cantCaja) : null,
-                            cant_x_caja: detalle.cant_x_caja != null ? Number(cantXCaja) : null,
-                            cant_fraccion: detalle.cant_fraccion != null ? Number(cantFraccion) : null,
-                            cantidad_total: cantidadSolicitada
-                        });
-                        await tx.save('NotaSalidaDetalle', detalleNota);
-
-                        // Kardex
-                        const movimiento = kardexRepo.create({
-                            producto_id: pid,
-                            lote_numero: lote.numero_lote,
-                            tipo_movimiento: 'SALIDA',
-                            cantidad: cantidadSolicitada,
-                            saldo: Number(lote.cantidad_disponible),
-                            documento_tipo: 'NOTA_SALIDA',
-                            documento_numero: numeroSalida,
-                            referencia_id: notaGuardada.id
-                        });
-                        await tx.save('Kardex', movimiento);
-
-                    }
-                    // CASO 2: Selección Automática FIFO (Sin Lote)
-                    else {
-                        // Buscar lotes con stock > 0, ordenados por vencimiento o creación
-                        const lotesDisponibles = await tx.find('Lote', {
-                            where: {
-                                producto_id: pid,
-                                cantidad_disponible: MoreThan(0.00)
-                            },
-                            order: {
-                                fecha_vencimiento: 'ASC',
-                                created_at: 'ASC'
-                            }
-                        });
-
-                        let pendiente = cantidadSolicitada;
-
-                        for (const lote of lotesDisponibles) {
-                            if (pendiente <= EPSILON) break;
-
-                            const disponible = Number(lote.cantidad_disponible);
-                            const aTomar = Math.min(disponible, pendiente);
-
-                            // Actualizar Lote
-                            lote.cantidad_disponible = disponible - aTomar;
-                            await tx.save('Lote', lote);
-
-                            // Crear Detalle (Uno por cada lote usado)
-                            const detalleNota = notaSalidaDetalleRepo.create({
-                                nota_salida_id: notaGuardada.id,
-                                producto_id: pid,
-                                lote_id: lote.id,                      // ← FK exacta al lote
-                                lote_numero: lote.numero_lote || null,
-                                fecha_vencimiento: lote.fecha_vencimiento || null,
-                                um: producto.unidad_medida || null,
-                                fabricante: producto.fabricante || null,
-                                cantidad: aTomar,
-                                cant_bulto: detalle.cant_bulto != null ? Number(cantBulto) : null,
-                                cant_caja: detalle.cant_caja != null ? Number(cantCaja) : null,
-                                cant_x_caja: detalle.cant_x_caja != null ? Number(cantXCaja) : null,
-                                cant_fraccion: detalle.cant_fraccion != null ? Number(cantFraccion) : null,
-                                cantidad_total: aTomar
-                            });
-                            await tx.save('NotaSalidaDetalle', detalleNota);
-
-                            // Kardex
-                            // Nota: El saldo aquí es un poco delicado en batch, pero usaremos el stock global actual menos lo acumulado
-                            const movimiento = kardexRepo.create({
-                                producto_id: pid,
-                                lote_numero: lote.numero_lote,
-                                tipo_movimiento: 'SALIDA',
-                                cantidad: aTomar,
-                                saldo: Number(lote.cantidad_disponible),
-                                documento_tipo: 'NOTA_SALIDA',
-                                documento_numero: numeroSalida,
-                                referencia_id: notaGuardada.id
-                            });
-                            await tx.save('Kardex', movimiento);
-
-                            pendiente -= aTomar;
-                        }
-
-                        // Verificación final de integridad
-                        if (pendiente > EPSILON) {
-                            const stockDisponible = await obtenerStockDisponiblePorLotes(tx, pid);
-                            throw new Error(`Inconsistencia en lotes para ${producto.descripcion}. Disponible por lotes: ${stockDisponible.toFixed(2)}, faltaron: ${pendiente.toFixed(2)}`);
-                        }
-                    }
-                }
-            });
-
-            return reply.status(201).send({
-                success: true,
-                data: notaGuardada,
-                message: 'Nota de salida creada exitosamente'
-            });
-
-        } catch (error) {
-            console.error('❌ Error en POST /api/salidas:', error);
-            return reply.status(400).send({
-                success: false,
-                error: error.message || 'Error al crear nota de salida'
-            });
-        }
+            return reply.code(201).send({ success: true, data: notaGuardada, message: 'Nota de salida creada exitosamente' });
+        } catch (error) { return reply.code(400).send({ success: false, error: error.message }); }
     });
 
     // PUT /api/salidas/:id - Actualizar nota de salida con detalles
@@ -916,269 +695,45 @@ async function salidasRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-        const {
-            estado,
-            observaciones,
-            detalles,
-            cliente_id,
-            cliente_ruc,
-            fecha,
-            responsable_id,
-            tipo_documento,
-            numero_documento,
-            fecha_ingreso,
-            motivo_salida
-        } = request.body;
-
-        const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
-        if (!nota) {
-            return reply.status(404).send({ success: false, error: 'Nota de salida no encontrada' });
-        }
-
         try {
-            await fastify.db.transaction(async (transactionalEntityManager) => {
-                // Actualizar campos básicos de la nota
-                if (estado) nota.estado = estado;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'fecha')) nota.fecha = fecha || nota.fecha;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'cliente_id')) {
-                    const clienteIdNumero = Number(cliente_id || 0);
-                    if (!clienteIdNumero || Number.isNaN(clienteIdNumero)) {
-                        throw new Error('Cliente no válido para la nota de salida');
-                    }
-
-                    const cliente = await transactionalEntityManager.findOne('Cliente', {
-                        where: { id: clienteIdNumero }
-                    });
-                    if (!cliente) {
-                        throw new Error('Cliente no encontrado');
-                    }
-
-                    nota.cliente_id = clienteIdNumero;
-                    nota.cliente_ruc = cliente.cuit || cliente_ruc || null;
-                } else if (Object.prototype.hasOwnProperty.call(request.body, 'cliente_ruc')) {
-                    nota.cliente_ruc = cliente_ruc || null;
+            const result = await fastify.db.transaction(async tx => {
+                const nota = await tx.findOne('NotaSalida', { where: { id: Number(request.params.id) }, lock: { mode: 'pessimistic_write' } });
+                if (!nota) throw Object.assign(new Error('Nota de salida no encontrada'), { statusCode: 404 });
+                if (nota.estado === 'CANCELADA') throw new Error('Una salida cancelada no se puede editar');
+                const before = { ...nota };
+                const body = request.body;
+                const cliente = await tx.findOne('Cliente', { where: { id: Number(body.cliente_id ?? nota.cliente_id) } });
+                if (!cliente) throw new Error('Cliente no encontrado');
+                if (body.cliente_id !== undefined && Number(body.cliente_id) !== Number(nota.cliente_id) && !body.detalles) {
+                    throw new Error('Para cambiar el cliente debe enviar y validar todos los detalles');
                 }
-                if (Object.prototype.hasOwnProperty.call(request.body, 'responsable_id')) nota.responsable_id = responsable_id ? Number(responsable_id) : null;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'observaciones')) nota.observaciones = observaciones || null;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'tipo_documento')) nota.tipo_documento = tipo_documento || null;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'numero_documento')) nota.numero_documento = numero_documento || null;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'fecha_ingreso')) nota.fecha_ingreso = fecha_ingreso || null;
-                if (Object.prototype.hasOwnProperty.call(request.body, 'motivo_salida')) nota.motivo_salida = motivo_salida || null;
-
-                await transactionalEntityManager.save('NotaSalida', nota);
-
-                // Si se envían detalles, actualizar toda la estructura
-                if (detalles && Array.isArray(detalles) && detalles.length > 0) {
-                    // Obtener detalles anteriores para revertir cambios en lotes
-                    const detallesAntiguos = await transactionalEntityManager.find('NotaSalidaDetalle', {
-                        where: { nota_salida_id: Number(id) }
-                    });
-
-                    // Revertir cambios en lotes de los detalles anteriores
-                    for (const detalleAntiguo of detallesAntiguos) {
-                        // Restaurar stock: usar lote_id si existe (exacto), si no buscar por numero_lote+producto_id
-                        let lotesParaRevertir = [];
-                        if (detalleAntiguo.lote_id) {
-                            const loteExacto = await transactionalEntityManager.findOne('Lote', {
-                                where: { id: Number(detalleAntiguo.lote_id) }
-                            });
-                            if (loteExacto) lotesParaRevertir = [loteExacto];
-                        } else if (detalleAntiguo.lote_numero) {
-                            const loteFallback = await transactionalEntityManager.findOne('Lote', {
-                                where: {
-                                    numero_lote: detalleAntiguo.lote_numero,
-                                    producto_id: detalleAntiguo.producto_id
-                                },
-                                order: {
-                                    id: 'DESC'
-                                }
-                            });
-                            if (loteFallback) lotesParaRevertir = [loteFallback];
-                        }
-
-                        for (const lote of lotesParaRevertir) {
-                            // Restaurar cantidad disponible en lote
-                            lote.cantidad_disponible = Number(lote.cantidad_disponible) + Number(detalleAntiguo.cantidad);
-                            await transactionalEntityManager.save('Lote', lote);
-                        }
-                    }
-
-                    await transactionalEntityManager.delete('Kardex', {
-                        documento_tipo: 'NOTA_SALIDA',
-                        referencia_id: Number(id)
-                    });
-
-                    // Eliminar detalles antiguos
-                    await transactionalEntityManager.delete('NotaSalidaDetalle', { nota_salida_id: Number(id) });
-
-                    // Validar stock disponible antes de aplicar nuevos detalles
-                    const EPSILON = 0.001;
-                    const totalPorProducto = new Map();
-                    for (const detalle of detalles) {
-                        const pid = Number(detalle.producto_id);
-                        totalPorProducto.set(pid, (totalPorProducto.get(pid) || 0) + Number(detalle.cantidad));
-                    }
-
-                    for (const [pid, totalCantidad] of totalPorProducto.entries()) {
-                        const producto = await transactionalEntityManager.findOne('Producto', { where: { id: pid } });
-                        if (!producto) {
-                            throw new Error(`Producto ${pid} no encontrado`);
-                        }
-                        const stock = await obtenerStockDisponiblePorLotes(transactionalEntityManager, pid);
-                        if (stock + EPSILON < totalCantidad) {
-                            throw new Error(`Stock insuficiente para ${producto.descripcion}. Disponible: ${stock.toFixed(2)}, Solicitado: ${totalCantidad.toFixed(2)}`);
-                        }
-                    }
-
-                    // Insertar nuevos detalles
-                    for (const detalle of detalles) {
-                        const pid = Number(detalle.producto_id);
-                        const cantidadSolicitada = Number(detalle.cantidad);
-
-                        const producto = await transactionalEntityManager.findOne('Producto', { where: { id: pid } });
-                        if (!producto) {
-                            throw new Error(`Producto ${pid} no encontrado`);
-                        }
-
-                        const loteNumeroSolicitado = String(detalle.lote_numero || '').trim();
-                        const loteIdSolicitado = detalle.lote_id ? Number(detalle.lote_id) : null;
-
-                        // CASO 1: Lote específico seleccionado o preservado desde una salida antigua
-                        if (loteIdSolicitado || loteNumeroSolicitado) {
-                            const lote = loteIdSolicitado
-                                ? await transactionalEntityManager.findOne('Lote', { where: { id: loteIdSolicitado } })
-                                : await transactionalEntityManager.findOne('Lote', {
-                                    where: {
-                                        producto_id: pid,
-                                        numero_lote: loteNumeroSolicitado
-                                    },
-                                    order: {
-                                        id: 'DESC'
-                                    }
-                                });
-                            if (!lote) throw new Error(`Lote ${loteIdSolicitado || loteNumeroSolicitado} no encontrado`);
-
-                            if (Number(lote.cantidad_disponible) + EPSILON < cantidadSolicitada) {
-                                throw new Error(`Stock insuficiente en lote ${lote.numero_lote}. Disponible: ${Number(lote.cantidad_disponible).toFixed(2)}`);
-                            }
-
-                            // Actualizar Lote
-                            lote.cantidad_disponible = Number(lote.cantidad_disponible) - cantidadSolicitada;
-                            if (lote.cantidad_disponible < 0) lote.cantidad_disponible = 0;
-                            await transactionalEntityManager.save('Lote', lote);
-
-                            // Crear Detalle
-                            const detalleNota = notaSalidaDetalleRepo.create({
-                                nota_salida_id: nota.id,
-                                producto_id: pid,
-                                lote_id: lote.id,                      // ← FK exacta al lote
-                                lote_numero: lote.numero_lote || null,
-                                fecha_vencimiento: lote.fecha_vencimiento || null,
-                                um: producto.unidad_medida || null,
-                                fabricante: producto.fabricante || null,
-                                cantidad: cantidadSolicitada,
-                                cant_bulto: detalle.cant_bulto != null ? Number(detalle.cant_bulto) : null,
-                                cant_caja: detalle.cant_caja != null ? Number(detalle.cant_caja) : null,
-                                cant_x_caja: detalle.cant_x_caja != null ? Number(detalle.cant_x_caja) : null,
-                                cant_fraccion: detalle.cant_fraccion != null ? Number(detalle.cant_fraccion) : null,
-                                cantidad_total: cantidadSolicitada
-                            });
-                            await transactionalEntityManager.save('NotaSalidaDetalle', detalleNota);
-
-                            // Kardex
-                            const movimiento = kardexRepo.create({
-                                producto_id: pid,
-                                lote_numero: lote.numero_lote,
-                                tipo_movimiento: 'SALIDA',
-                                cantidad: cantidadSolicitada,
-                                saldo: Number(lote.cantidad_disponible),
-                                documento_tipo: 'NOTA_SALIDA',
-                                documento_numero: nota.numero_salida,
-                                referencia_id: nota.id
-                            });
-                            await transactionalEntityManager.save('Kardex', movimiento);
-                        }
-                        // CASO 2: Selección Automática FIFO (Sin Lote)
-                        else {
-                            const lotesDisponibles = await transactionalEntityManager.find('Lote', {
-                                where: {
-                                    producto_id: pid,
-                                    cantidad_disponible: MoreThan(0.00)
-                                },
-                                order: {
-                                    fecha_vencimiento: 'ASC',
-                                    created_at: 'ASC'
-                                }
-                            });
-
-                            let pendiente = cantidadSolicitada;
-
-                            for (const lote of lotesDisponibles) {
-                                if (pendiente <= EPSILON) break;
-
-                                const disponible = Number(lote.cantidad_disponible);
-                                const aTomar = Math.min(disponible, pendiente);
-
-                                // Actualizar Lote
-                                lote.cantidad_disponible = disponible - aTomar;
-                                await transactionalEntityManager.save('Lote', lote);
-
-                                // Crear Detalle
-                                const detalleNota = notaSalidaDetalleRepo.create({
-                                    nota_salida_id: nota.id,
-                                    producto_id: pid,
-                                    lote_id: lote.id,                  // ← FK exacta al lote
-                                    lote_numero: lote.numero_lote || null,
-                                    fecha_vencimiento: lote.fecha_vencimiento || null,
-                                    um: producto.unidad_medida || null,
-                                    fabricante: producto.fabricante || null,
-                                    cantidad: aTomar,
-                                    cant_bulto: detalle.cant_bulto != null ? Number(detalle.cant_bulto) : null,
-                                    cant_caja: detalle.cant_caja != null ? Number(detalle.cant_caja) : null,
-                                    cant_x_caja: detalle.cant_x_caja != null ? Number(detalle.cant_x_caja) : null,
-                                    cant_fraccion: detalle.cant_fraccion != null ? Number(detalle.cant_fraccion) : null,
-                                    cantidad_total: aTomar
-                                });
-                                await transactionalEntityManager.save('NotaSalidaDetalle', detalleNota);
-
-                                // Kardex
-                                const movimiento = kardexRepo.create({
-                                    producto_id: pid,
-                                    lote_numero: lote.numero_lote,
-                                    tipo_movimiento: 'SALIDA',
-                                    cantidad: aTomar,
-                                    saldo: Number(lote.cantidad_disponible),
-                                    documento_tipo: 'NOTA_SALIDA',
-                                    documento_numero: nota.numero_salida,
-                                    referencia_id: nota.id
-                                });
-                                await transactionalEntityManager.save('Kardex', movimiento);
-
-                                pendiente -= aTomar;
-                            }
-
-                            if (pendiente > EPSILON) {
-                                const stockDisponible = await obtenerStockDisponiblePorLotes(transactionalEntityManager, pid);
-                                throw new Error(`Inconsistencia en lotes. Disponible: ${stockDisponible.toFixed(2)}, faltaron: ${pendiente.toFixed(2)}`);
-                            }
-                        }
-                    }
+                nota.cliente_id = cliente.id;
+                nota.cliente_ruc = cliente.cuit || null;
+                for (const field of ['fecha', 'observaciones', 'tipo_documento', 'numero_documento', 'fecha_ingreso', 'motivo_salida']) {
+                    if (Object.prototype.hasOwnProperty.call(body, field)) nota[field] = body[field] || null;
                 }
+                if (!nota.fecha) throw new Error('La fecha es obligatoria');
+                if (body.estado) {
+                    if (!['REGISTRADA', 'DESPACHO_PENDIENTE', 'DESPACHADA', 'COMPLETADA', 'PARCIAL'].includes(body.estado)) throw new Error('Estado no permitido');
+                    nota.estado = body.estado;
+                }
+                let anteriores;
+                if (body.detalles !== undefined) {
+                    if (!Array.isArray(body.detalles) || !body.detalles.length) throw new Error('La salida debe tener al menos un detalle');
+                    const previous = await tx.find('NotaSalidaDetalle', { where: { nota_salida_id: nota.id } });
+                    await lockProducts(tx, [...previous, ...body.detalles].map(detalle => detalle.producto_id));
+                    anteriores = await restoreDetails(tx, nota);
+                    await tx.delete('Kardex', { documento_tipo: 'NOTA_SALIDA', referencia_id: nota.id });
+                    await tx.delete('NotaSalidaDetalle', { nota_salida_id: nota.id });
+                    await applyDetails(tx, nota, body.detalles, cliente);
+                }
+                await tx.save('NotaSalida', nota);
+                await audit(tx, request, 'ACTUALIZAR', 'notas_salida', nota.id,
+                    { ...before, detalles: anteriores }, { ...nota, detalles: body.detalles });
+                return nota;
             });
-
-            return {
-                success: true,
-                data: nota,
-                message: 'Nota actualizada exitosamente'
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            return reply.status(400).send({
-                success: false,
-                error: error.message || 'Error al actualizar la nota'
-            });
-        }
+            return { success: true, data: result, message: 'Nota actualizada exitosamente' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // DELETE /api/salidas/:id - Cancelar nota de salida
@@ -1205,77 +760,32 @@ async function salidasRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-
-        const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
-        if (!nota) {
-            return reply.status(404).send({ success: false, error: 'Nota de salida no encontrada' });
-        }
-
         try {
-            await fastify.db.transaction(async (transactionalEntityManager) => {
-                // Obtener todos los detalles de la nota
-                const detalles = await transactionalEntityManager.find('NotaSalidaDetalle', {
-                    where: { nota_salida_id: Number(id) }
-                });
-
-                // Revertir cada detalle
+            await fastify.db.transaction(async tx => {
+                const nota = await tx.findOne('NotaSalida', { where: { id: Number(request.params.id) }, lock: { mode: 'pessimistic_write' } });
+                if (!nota) throw Object.assign(new Error('Nota de salida no encontrada'), { statusCode: 404 });
+                if (nota.estado === 'CANCELADA') throw Object.assign(new Error('La salida ya está cancelada'), { statusCode: 409 });
+                const previousStock = new Map();
+                const detalles = await tx.find('NotaSalidaDetalle', { where: { nota_salida_id: nota.id } });
+                await lockProducts(tx, detalles.map(detalle => detalle.producto_id));
+                for (const detalle of detalles) if (!previousStock.has(detalle.producto_id)) previousStock.set(detalle.producto_id, await stock(tx, detalle.producto_id));
+                await restoreDetails(tx, nota);
                 for (const detalle of detalles) {
-                    // Restaurar stock: si hay lote_id usamos el lote exacto; si no, buscamos por numero_lote+producto_id
-                    let lotesParaRevertir = [];
-                    if (detalle.lote_id) {
-                        const loteExacto = await transactionalEntityManager.findOne('Lote', {
-                            where: { id: Number(detalle.lote_id) }
-                        });
-                        if (loteExacto) lotesParaRevertir = [loteExacto];
-                    } else {
-                        lotesParaRevertir = await transactionalEntityManager.find('Lote', {
-                            where: {
-                                numero_lote: detalle.lote_numero,
-                                producto_id: detalle.producto_id
-                            }
-                        });
-                    }
-
-                    for (const lote of lotesParaRevertir) {
-                        lote.cantidad_disponible = Number(lote.cantidad_disponible) + Number(detalle.cantidad);
-                        await transactionalEntityManager.save('Lote', lote);
-                    }
-
-                    // Crear movimiento de reversa en Kardex
-                    const movimientoReversa = kardexRepo.create({
-                        producto_id: detalle.producto_id,
-                        lote_numero: detalle.lote_numero,
-                        tipo_movimiento: 'SALIDA_REVERSA',
-                        cantidad: -Number(detalle.cantidad),
-                        saldo: Number(detalle.cantidad),
-                        documento_tipo: 'NOTA_SALIDA_CANCELADA',
-                        documento_numero: nota.numero_salida,
-                        referencia_id: nota.id
+                    const saldo = Math.round((previousStock.get(detalle.producto_id) + Number(detalle.cantidad)) * 100) / 100;
+                    previousStock.set(detalle.producto_id, saldo);
+                    await tx.save('Kardex', {
+                        producto_id: detalle.producto_id, lote_numero: detalle.lote_numero,
+                        tipo_movimiento: 'SALIDA_REVERSA', cantidad: -Number(detalle.cantidad), saldo,
+                        documento_tipo: 'NOTA_SALIDA_CANCELADA', documento_numero: nota.numero_salida, referencia_id: nota.id
                     });
-                    await transactionalEntityManager.save('Kardex', movimientoReversa);
                 }
-
-                // Marcar nota como cancelada
+                await audit(tx, request, 'CANCELAR', 'notas_salida', nota.id, { ...nota, detalles }, { estado: 'CANCELADA' });
                 nota.estado = 'CANCELADA';
-                nota.observaciones = (nota.observaciones || '') + ' | CANCELADO: ' + new Date().toLocaleString();
-                await transactionalEntityManager.save('NotaSalida', nota);
-
-                // Eliminar detalles
-                await transactionalEntityManager.delete('NotaSalidaDetalle', { nota_salida_id: Number(id) });
+                await tx.save('NotaSalida', nota);
+                await tx.delete('NotaSalidaDetalle', { nota_salida_id: nota.id });
             });
-
-            return {
-                success: true,
-                message: `Nota de salida ${nota.numero_salida} cancelada exitosamente. Los cambios han sido revertidos en la base de datos.`
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            return reply.status(400).send({
-                success: false,
-                error: error.message || 'Error al cancelar la nota'
-            });
-        }
+            return { success: true, message: 'Nota de salida cancelada; stock restituido a sus lotes exactos' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // POST /api/salidas/:id/despachar - Despachar nota
@@ -1296,21 +806,19 @@ async function salidasRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-
-        const nota = await notaSalidaRepo.findOneBy({ id: Number(id) });
-        if (!nota) {
-            return reply.status(404).send({ success: false, error: 'Nota no encontrada' });
-        }
-
-        nota.estado = 'DESPACHADA';
-        await notaSalidaRepo.save(nota);
-
-        return {
-            success: true,
-            data: nota,
-            message: 'Nota despachada exitosamente'
-        };
+        try {
+            const result = await fastify.db.transaction(async tx => {
+                const nota = await tx.findOne('NotaSalida', { where: { id: Number(request.params.id) }, lock: { mode: 'pessimistic_write' } });
+                if (!nota) throw Object.assign(new Error('Nota no encontrada'), { statusCode: 404 });
+                if (nota.estado === 'CANCELADA') throw new Error('Una nota cancelada no se puede reactivar');
+                const before = { ...nota };
+                nota.estado = 'DESPACHADA';
+                await tx.save('NotaSalida', nota);
+                await audit(tx, request, 'ACTUALIZAR', 'notas_salida', nota.id, before, nota);
+                return nota;
+            });
+            return { success: true, data: result, message: 'Estado de la nota actualizado' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // POST /api/salidas/importar - Importar desde Excel
@@ -1324,7 +832,8 @@ async function salidasRoutes(fastify, options) {
                     type: 'object',
                     properties: {
                         success: { type: 'boolean' },
-                        message: { type: 'string' }
+                        message: { type: 'string' },
+                        errores: { type: 'array', items: { type: 'string' } }
                     }
                 },
                 400: ErrorResponseSchema
@@ -1347,20 +856,9 @@ async function salidasRoutes(fastify, options) {
             let filas = [];
 
             if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || mimeType.includes('csv') || mimeType.includes('text/plain')) {
-                const contenido = buffer.toString('utf8');
-                const lineas = contenido.split(/\r?\n/).filter(l => l.trim());
-
-                if (lineas.length < 2) {
-                    return reply.status(400).send({ success: false, error: 'El archivo no tiene datos' });
-                }
-
-                const delimitador = detectarDelimitador(lineas[0]);
-                const headers = lineas[0].split(delimitador).map(h => h.trim());
-
-                for (let i = 1; i < lineas.length; i++) {
-                    const valores = lineas[i].split(delimitador).map(v => v.trim());
-                    filas.push({ rowNumber: i + 1, headers, valores });
-                }
+                const rows = parseCSV(buffer.toString('utf8'));
+                if (rows.length < 2) return reply.code(400).send({ success: false, error: 'El archivo no tiene datos' });
+                filas = rows.slice(1).map((valores, index) => ({ rowNumber: index + 2, headers: rows[0], valores }));
             } else {
                 const workbook = new ExcelJS.Workbook();
                 await workbook.xlsx.load(buffer);
@@ -1450,12 +948,6 @@ async function salidasRoutes(fastify, options) {
                 if (!cliente && rucLimpio && clienteTieneCuit) {
                     cliente = await clienteRepo.findOneBy({ cuit: rucLimpio });
                 }
-                if (!cliente && rucLimpio && rucLimpio !== '-') {
-                    cliente = await clienteRepo.save(clienteRepo.create({
-                        codigo: rucLimpio,
-                        razon_social: `CLIENTE ${rucLimpio}`
-                    }));
-                }
                 if (!cliente) {
                     errores.push(`Fila ${fila.rowNumber}: Cliente no encontrado (Código: ${codigoCliente || '-'} / RUC: ${ruc || '-'})`);
                     continue;
@@ -1541,6 +1033,7 @@ async function salidasRoutes(fastify, options) {
             for (const grupo of grupos.values()) {
                 try {
                     await fastify.db.transaction(async (tx) => {
+                        await lockDocumentNumbers(tx);
                         const numeroSalida = await generarNumeroSalida();
 
                         const nota = notaSalidaRepo.create({
@@ -1549,7 +1042,7 @@ async function salidasRoutes(fastify, options) {
                             cliente_ruc: grupo.cliente_ruc || null,
                             fecha: grupo.fecha,
                             fecha_ingreso: grupo.fecha_ingreso,
-                            responsable_id: 1,
+                            responsable_id: request.user.id,
                             tipo_documento: grupo.tipo_documento,
                             numero_documento: grupo.numero_documento,
                             motivo_salida: grupo.motivo_salida,
@@ -1559,85 +1052,12 @@ async function salidasRoutes(fastify, options) {
 
                         const notaGuardada = await tx.save('NotaSalida', nota);
 
-                        for (const d of grupo.detalles) {
-                            let saldoMovimiento = 0;
-                            let loteId = null;
-
-                            if (d.loteNumero) {
-                                let lote = await tx.findOne('Lote', {
-                                    where: {
-                                        producto_id: d.producto.id,
-                                        numero_lote: d.loteNumero
-                                    }
-                                });
-
-                                if (!lote || Number(lote.cantidad_disponible || 0) < Number(d.cantidad)) {
-                                    throw new Error(`Fila ${d.rowNumber}: Stock insuficiente en lote ${d.loteNumero}`);
-                                }
-
-                                lote.cantidad_disponible = Number(lote.cantidad_disponible) - Number(d.cantidad);
-                                await tx.save('Lote', lote);
-                                loteId = lote.id;
-                                saldoMovimiento = Number(lote.cantidad_disponible);
-                            } else {
-                                const lotesDisponibles = await tx.find('Lote', {
-                                    where: {
-                                        producto_id: d.producto.id,
-                                        cantidad_disponible: MoreThan(0.00)
-                                    },
-                                    order: {
-                                        fecha_vencimiento: 'ASC',
-                                        created_at: 'ASC'
-                                    }
-                                });
-
-                                let pendiente = Number(d.cantidad);
-                                for (const lote of lotesDisponibles) {
-                                    if (pendiente <= 0) break;
-                                    const disponible = Number(lote.cantidad_disponible || 0);
-                                    if (disponible <= 0) continue;
-                                    const aTomar = Math.min(disponible, pendiente);
-                                    lote.cantidad_disponible = disponible - aTomar;
-                                    await tx.save('Lote', lote);
-                                    saldoMovimiento = Number(lote.cantidad_disponible);
-                                    pendiente -= aTomar;
-                                }
-
-                                if (pendiente > 0) {
-                                    throw new Error(`Fila ${d.rowNumber}: Stock insuficiente en lotes para ${d.producto.codigo}`);
-                                }
-                            }
-
-                            const detalle = notaSalidaDetalleRepo.create({
-                                nota_salida_id: notaGuardada.id,
-                                producto_id: d.producto.id,
-                                lote_id: loteId,
-                                lote_numero: d.loteNumero,
-                                fecha_vencimiento: d.fechaVencimientoSql,
-                                um: d.um,
-                                fabricante: d.producto.fabricante || null,
-                                precio_unitario: d.precio,
-                                cantidad: Number(d.cantidad),
-                                cant_bulto: d.cant_bulto,
-                                cant_caja: d.cant_caja,
-                                cant_x_caja: d.cant_x_caja,
-                                cant_fraccion: d.cant_fraccion,
-                                cantidad_total: Number(d.cantidad)
-                            });
-                            await tx.save('NotaSalidaDetalle', detalle);
-
-                            const movimiento = kardexRepo.create({
-                                producto_id: d.producto.id,
-                                lote_numero: d.loteNumero,
-                                tipo_movimiento: 'SALIDA',
-                                cantidad: Number(d.cantidad),
-                                saldo: saldoMovimiento,
-                                documento_tipo: 'NOTA_SALIDA',
-                                documento_numero: numeroSalida,
-                                referencia_id: notaGuardada.id
-                            });
-                            await tx.save('Kardex', movimiento);
-                        }
+                        await applyDetails(tx, notaGuardada, grupo.detalles.map(d => ({
+                            producto_id: d.producto.id, lote_numero: d.loteNumero, cantidad: d.cantidad,
+                            precio_unitario: d.precio, um: d.um, cant_bulto: d.cant_bulto,
+                            cant_caja: d.cant_caja, cant_x_caja: d.cant_x_caja, cant_fraccion: d.cant_fraccion
+                        })), grupo.detalles[0].cliente);
+                        await audit(tx, request, 'IMPORTAR', 'notas_salida', notaGuardada.id, null, notaGuardada);
                     });
 
                     generadas++;
@@ -1647,7 +1067,7 @@ async function salidasRoutes(fastify, options) {
             }
 
             return {
-                success: true,
+                success: errores.length === 0,
                 message: `Importación completada: ${generadas} notas generadas`,
                 errores: errores.length > 0 ? errores : undefined
             };
@@ -1690,7 +1110,7 @@ async function salidasRoutes(fastify, options) {
         notas.forEach(nota => {
             worksheet.addRow({
                 numero_salida: nota.numero_salida,
-                fecha: new Date(nota.fecha).toLocaleDateString('es-AR'),
+                fecha: formatCalendarDate(nota.fecha),
                 cliente: nota.cliente?.razon_social || '- ',
                 estado: nota.estado,
                 observaciones: nota.observaciones

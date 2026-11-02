@@ -1,3 +1,5 @@
+import { todayCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useParams } from 'react-router-dom';
@@ -26,7 +28,7 @@ import {
 const buildNuevoProductoState = (defaults = {}) => ({
     codigo: defaults.codigo || '',
     descripcion: defaults.descripcion || '',
-    fecha_ingreso: defaults.fecha_ingreso || new Date().toISOString().split('T')[0],
+    fecha_ingreso: defaults.fecha_ingreso || todayCalendarDate(),
     lote: defaults.lote || '',
     fecha_vencimiento: defaults.fecha_vencimiento || '',
     tipo_documento: defaults.tipo_documento || '',
@@ -91,7 +93,7 @@ const PLANTILLA_INGRESO_EJEMPLOS = [
 export const NotaIngresoForm = () => {
     const { register, control, handleSubmit, reset, setValue, getValues, formState: { isSubmitting } } = useForm({
         defaultValues: {
-            fecha: new Date().toISOString().split('T')[0],
+            fecha: todayCalendarDate(),
             numero_ingreso: '',
             tipo_documento: '',
             numero_documento: '',
@@ -1113,6 +1115,10 @@ export const NotaIngresoForm = () => {
                 };
             }).filter((d) => d.producto_id && d.lote_numero && Number(d.cantidad) > 0);
 
+            if (detallesSanitizados.length !== (data.detalles || []).length) {
+                showError('Hay filas sin producto, lote o cantidad válida; corríjalas antes de guardar.');
+                return;
+            }
             if (detallesSanitizados.length === 0) {
                 showError('No hay detalles válidos para guardar. Verifica lote y cantidad mayor a 0.');
                 return;
@@ -1175,7 +1181,7 @@ export const NotaIngresoForm = () => {
         }
         try {
             const pdfUrl = `${API_ORIGIN}/api/ingresos/${lastIngresoId}/pdf`;
-            const opened = window.open(pdfUrl, '_blank');
+            const opened = await openApiDocument(pdfUrl);
             if (!opened) {
                 showError('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
             }

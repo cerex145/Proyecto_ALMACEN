@@ -350,7 +350,9 @@ async function clienteRoutes(fastify, options) {
             return reply.status(404).send({ success: false, error: 'Cliente no encontrado' });
         }
 
-        await clienteRepo.remove(cliente);
+        cliente.activo = 0;
+        cliente.estado = 'Inactivo';
+        await clienteRepo.save(cliente);
 
         return { success: true, message: 'Cliente eliminado exitosamente' };
     });

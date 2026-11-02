@@ -1,3 +1,5 @@
+const { quantity, lockProducts, stock, audit } = require('../utils/inventory');
+
 async function ajustesRoutes(fastify, options) {
     const ajusteRepo = fastify.db.getRepository('AjusteStock');
     const productoRepo = fastify.db.getRepository('Producto');
@@ -220,7 +222,7 @@ async function ajustesRoutes(fastify, options) {
             });
         }
 
-        const cantidadNum = Number(cantidad);
+        const cantidadNum = quantity(cantidad);
         if (cantidadNum <= 0) {
             return reply.status(400).send({
                 success: false,
@@ -255,9 +257,11 @@ async function ajustesRoutes(fastify, options) {
         // Guardar en transacción
         let savedId;
         await fastify.db.transaction(async (transactionalEntityManager) => {
+            await lockProducts(transactionalEntityManager, [producto_id]);
             const savedAjuste = await transactionalEntityManager.save('AjusteStock', nuevoAjuste);
             savedId = savedAjuste.id;
 
+            const cambios = [];
             if (tipo === 'AJUSTE_POSITIVO') {
                 const lotesProducto = await transactionalEntityManager.find('Lote', {
                     where: { producto_id: Number(producto_id) },
@@ -271,6 +275,7 @@ async function ajustesRoutes(fastify, options) {
                     loteActual.cantidad_disponible = Number(loteActual.cantidad_disponible || 0) + cantidadNum;
                     loteActual.cantidad_ingresada = Number(loteActual.cantidad_ingresada || 0) + cantidadNum;
                     await transactionalEntityManager.save('Lote', loteActual);
+                    cambios.push({ lote_numero: loteActual.numero_lote, cantidad: cantidadNum });
                 } else {
                     const loteAjuste = loteRepo.create({
                         producto_id: Number(producto_id),
@@ -281,6 +286,7 @@ async function ajustesRoutes(fastify, options) {
                         nota_ingreso_id: null
                     });
                     await transactionalEntityManager.save('Lote', loteAjuste);
+                    cambios.push({ lote_numero: loteAjuste.numero_lote, cantidad: cantidadNum });
                 }
             } else {
                 const lotesDisponibles = await transactionalEntityManager.find('Lote', {
@@ -303,12 +309,25 @@ async function ajustesRoutes(fastify, options) {
                     lote.cantidad_disponible = disponible - aDescontar;
                     await transactionalEntityManager.save('Lote', lote);
                     pendiente -= aDescontar;
+                    cambios.push({ lote_numero: lote.numero_lote, cantidad: aDescontar });
                 }
 
                 if (pendiente > 0) {
                     throw new Error('Stock insuficiente para realizar el ajuste negativo');
                 }
             }
+            const finalStock = await stock(transactionalEntityManager, producto_id);
+            let saldo = tipo === 'AJUSTE_POSITIVO' ? finalStock - cantidadNum : finalStock + cantidadNum;
+            for (const cambio of cambios) {
+                saldo += tipo === 'AJUSTE_POSITIVO' ? cambio.cantidad : -cambio.cantidad;
+                await transactionalEntityManager.save('Kardex', {
+                    producto_id: Number(producto_id), lote_numero: cambio.lote_numero, tipo_movimiento: tipo,
+                    cantidad: cambio.cantidad, saldo: Math.round(saldo * 100) / 100,
+                    documento_tipo: 'AJUSTE_STOCK', documento_numero: String(savedId), referencia_id: savedId,
+                    observaciones: motivo
+                });
+            }
+            await audit(transactionalEntityManager, request, 'CREAR', 'ajustes_stock', savedId, null, nuevoAjuste);
         });
 
         const ajusteGuardado = await ajusteRepo.createQueryBuilder('ajuste')
@@ -354,8 +373,8 @@ async function ajustesRoutes(fastify, options) {
                 'producto.id as producto_id',
                 'producto.codigo as producto_codigo',
                 'producto.descripcion as producto_descripcion',
-                'SUM(CASE WHEN ajuste.tipo = "AJUSTE_POSITIVO" THEN ajuste.cantidad ELSE 0 END) as total_positivos',
-                'SUM(CASE WHEN ajuste.tipo = "AJUSTE_NEGATIVO" THEN ajuste.cantidad ELSE 0 END) as total_negativos',
+                "SUM(CASE WHEN ajuste.tipo = 'AJUSTE_POSITIVO' THEN ajuste.cantidad ELSE 0 END) as total_positivos",
+                "SUM(CASE WHEN ajuste.tipo = 'AJUSTE_NEGATIVO' THEN ajuste.cantidad ELSE 0 END) as total_negativos",
                 'COUNT(*) as total_ajustes'
             ]);
 

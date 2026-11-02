@@ -1,3 +1,5 @@
+import { todayCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -32,7 +34,7 @@ const RegistrarIngreso = ({ onCancel, onSuccess }) => {
     // -- Formulario "INGRESO CANTIDAD" --
     const [tipoDocumento, setTipoDocumento] = useState('Guia Remision');
     const [numeroDocumento, setNumeroDocumento] = useState('');
-    const [fechaIngreso, setFechaIngreso] = useState(new Date().toISOString().split('T')[0]);
+    const [fechaIngreso, setFechaIngreso] = useState(todayCalendarDate());
     const [observaciones, setObservaciones] = useState('');
 
     // -- Lista de Items --
@@ -211,7 +213,7 @@ const RegistrarIngreso = ({ onCancel, onSuccess }) => {
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', url);
             } else {
-                window.open(url, '_blank');
+                await openApiDocument(url);
             }
         } catch (error) {
             console.error('Error al descargar PDF:', error);

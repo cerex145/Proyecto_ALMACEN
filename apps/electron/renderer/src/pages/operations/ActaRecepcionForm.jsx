@@ -1,3 +1,5 @@
+import { todayCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { productService } from '../../services/product.service';
@@ -10,7 +12,7 @@ import { Card } from '../../components/common/Card';
 export const ActaRecepcionForm = () => {
     const { register, control, handleSubmit, reset, setValue, getValues, watch, clearErrors, formState: { errors, isSubmitting } } = useForm({
         defaultValues: {
-            fecha: new Date().toISOString().split('T')[0],
+            fecha: todayCalendarDate(),
             tipo_documento: '',
             numero_documento: '',
             cliente_id: '',
@@ -563,7 +565,7 @@ export const ActaRecepcionForm = () => {
         }
         try {
             const pdfUrl = `${API_ORIGIN}/api/actas/${lastActaId}/pdf`;
-            window.open(pdfUrl, '_blank');
+            await openApiDocument(pdfUrl);
         } catch (error) {
             console.error(error);
             alert('Error al exportar PDF');

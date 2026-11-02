@@ -4,6 +4,7 @@ const multipart = require('@fastify/multipart');
 const swagger = require('@fastify/swagger');
 const swaggerUi = require('@fastify/swagger-ui');
 const dbPlugin = require('./plugins/database.plugin');
+const { canAccess } = require('./utils/authorization');
 
 async function buildApp(fastify, options) {
     const jwtSecret = process.env.JWT_SECRET;
@@ -17,7 +18,8 @@ async function buildApp(fastify, options) {
     });
 
     await fastify.register(jwt, {
-        secret: jwtSecret || 'dev-only-jwt-secret-change-me'
+        secret: jwtSecret || 'dev-only-jwt-secret-change-me',
+        sign: { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
     });
 
     await fastify.register(multipart, {
@@ -163,29 +165,28 @@ async function buildApp(fastify, options) {
     fastify.decorate('authenticate', async function (request, reply) {
         try {
             await request.jwtVerify();
-        } catch (err) {
-            reply.code(401).send({ success: false, error: 'No autorizado' });
+            if (!request.user.exp) throw new Error('Sesión antigua: vuelva a iniciar sesión');
+            const usuario = await fastify.db.getRepository('Usuario').findOne({
+                where: { id: Number(request.user.id) }, relations: ['rol']
+            });
+            if (!usuario || !usuario.activo || !usuario.rol || !usuario.rol.activo) throw new Error('Usuario inactivo');
+            request.user = { ...request.user, nombre: usuario.nombre, usuario: usuario.usuario, email: usuario.email,
+                rol_id: usuario.rol_id, rol: usuario.rol.nombre, permisos: usuario.rol.permisos || {} };
+        } catch {
+            return reply.code(401).send({ success: false, error: 'Sesión inválida o vencida. Inicie sesión nuevamente.' });
         }
     });
 
-    const requireAuth = process.env.REQUIRE_AUTH === 'true';
-    const publicApiRoutes = new Set([
-        '/api/usuarios/login',
-        '/api/usuarios/registro'
-    ]);
-
     fastify.addHook('onRequest', async (request, reply) => {
-        if (!requireAuth || request.method === 'OPTIONS') return;
-
-        const currentPath = request.routerPath || request.url.split('?')[0];
-        const isPublic = currentPath === '/'
-            || currentPath === '/health'
-            || currentPath.startsWith('/docs')
-            || publicApiRoutes.has(currentPath);
-
-        if (isPublic) return;
-
+        const currentPath = request.url.split('?')[0];
+        if (request.method === 'OPTIONS' || currentPath === '/' || currentPath === '/health'
+            || currentPath === '/docs' || currentPath.startsWith('/docs/') || currentPath === '/api/usuarios/login') return;
         await fastify.authenticate(request, reply);
+        if (reply.sent) return;
+        const route = request.routeOptions.url || currentPath;
+        if (!canAccess({ ...request.user, targetId: request.params?.id }, request.method, route)) {
+            return reply.code(403).send({ success: false, error: 'No tiene permisos para esta operación' });
+        }
     });
 
     // Register routes

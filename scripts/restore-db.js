@@ -1,60 +1,16 @@
-/**
- * restore-db.js — Restaura el último backup de Supabase
- */
-
-const { Client } = require('pg');
-const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../apps/api/.env') });
+const { restoreDatabase } = require('./lib/postgres-backup');
 
-const DATABASE_URL = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
-
-async function restore() {
-    const backupDir = path.join(__dirname, '..', 'backups');
-    
-    // Hardcode explicitly since mtime was wrong
-    // Hardcode explicitly since mtime was wrong
-    const latestBackup = 'backup_2026-04-06T07-48-59.sql';
-    const backupPath = path.join(backupDir, latestBackup);
-    
-    if (!fs.existsSync(backupPath)) {
-        console.error('❌ El archivo ' + latestBackup + ' no existe.');
-        process.exit(1);
-    }
-
-    console.log(`✅ Archivo encontrado: ${latestBackup}`);
-    console.log('🔄 Extrayendo datos...');
-    
-    const sqlData = fs.readFileSync(backupPath, 'utf8');
-
-    const client = new Client({
-        connectionString: DATABASE_URL,
-        ssl: { rejectUnauthorized: false }
+async function main() {
+    const index = process.argv.indexOf('--file');
+    const result = await restoreDatabase({
+        file: index >= 0 ? process.argv[index + 1] : undefined,
+        confirmed: process.argv.includes('--confirm-restore'), outputDir: path.join(__dirname, '../backups')
     });
-
-    try {
-        await client.connect();
-        console.log('✅ Conectado a Supabase PostgreSQL');
-        
-        console.log('🔄 Ejecutando consultas de restauración...');
-        
-        // Empieza una transacción
-        await client.query('BEGIN');
-        
-        // Ejecuta todos los DROP/DELETE e INSERTS del archivo sql
-        await client.query(sqlData);
-        
-        // Confirma la transacción
-        await client.query('COMMIT');
-        
-        console.log('✅ BASE DE DATOS RESTAURADA CON ÉXITO.');
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('❌ Error al restaurar BD.');
-        console.error(err.message);
-        process.exit(1);
-    } finally {
-        await client.end();
-    }
+    console.log(`Restauración completada: ${result.restored}`);
+    console.log(`Respaldo previo a la restauración: ${result.safetyBackup}`);
 }
 
-restore();
+if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
+module.exports = { main, restoreDatabase };

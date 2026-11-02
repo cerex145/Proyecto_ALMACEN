@@ -1,3 +1,5 @@
+const { formatCalendarDate } = require('../utils/calendar');
+const { audit, quantity } = require('../utils/inventory');
 const { ActaRecepcion, ActaRecepcionDetalle } = require('../entities/ActaRecepcion');
 const { Cliente } = require('../entities/Cliente');
 const { Producto } = require('../entities/Producto');
@@ -117,8 +119,17 @@ module.exports = async function (fastify, opts) {
                 });
             }
 
-            const actasRepo = fastify.db.getRepository(ActaRecepcion);
-            const detallesRepo = fastify.db.getRepository(ActaRecepcionDetalle);
+            detalles.forEach(detalle => {
+                quantity(detalle.cantidad_solicitada);
+                const received = Number(detalle.cantidad_recibida);
+                if (!Number.isFinite(received) || received < 0 || !detalle.producto_id || !String(detalle.lote_numero || '').trim()) {
+                    throw Object.assign(new Error('Revise producto, lote y cantidad recibida'), { statusCode: 400 });
+                }
+                if (received > 0) quantity(received);
+            });
+            const actaCompleta = await fastify.db.transaction(async tx => {
+            const actasRepo = tx.getRepository(ActaRecepcion);
+            const detallesRepo = tx.getRepository(ActaRecepcionDetalle);
 
             // Crear acta principal
             const nuevaActa = actasRepo.create({
@@ -168,11 +179,15 @@ module.exports = async function (fastify, opts) {
             }
 
             // Cargar acta completa con relaciones
-            const actaCompleta = await actasRepo.createQueryBuilder('acta')
+            const completa = await actasRepo.createQueryBuilder('acta')
                 .leftJoinAndSelect('acta.cliente', 'cliente')
                 .leftJoinAndSelect('acta.detalles', 'detalles')
                 .where('acta.id = :id', { id: actaGuardada.id })
                 .getOne();
+
+            await audit(tx, request, 'CREAR', 'actas_recepcion', actaGuardada.id, null, { ...actaGuardada, detalles });
+            return completa;
+            });
 
             return reply.status(201).send({
                 success: true,
@@ -182,7 +197,7 @@ module.exports = async function (fastify, opts) {
 
         } catch (error) {
             fastify.log.error(error);
-            return reply.status(500).send({
+            return reply.status(error.statusCode || 500).send({
                 success: false,
                 message: 'Error al crear acta de recepción',
                 error: error.message
@@ -193,32 +208,16 @@ module.exports = async function (fastify, opts) {
     // DELETE /api/actas/:id - Eliminar acta
     fastify.delete('/api/actas/:id', async (request, reply) => {
         try {
-            const { id } = request.params;
-
-            const actasRepo = fastify.db.getRepository(ActaRecepcion);
-            const acta = await actasRepo.findOne({ where: { id } });
-
-            if (!acta) {
-                return reply.status(404).send({
-                    success: false,
-                    message: 'Acta de recepción no encontrada'
-                });
-            }
-
-            await actasRepo.remove(acta);
-
-            return {
-                success: true,
-                message: 'Acta de recepción eliminada exitosamente'
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            return reply.status(500).send({
-                success: false,
-                message: 'Error al eliminar acta de recepción',
-                error: error.message
+            await fastify.db.transaction(async tx => {
+                const acta = await tx.findOne('ActaRecepcion', { where: { id: Number(request.params.id) }, lock: { mode: 'pessimistic_write' } });
+                if (!acta) throw Object.assign(new Error('Acta de recepción no encontrada'), { statusCode: 404 });
+                const detalles = await tx.find('ActaRecepcionDetalle', { where: { acta_id: acta.id } });
+                await audit(tx, request, 'ELIMINAR', 'actas_recepcion', acta.id, { ...acta, detalles }, null);
+                await tx.delete('ActaRecepcionDetalle', { acta_id: acta.id });
+                await tx.delete('ActaRecepcion', { id: acta.id });
             });
-        }
+            return { success: true, message: 'Acta de recepción eliminada exitosamente' };
+        } catch (error) { return reply.code(error.statusCode || 500).send({ success: false, error: error.message }); }
     });
 
     // PUT /api/actas/:id - Actualizar estado del acta
@@ -439,7 +438,7 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'FECHA:', width: 60, style: 'labelBoldSmall' },
-                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: '*', style: 'dataText' }
+                                            { text: formatCalendarDate(acta.fecha), width: '*', style: 'dataText' }
                                         ],
                                         border: [true, true, true, true]
                                     },
@@ -569,7 +568,7 @@ module.exports = async function (fastify, opts) {
                                     { text: d.producto_nombre || d.producto?.descripcion || '', style: 'tableCellLeft' },
                                     { text: d.fabricante || '', style: 'tableCellSmall' },
                                     { text: d.lote_numero || '', style: 'tableCellSmall' },
-                                    { text: d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString('es-PE') : '', style: 'tableCellSmall' },
+                                    { text: d.fecha_vencimiento ? formatCalendarDate(d.fecha_vencimiento) : '', style: 'tableCellSmall' },
                                     { text: parseFloat(d.cantidad_solicitada || 0).toFixed(0), style: 'tableCell' },
                                     { text: parseFloat(d.cantidad_recibida || 0).toFixed(0), style: 'tableCell' },
                                     { text: '√', style: 'tableCell' },
@@ -633,14 +632,14 @@ module.exports = async function (fastify, opts) {
                                     {
                                         columns: [
                                             { text: 'FECHA:', width: 40, style: 'labelSmall' },
-                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: 60, style: 'dataTextSmall' },
+                                            { text: formatCalendarDate(acta.fecha), width: 60, style: 'dataTextSmall' },
                                             { text: 'FIRMA', width: '*', style: 'labelSmall', alignment: 'right' }
                                         ]
                                     },
                                     {
                                         columns: [
                                             { text: 'FECHA:', width: 40, style: 'labelSmall' },
-                                            { text: new Date(acta.fecha).toLocaleDateString('es-PE'), width: 60, style: 'dataTextSmall' },
+                                            { text: formatCalendarDate(acta.fecha), width: 60, style: 'dataTextSmall' },
                                             { text: 'FIRMA Y SELLO', width: '*', style: 'labelSmall', alignment: 'right' }
                                         ]
                                     }

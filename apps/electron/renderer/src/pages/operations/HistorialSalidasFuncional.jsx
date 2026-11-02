@@ -1,3 +1,5 @@
+import { parseCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
@@ -23,7 +25,7 @@ export const HistorialSalidasFuncional = () => {
             const [, y, mo, d] = m;
             return `${d}/${mo}/${y}`;
         }
-        const fecha = new Date(valor);
+        const fecha = parseCalendarDate(valor);
         return Number.isNaN(fecha.getTime()) ? '-' : fecha.toLocaleDateString('es-PE');
     };
 
@@ -63,7 +65,7 @@ export const HistorialSalidasFuncional = () => {
 
             const rows = [];
             filas.forEach((fila, index) => {
-                const fechaObj = new Date(fila.fecha);
+                const fechaObj = parseCalendarDate(fila.fecha);
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
@@ -108,7 +110,7 @@ export const HistorialSalidasFuncional = () => {
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
             } else {
-                const opened = window.open(pdfUrl, '_blank');
+                const opened = await openApiDocument(pdfUrl);
                 if (!opened) {
                     alert('No se pudo abrir el PDF. Verifica bloqueadores de ventanas emergentes.');
                 }

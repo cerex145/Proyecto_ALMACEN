@@ -1,3 +1,6 @@
+const { formatCalendarDate } = require('../utils/calendar');
+const { quantity, lockProducts, lockDocumentNumbers, stock, assertIngresoEditable, assertClient, audit } = require('../utils/inventory');
+const { parseNumber } = require('../utils/import');
 const ExcelJS = require('exceljs');
 const { Like } = require('typeorm');
 
@@ -734,8 +737,8 @@ async function ingresosRoutes(fastify, options) {
                 });
             }
 
-            const numeroIngreso = await generarNumeroIngreso();
-            const numeroGuia = await generarNumeroGuia();
+            let numeroIngreso;
+            let numeroGuia;
 
 
             // Validar detalles
@@ -743,6 +746,7 @@ async function ingresosRoutes(fastify, options) {
             hoy.setHours(0, 0, 0, 0);
 
             for (const detalle of detalles) {
+                detalle.cantidad = quantity(detalle.cantidad);
                 if (!detalle.producto_id || !detalle.cantidad || Number(detalle.cantidad) <= 0) {
                     return reply.status(400).send({
                         success: false,
@@ -777,13 +781,19 @@ async function ingresosRoutes(fastify, options) {
                 proveedor: proveedor || null,
                 tipo_documento: tipo_documento || null,
                 numero_documento: numero_documento || null,
-                responsable_id,
+                responsable_id: request.user.id,
                 observaciones,
                 estado: 'REGISTRADA'
             });
 
             // Iniciar transacción
             await fastify.db.transaction(async (transactionalEntityManager) => {
+                await lockDocumentNumbers(transactionalEntityManager);
+                numeroIngreso = await generarNumeroIngreso();
+                numeroGuia = await generarNumeroGuia();
+                nota.numero_ingreso = numeroIngreso;
+                nota.numero_guia = numeroGuia;
+                await lockProducts(transactionalEntityManager, detalles.map(detalle => detalle.producto_id));
                 const notaGuardada = await transactionalEntityManager.save('NotaIngreso', nota);
 
                 // Crear detalles y lotes
@@ -835,8 +845,8 @@ async function ingresosRoutes(fastify, options) {
                                 numero_documento: numero_documento || producto.numero_documento || null,
                                 tipo_documento: tipo_documento || producto.tipo_documento || null,
                                 registro_sanitario: producto.registro_sanitario || null,
-                                temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || producto.temperatura_min_c || null,
-                                temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || producto.temperatura_max_c || null,
+                                temperatura_min_c: detalle.temperatura_min ?? detalle.temperatura_min_c ?? producto.temperatura_min_c ?? null,
+                                temperatura_max_c: detalle.temperatura_max ?? detalle.temperatura_max_c ?? producto.temperatura_max_c ?? null,
                                 unidad_medida: detalle.um || producto.unidad_medida || null,
                                 activo: producto.activo ?? 1
                             });
@@ -855,8 +865,8 @@ async function ingresosRoutes(fastify, options) {
                         fecha_vencimiento: fechaVencimiento,
                         um: detalle.um || null,
                         fabricante: detalle.fabricante || null,
-                        temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || null,
-                        temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || null,
+                        temperatura_min_c: detalle.temperatura_min ?? detalle.temperatura_min_c ?? null,
+                        temperatura_max_c: detalle.temperatura_max ?? detalle.temperatura_max_c ?? null,
                         cantidad: detalle.cantidad,
                         cantidad_bultos: detalle.cantidad_bultos || 0,
                         cantidad_cajas: detalle.cantidad_cajas || 0,
@@ -899,7 +909,7 @@ async function ingresosRoutes(fastify, options) {
                         lote_numero: detalle.lote_numero,
                         tipo_movimiento: 'INGRESO',
                         cantidad: detalle.cantidad,
-                        saldo: Number(detalle.cantidad),
+                        saldo: await stock(transactionalEntityManager, detalle.producto_id),
                         documento_tipo: 'NOTA_INGRESO',
                         documento_numero: numeroIngreso,
                         referencia_id: notaGuardada.id
@@ -907,6 +917,7 @@ async function ingresosRoutes(fastify, options) {
                     await transactionalEntityManager.save('Kardex', movimiento);
                 }
 
+                await audit(transactionalEntityManager, request, 'CREAR', 'notas_ingreso', notaGuardada.id, null, { ...notaGuardada, detalles });
                 // Assign to outer variable to return?
                 // Verify if we can access notaGuardada outside? 
                 // We should return reply here or let it finish.
@@ -989,20 +1000,37 @@ async function ingresosRoutes(fastify, options) {
         const { id } = request.params;
         const { fecha: fechaRaw, proveedor, tipo_documento, numero_documento, estado, observaciones, detalles } = request.body;
 
-        const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
+        let nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
         if (!nota) {
             return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
         }
 
         try {
             await fastify.db.transaction(async (transactionalEntityManager) => {
+                nota = await transactionalEntityManager.findOne('NotaIngreso', { where: { id: Number(id) }, lock: { mode: 'pessimistic_write' } });
+                if (!nota) throw new Error('Nota de ingreso no encontrada');
+                const previousDetails = await transactionalEntityManager.find('NotaIngresoDetalle', { where: { nota_ingreso_id: Number(id) } });
+                const before = { ...nota, detalles: previousDetails };
+                if (detalles !== undefined) {
+                    if (!Array.isArray(detalles) || !detalles.length) throw new Error('El ingreso debe tener detalles');
+                    detalles.forEach(detalle => { detalle.cantidad = quantity(detalle.cantidad); });
+                    const old = await transactionalEntityManager.find('Lote', { where: { nota_ingreso_id: Number(id) } });
+                    await lockProducts(transactionalEntityManager, [...old, ...detalles].map(detalle => detalle.producto_id));
+                    await assertIngresoEditable(transactionalEntityManager, id);
+                }
+                if (request.body.cliente_id != null && Number(request.body.cliente_id) !== Number(nota.cliente_id)) {
+                    throw new Error('El cliente de un ingreso no se puede cambiar; registre otro ingreso con el cliente correcto');
+                }
                 // Actualizar campos básicos de la nota
-                if (fechaRaw) nota.fecha = normalizarFecha(fechaRaw);
+                if (fechaRaw) { nota.fecha = normalizarFecha(fechaRaw); if (!nota.fecha) throw new Error('Fecha inválida'); }
                 if (proveedor) nota.proveedor = proveedor;
                 if (tipo_documento !== undefined) nota.tipo_documento = tipo_documento || null;
                 if (numero_documento !== undefined) nota.numero_documento = numero_documento || null;
-                if (estado) nota.estado = estado;
-                if (observaciones) nota.observaciones = observaciones;
+                if (estado) {
+                    if (!['REGISTRADA', 'PARCIALMENTE_RECIBIDA', 'RECIBIDA_CONFORME', 'RECIBIDA_OBSERVADA'].includes(estado)) throw new Error('Estado no permitido');
+                    nota.estado = estado;
+                }
+                if (observaciones !== undefined) nota.observaciones = observaciones || null;
 
                 await transactionalEntityManager.save('NotaIngreso', nota);
 
@@ -1071,6 +1099,8 @@ async function ingresosRoutes(fastify, options) {
                     // Eliminar detalles antiguos
                     await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: notaId });
 
+                    const clienteActual = await transactionalEntityManager.findOne('Cliente', { where: { id: Number(nota.cliente_id) } });
+                    if (!clienteActual) throw new Error('Cliente no encontrado');
                     // Insertar nuevos detalles
                     for (const detalle of detalles) {
                         const producto = await transactionalEntityManager.findOne('Producto', { where: { id: Number(detalle.producto_id) } });
@@ -1078,7 +1108,10 @@ async function ingresosRoutes(fastify, options) {
                             throw new Error(`Producto ${detalle.producto_id} no encontrado`);
                         }
 
+                        assertClient(producto, clienteActual);
                         const fechaVencimiento = detalle.fecha_vencimiento ? normalizarFecha(detalle.fecha_vencimiento) : null;
+                        if (detalle.fecha_vencimiento && !fechaVencimiento) throw new Error('Fecha de vencimiento inválida');
+                        if (!String(detalle.lote_numero || '').trim()) throw new Error('Cada detalle debe incluir lote');
 
                         const detalleNota = notaIngresoDetalleRepo.create({
                             nota_ingreso_id: nota.id,
@@ -1087,8 +1120,8 @@ async function ingresosRoutes(fastify, options) {
                             fecha_vencimiento: fechaVencimiento,
                             um: detalle.um || null,
                             fabricante: detalle.fabricante || null,
-                            temperatura_min_c: detalle.temperatura_min || detalle.temperatura_min_c || null,
-                            temperatura_max_c: detalle.temperatura_max || detalle.temperatura_max_c || null,
+                            temperatura_min_c: detalle.temperatura_min ?? detalle.temperatura_min_c ?? null,
+                            temperatura_max_c: detalle.temperatura_max ?? detalle.temperatura_max_c ?? null,
                             cantidad: detalle.cantidad,
                             cantidad_bultos: detalle.cantidad_bultos || 0,
                             cantidad_cajas: detalle.cantidad_cajas || 0,
@@ -1130,7 +1163,7 @@ async function ingresosRoutes(fastify, options) {
                             lote_numero: detalle.lote_numero,
                             tipo_movimiento: 'INGRESO',
                             cantidad: detalle.cantidad,
-                            saldo: Number(detalle.cantidad),
+                            saldo: await stock(transactionalEntityManager, detalle.producto_id),
                             documento_tipo: 'NOTA_INGRESO',
                             documento_numero: nota.numero_ingreso,
                             referencia_id: nota.id
@@ -1138,6 +1171,7 @@ async function ingresosRoutes(fastify, options) {
                         await transactionalEntityManager.save('Kardex', movimiento);
                     }
                 }
+                await audit(transactionalEntityManager, request, 'ACTUALIZAR', 'notas_ingreso', nota.id, before, { ...nota, detalles });
             });
 
             return {
@@ -1178,42 +1212,20 @@ async function ingresosRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-
-        const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
-        if (!nota) {
-            return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
-        }
-
         try {
-            await fastify.db.transaction(async (transactionalEntityManager) => {
-                // 1. Eliminar directamente los registros de Kardex de este ingreso (sin dejar rastro de reversa)
-                await transactionalEntityManager.delete('Kardex', {
-                    documento_tipo: 'NOTA_INGRESO',
-                    referencia_id: Number(id)
-                });
-
-                // 2. Eliminar los lotes creados por este ingreso
-                await transactionalEntityManager.delete('Lote', { nota_ingreso_id: Number(id) });
-
-                // 3. Eliminar los detalles de la nota
-                await transactionalEntityManager.delete('NotaIngresoDetalle', { nota_ingreso_id: Number(id) });
-
-                // 4. Eliminar la nota físicamente
-                await transactionalEntityManager.delete('NotaIngreso', { id: Number(id) });
+            await fastify.db.transaction(async tx => {
+                const nota = await tx.findOne('NotaIngreso', { where: { id: Number(request.params.id) }, lock: { mode: 'pessimistic_write' } });
+                if (!nota) throw Object.assign(new Error('Nota de ingreso no encontrada'), { statusCode: 404 });
+                await assertIngresoEditable(tx, nota.id);
+                const detalles = await tx.find('NotaIngresoDetalle', { where: { nota_ingreso_id: nota.id } });
+                await audit(tx, request, 'ELIMINAR', 'notas_ingreso', nota.id, { ...nota, detalles }, null);
+                await tx.delete('Kardex', { documento_tipo: 'NOTA_INGRESO', referencia_id: nota.id });
+                await tx.delete('Lote', { nota_ingreso_id: nota.id });
+                await tx.delete('NotaIngresoDetalle', { nota_ingreso_id: nota.id });
+                await tx.delete('NotaIngreso', { id: nota.id });
             });
-
-            return {
-                success: true,
-                message: `Nota de ingreso ${nota.numero_ingreso} eliminada exitosamente.`
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            return reply.status(400).send({
-                success: false,
-                error: error.message || 'Error al eliminar la nota'
-            });
-        }
+            return { success: true, message: 'Ingreso eliminado después de verificar que no tiene stock consumido ni salidas asociadas' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // POST /api/ingresos/:id/aprobar - Aprobar nota
@@ -1234,21 +1246,19 @@ async function ingresosRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { id } = request.params;
-
-        const nota = await notaIngresoRepo.findOneBy({ id: Number(id) });
-        if (!nota) {
-            return reply.status(404).send({ success: false, error: 'Nota de ingreso no encontrada' });
-        }
-
-        nota.estado = 'RECIBIDA_CONFORME';
-        await notaIngresoRepo.save(nota);
-
-        return {
-            success: true,
-            data: nota,
-            message: 'Nota aprobada exitosamente'
-        };
+        try {
+            const result = await fastify.db.transaction(async tx => {
+                const nota = await tx.findOne('NotaIngreso', { where: { id: Number(request.params.id) }, lock: { mode: 'pessimistic_write' } });
+                if (!nota) throw Object.assign(new Error('Nota no encontrada'), { statusCode: 404 });
+                if (nota.estado === 'CANCELADA') throw new Error('Una nota cancelada no se puede reactivar');
+                const before = { ...nota };
+                nota.estado = 'RECIBIDA_CONFORME';
+                await tx.save('NotaIngreso', nota);
+                await audit(tx, request, 'ACTUALIZAR', 'notas_ingreso', nota.id, before, nota);
+                return nota;
+            });
+            return { success: true, data: result, message: 'Estado de la nota actualizado' };
+        } catch (error) { return reply.code(error.statusCode || 400).send({ success: false, error: error.message }); }
     });
 
     // POST /api/ingresos/importar - Importar desde Excel
@@ -1294,14 +1304,7 @@ async function ingresosRoutes(fastify, options) {
             const detallesActuales = [];
 
             const normalizarRuc = (value) => String(value || '').replace(/\D/g, '').trim();
-            const parseNumero = (value) => {
-                if (value === null || value === undefined || value === '') return null;
-                if (typeof value === 'number') return value;
-                const clean = String(value).trim().replace(',', '.').replace(/[^0-9.-]/g, '');
-                if (!clean) return null;
-                const parsed = Number(clean);
-                return Number.isFinite(parsed) ? parsed : null;
-            };
+            const parseNumero = value => parseNumber(value, null);
             const parseFecha = (value) => {
                 if (!value) return null;
                 if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -1383,7 +1386,7 @@ async function ingresosRoutes(fastify, options) {
                 const porCaja = parseNumero(cantidad_por_caja) || 0;
                 const fraccion = parseNumero(cantidad_fraccion) || 0;
                 const totalIngresado = parseNumero(cantidad_total);
-                const totalCalculado = (bultos * cajas * porCaja) + fraccion;
+                const totalCalculado = (cajas * porCaja) + fraccion;
                 const totalFinal = totalIngresado !== null ? totalIngresado : totalCalculado;
 
                 if (!Number.isFinite(totalFinal) || totalFinal <= 0) {
@@ -1391,15 +1394,15 @@ async function ingresosRoutes(fastify, options) {
                     return;
                 }
 
-                const tempMin = parseNumero(temperatura_min) || 15;
-                const tempMax = parseNumero(temperatura_max) || 25;
+                const tempMin = parseNumero(temperatura_min) ?? 15;
+                const tempMax = parseNumero(temperatura_max) ?? 25;
 
                 detallesActuales.push({
                     fecha: fechaIngresoParsed,
                     cliente_id: Number(cliente.id),
                     cliente_ruc: cliente.cuit || null,
                     proveedor: cliente.razon_social,
-                    responsable_id: responsable ? Number(responsable) : 1,
+                    responsable_id: request.user.id,
                     codigo_producto: String(codigo_producto).trim(),
                     lote_numero: String(lote).trim(),
                     fecha_vencimiento: fechaVencParsed,
@@ -1470,7 +1473,7 @@ async function ingresosRoutes(fastify, options) {
                             proveedor: grupo.proveedor || null,
                             activo: 1
                         });
-                        await productoRepo.save(producto);
+                        // Se guarda dentro de la transacción de la nota.
                     }
                     detallesConProducto.push({ detalle, producto });
                 }
@@ -1479,6 +1482,8 @@ async function ingresosRoutes(fastify, options) {
 
                 try {
                     await fastify.db.transaction(async (tx) => {
+                        await lockDocumentNumbers(tx);
+                        await lockProducts(tx, detallesConProducto.map(item => item.producto.id));
                         const numeroIngreso = await generarNumeroIngreso();
                         const numeroGuia = await generarNumeroGuia();
 
@@ -1496,7 +1501,13 @@ async function ingresosRoutes(fastify, options) {
                         const notaGuardada = await tx.save('NotaIngreso', nota);
 
                         for (const item of detallesConProducto) {
-                            const { detalle, producto } = item;
+                            const { detalle } = item;
+                            let producto = item.producto;
+                            quantity(detalle.cantidad);
+                            const existing = await tx.findOne('Producto', { where: { codigo: detalle.codigo_producto, cliente_id: grupo.cliente_id } });
+                            if (existing) producto = existing;
+                            else producto = await tx.save('Producto', producto);
+                            await lockProducts(tx, [producto.id]);
 
                             const detalleNota = notaIngresoDetalleRepo.create({
                                 nota_ingreso_id: notaGuardada.id,
@@ -1547,13 +1558,14 @@ async function ingresosRoutes(fastify, options) {
                                 lote_numero: detalle.lote_numero,
                                 tipo_movimiento: 'INGRESO',
                                 cantidad: detalle.cantidad,
-                                saldo: Number(detalle.cantidad),
+                                saldo: await stock(tx, producto.id),
                                 documento_tipo: 'NOTA_INGRESO',
                                 documento_numero: numeroIngreso,
                                 referencia_id: notaGuardada.id
                             });
                             await tx.save('Kardex', movimiento);
                         }
+                        await audit(tx, request, 'IMPORTAR', 'notas_ingreso', notaGuardada.id, null, { ...notaGuardada, detalles: grupo.detalles });
                     });
 
                     generados++;
@@ -1563,7 +1575,7 @@ async function ingresosRoutes(fastify, options) {
             }
 
             return {
-                success: true,
+                success: errores.length === 0,
                 message: `Importación completada: ${generados} notas generadas`,
                 errores: errores.length > 0 ? errores : undefined
             };
@@ -1605,7 +1617,7 @@ async function ingresosRoutes(fastify, options) {
         notas.forEach(nota => {
             worksheet.addRow({
                 numero_ingreso: nota.numero_ingreso,
-                fecha: new Date(nota.fecha).toLocaleDateString('es-AR'),
+                fecha: formatCalendarDate(nota.fecha),
                 proveedor: nota.proveedor,
                 estado: nota.estado,
                 observaciones: nota.observaciones

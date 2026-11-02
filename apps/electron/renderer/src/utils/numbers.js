@@ -1,0 +1,24 @@
+export function parseNumber(value, fallback = 0) {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : fallback;
+    let text = String(value).trim().replace(/\s/g, '');
+    if (!/^[+-]?[\d.,]+$/.test(text)) return fallback;
+    const comma = text.lastIndexOf(',');
+    const dot = text.lastIndexOf('.');
+    if (comma >= 0 && dot >= 0) {
+        const decimal = comma > dot ? ',' : '.';
+        const thousands = decimal === ',' ? '.' : ',';
+        text = text.split(thousands).join('').replace(decimal, '.');
+    } else if (comma >= 0) {
+        if ((text.match(/,/g) || []).length > 1) {
+            if (!/^[+-]?\d{1,3}(,\d{3})+$/.test(text)) return fallback;
+            text = text.replace(/,/g, '');
+        } else text = text.replace(',', '.');
+    } else if ((text.match(/\./g) || []).length > 1) {
+        if (!/^[+-]?\d{1,3}(\.\d{3})+$/.test(text)) return fallback;
+        text = text.replace(/\./g, '');
+    }
+    const result = Number(text);
+    return Number.isFinite(result) ? result : fallback;
+}
+

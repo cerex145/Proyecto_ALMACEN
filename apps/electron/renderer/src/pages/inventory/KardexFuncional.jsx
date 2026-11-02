@@ -1,3 +1,4 @@
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { API_ORIGIN } from '../../services/api';
 
@@ -107,13 +108,13 @@ export const KardexFuncional = () => {
         setFiltroCliente('');
     };
 
-    const exportarExcel = () => {
+    const exportarExcel = async () => {
         let url = `${API_ORIGIN}/api/kardex/exportar?`;
         if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
         if (filtroFechaDesde) url += `&fecha_desde=${filtroFechaDesde}`;
         if (filtroFechaHasta) url += `&fecha_hasta=${filtroFechaHasta}`;
         if (filtroCliente) url += `&cliente_nombre=${encodeURIComponent(filtroCliente)}`;
-        window.open(url, '_blank');
+        try { await openApiDocument(url); } catch (error) { window.alert(error.message || 'No se pudo exportar el Kardex'); }
     };
 
     const hayFiltrosActivos = filtroProducto || filtroLote || filtroDocumento || filtroTipo || filtroFechaDesde || filtroFechaHasta || filtroCliente;

@@ -1,52 +1,39 @@
-import axios from 'axios';
+import api from './api';
 
-const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
-const API_URL = `${API_ORIGIN}/api/usuarios`;
+const logout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); };
+
+export function sessionExpiresAt() {
+    try {
+        const raw = (localStorage.getItem('token') || '').split('.')[1];
+        const base64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')));
+        return Number.isFinite(decoded.exp) ? decoded.exp * 1000 : 0;
+    } catch { return 0; }
+}
+
+const getCurrentUser = () => {
+    try {
+        if (sessionExpiresAt() <= Date.now()) { logout(); return null; }
+        return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch { logout(); return null; }
+};
 
 const login = async (usuario, password) => {
     try {
-        const response = await axios.post(`${API_URL}/login`, { usuario, password });
-        if (response.data.success) {
-            localStorage.setItem('token', response.data.token);
-            localStorage.setItem('user', JSON.stringify(response.data.usuario));
-        }
-        return response.data;
-    } catch (error) {
-        throw error.response?.data?.error || 'Error al iniciar sesión';
-    }
+        const { data } = await api.post('/usuarios/login', { usuario, password });
+        if (data.success) { localStorage.setItem('token', data.token); localStorage.setItem('user', JSON.stringify(data.usuario)); }
+        return data;
+    } catch (error) { throw new Error(error.response?.data?.error || 'Error al iniciar sesión'); }
 };
 
-const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+const restoreSession = async () => {
+    const { data } = await api.get('/usuarios/me');
+    localStorage.setItem('user', JSON.stringify(data.usuario));
+    return data.usuario;
 };
 
-const getCurrentUser = () => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) return JSON.parse(userStr);
-    return null;
-};
-
-const getUsers = async () => {
-    const response = await axios.get(API_URL);
-    return response.data.data;
-};
-
-const createUser = async (userData) => {
-    const response = await axios.post(`${API_URL}/registro`, userData);
-    return response.data;
-};
-
-const deleteUser = async (id) => {
-    const response = await axios.delete(`${API_URL}/${id}`);
-    return response.data;
-};
-
-export const authService = {
-    login,
-    logout,
-    getCurrentUser,
-    getUsers,
-    createUser,
-    deleteUser
+export const authService = { login, logout, getCurrentUser, restoreSession,
+    getUsers: async () => (await api.get('/usuarios')).data.data,
+    createUser: async data => (await api.post('/usuarios/registro', data)).data,
+    deleteUser: async id => (await api.delete(`/usuarios/${id}`)).data
 };

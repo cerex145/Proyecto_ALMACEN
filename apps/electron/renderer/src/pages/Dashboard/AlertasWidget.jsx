@@ -1,3 +1,4 @@
+import { parseCalendarDate } from '../../utils/calendar';
 import React, { useEffect, useState } from 'react';
 import { alertasService } from '../../services/alertas.service';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
@@ -44,7 +45,7 @@ export const AlertasWidget = () => {
         if (!valor) {
             return 'N/A';
         }
-        const fecha = new Date(valor);
+        const fecha = parseCalendarDate(valor);
         if (Number.isNaN(fecha.getTime())) {
             return 'N/A';
         }

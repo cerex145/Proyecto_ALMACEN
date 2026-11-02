@@ -1,3 +1,5 @@
+import { parseCalendarDate } from '../../utils/calendar';
+import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect } from 'react';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Button } from '../../components/common/Button';
@@ -32,7 +34,7 @@ export const ActasRecepcionFuncional = () => {
             if (window.electron?.ipcRenderer) {
                 await window.electron.ipcRenderer.invoke('open-external', url);
             } else {
-                window.open(url, '_blank');
+                await openApiDocument(url);
             }
         } catch (error) {
             console.error('Error al descargar PDF:', error);
@@ -66,7 +68,7 @@ export const ActasRecepcionFuncional = () => {
                             </p>
                             <p className="flex justify-between border-b border-slate-200 pb-2">
                                 <span className="font-semibold text-slate-600">Fecha Recepción:</span>
-                                <span>{new Date(selectedActa.fecha).toLocaleDateString()}</span>
+                                <span>{parseCalendarDate(selectedActa.fecha).toLocaleDateString()}</span>
                             </p>
                             <p className="flex justify-between border-b border-slate-200 pb-2">
                                 <span className="font-semibold text-slate-600">Documento:</span>
@@ -175,7 +177,7 @@ export const ActasRecepcionFuncional = () => {
                                         {(acta.tipo_documento || 'Documento')}
                                         {acta.numero_documento ? ` - ${acta.numero_documento}` : ''}
                                     </TableCell>
-                                    <TableCell>{new Date(acta.fecha).toLocaleDateString()}</TableCell>
+                                    <TableCell>{parseCalendarDate(acta.fecha).toLocaleDateString()}</TableCell>
                                     <TableCell>{acta.detalles?.length || 0}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-2">

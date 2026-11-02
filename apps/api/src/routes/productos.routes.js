@@ -1,3 +1,4 @@
+const { lockProducts, stock, quantity } = require('../utils/inventory');
 const ExcelJS = require('exceljs');
 const { Brackets, Like } = require('typeorm');
 
@@ -874,10 +875,11 @@ async function productoRoutes(fastify, options) {
         }
 
         try {
-            return await fastify.db.transaction(async (tx) => {
+            const result = await fastify.db.transaction(async (tx) => {
                 const loteRepo = tx.getRepository('Lote');
                 const kardexRepo = tx.getRepository('Kardex');
 
+                await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [JSON.stringify(['producto', cliente_id || cliente_ruc || '', codigo])]);
                 // 1. Crear o actualizar producto
                 const queryConditions = { codigo };
                 if (cliente_id) {
@@ -903,8 +905,10 @@ async function productoRoutes(fastify, options) {
                     await tx.save('Producto', producto);
                 }
 
+                await lockProducts(tx, [producto.id]);
                 // 2. Si hay lote + vencimiento + cantidad, crear movimiento completo
                 if (lote && cantidad_ingreso && Number(cantidad_ingreso) > 0) {
+                    quantity(cantidad_ingreso);
                     // Crear lote
                     const nuevoLote = loteRepo.create({
                         producto_id: producto.id,
@@ -922,7 +926,7 @@ async function productoRoutes(fastify, options) {
                         lote_numero: lote,
                         tipo_movimiento: 'INGRESO',
                         cantidad: Number(cantidad_ingreso),
-                        saldo: Number(cantidad_ingreso),
+                        saldo: await stock(tx, producto.id),
                         documento_tipo: 'CARGA_MASIVA',
                         documento_numero: codigo,
                         referencia_id: producto.id
@@ -930,12 +934,13 @@ async function productoRoutes(fastify, options) {
                     await tx.save('Kardex', kardexIngreso);
                 }
 
-                return reply.status(201).send({
+                return {
                     success: true,
                     data: producto,
                     message: lote ? 'Producto y lote creados exitosamente' : 'Producto creado exitosamente'
-                });
+                };
             });
+            return reply.status(201).send(result);
         } catch (error) {
             console.error('Error en crear-con-lote:', error);
             return reply.status(400).send({
@@ -1638,11 +1643,11 @@ async function productoRoutes(fastify, options) {
                 SELECT
                     l.producto_id,
                     COUNT(*) FILTER (
-                        WHERE COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
+                        WHERE COALESCE(l.cantidad_disponible, 0) > 0
                     ) AS total_lotes,
                     MIN(
                         CASE
-                            WHEN COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
+                            WHEN COALESCE(l.cantidad_disponible, 0) > 0
                             THEN l.fecha_vencimiento
                         END
                     ) AS proximo_vencimiento,
@@ -1654,7 +1659,7 @@ async function productoRoutes(fastify, options) {
                             'cantidad_disponible', COALESCE(l.cantidad_disponible, 0)
                         )
                     ) FILTER (
-                        WHERE COALESCE(NULLIF(l.cantidad_disponible, 0), l.cantidad_actual, l.cantidad_inicial, 0) > 0
+                        WHERE COALESCE(l.cantidad_disponible, 0) > 0
                     ) AS lotes_json
                 FROM lotes l
                 GROUP BY l.producto_id
