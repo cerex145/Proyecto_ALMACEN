@@ -306,7 +306,7 @@ export const InventarioGeneral = () => {
             'Categoría': p.categoria_ingreso?.replace(/_/g, ' ') || '-',
             'Unidad': p.um || p.unidad || 'UND',
             'N° Lote': p._lote_numero || '-',
-            'Vencimiento': p._lote_vencimiento ? formatDatePE(p._lote_vencimiento) : 'Sin fecha',
+            'Vencimiento': parseSafeDate(p._lote_vencimiento) || 'Sin fecha',
             'Ingresado': p._lote_ingresado != null ? Number(p._lote_ingresado).toFixed(2) : '-',
             'Disponible': Number(p._lote_disponible || 0).toFixed(2),
             'Estado': getStockStatus(p._lote_disponible, p.stock_minimo).label
@@ -321,7 +321,16 @@ export const InventarioGeneral = () => {
         const wb = XLSX.utils.book_new();
         const agregarHoja = (datos, nombre) => {
             if (datos.length === 0) return;
-            const ws = XLSX.utils.json_to_sheet(datos);
+            const ws = XLSX.utils.json_to_sheet(datos, { dateNF: 'dd/mm/yyyy' });
+            datos.forEach((fila, index) => {
+                const fecha = fila.Vencimiento;
+                if (fecha instanceof Date) {
+                    ws['H' + (index + 2)].v = (Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate())
+                        - Date.UTC(1899, 11, 30)) / MS_PER_DAY;
+                }
+            });
+            ws['!cols'] = [];
+            ws['!cols'][7] = { wch: 12 };
             ws['!autofilter'] = { ref: `A1:K${datos.length + 1}` };
             XLSX.utils.book_append_sheet(wb, ws, nombre);
         };
