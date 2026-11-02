@@ -316,7 +316,7 @@ async function kardexRoutes(fastify, options) {
         const safeOrder = String(order).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
         const sortExpression = orderBy === 'fecha' ? fechaMovimientoSql : `k.${safeOrderBy}`;
-        sql += ` ORDER BY ${sortExpression} ${safeOrder}, k.id ${safeOrder} LIMIT ${paramIndex++} OFFSET ${paramIndex++}`;
+        sql += ` ORDER BY ${sortExpression} ${safeOrder}, k.id ${safeOrder} LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
         params.push(Number(limit), skip);
 
         const movimientos = await connection.query(sql, params);
