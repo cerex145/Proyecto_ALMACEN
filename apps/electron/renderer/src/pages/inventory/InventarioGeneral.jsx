@@ -1,3 +1,4 @@
+import { EditarLoteModal } from './EditarLoteModal';
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { productService } from '../../services/product.service';
@@ -78,11 +79,13 @@ const aplanarPorLote = (productos) => {
                     ...p,
                     // Sobreescribir stock con el del lote individual
                     stock_calculado: disponible,
+                    _lote_id: lote.id,
+                    _lote_ingreso_id: lote.nota_ingreso_id,
                     _lote_numero: lote.numero_lote || null,
                     _lote_vencimiento: lote.fecha_vencimiento || null,
                     _lote_ingresado: Number(lote.cantidad_ingresada) || 0,
                     _lote_disponible: disponible,
-                    _rowKey: `${p.id}-lote-${idx}`,
+                    _rowKey: `${p.id}-lote-${lote.id ?? idx}`,
                 });
             });
         }
@@ -91,6 +94,7 @@ const aplanarPorLote = (productos) => {
 };
 
 export const InventarioGeneral = () => {
+    const [loteEditar, setLoteEditar] = useState(null);
     const [inventario, setInventario] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busqueda, setBusqueda] = useState('');
@@ -682,6 +686,13 @@ export const InventarioGeneral = () => {
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16.862 4.487l1.651-1.651a2.121 2.121 0 013 3L9.75 17.6 4 19l1.4-5.75L16.862 4.487z" />
                                                         </svg>
                                                     </button>
+                                                    {fila._lote_id && fila.puede_editar_lotes && (
+                                                        <button type="button" onClick={() => setLoteEditar(fila)}
+                                                            aria-label={`Editar lote ${fila._lote_numero} de ${fila.descripcion}`}
+                                                            className="ml-2 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50">
+                                                            Editar lote
+                                                        </button>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
@@ -692,6 +703,18 @@ export const InventarioGeneral = () => {
                     )}
                 </CardContent>
             </Card>
+
+            {loteEditar && (
+                <EditarLoteModal fila={loteEditar} onClose={() => setLoteEditar(null)}
+                    onSaved={updated => {
+                        setInventario(previous => previous.map(producto => ({ ...producto,
+                            lotes: (producto.lotes || []).map(lote => Number(lote.id) === Number(updated.id)
+                                ? { ...lote, numero_lote: updated.numero_lote, fecha_vencimiento: updated.fecha_vencimiento } : lote)
+                        })));
+                        setLoteEditar(null);
+                        loadInventario();
+                    }} />
+            )}
 
             {productoRenombrar && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4">

@@ -94,6 +94,11 @@ export const productService = {
     },
 
     // Lotes
+    correctLotData: async (id, data) => {
+        const response = await api.patch(`/lotes/${id}/datos`, data);
+        return response.data.data;
+    },
+
     getLotesByProduct: async (productId, clienteId = null) => {
         const params = clienteId ? { cliente_id: clienteId } : {};
         const response = await api.get(`/lotes/producto/${productId}`, { params });
