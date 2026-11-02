@@ -7,7 +7,7 @@ const KardexMovimientoSchema = {
         id: { type: 'integer' },
         producto_id: { type: 'integer' },
         lote_numero: { type: 'string', nullable: true },
-        tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'] },
+        tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'SALIDA_REVERSA', 'AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'] },
         cantidad: { type: 'number' },
         saldo: { type: 'number' },
         documento_tipo: { type: 'string', nullable: true },
@@ -144,7 +144,7 @@ async function kardexRoutes(fastify, options) {
                     lote_numero: { type: 'string', description: 'Filtrar por número de lote' },
                     documento_numero: { type: 'string', description: 'Filtrar por número de documento' },
                     cliente_nombre: { type: 'string', description: 'Filtrar por nombre de cliente o proveedor' },
-                    tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'], description: 'Tipo de movimiento' },
+                    tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'SALIDA_REVERSA', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'], description: 'Tipo de movimiento' },
                     fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio' },
                     fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin' },
                     page: { type: 'integer', minimum: 1, default: 1 },
@@ -422,12 +422,15 @@ async function kardexRoutes(fastify, options) {
     fastify.get('/api/kardex/exportar', {
         schema: {
             tags: ['Kardex'],
-            description: 'Exportar movimientos de kardex a Excel',
+            description: 'Exportar Kardex con los mismos filtros y balance neto que la consulta',
             querystring: {
                 type: 'object',
                 properties: {
                     producto_id: { type: 'integer', description: 'Filtrar por ID de producto' },
                     producto_nombre: { type: 'string', description: 'Filtrar por nombre o código de producto' },
+                    lote_numero: { type: 'string' },
+                    documento_numero: { type: 'string' },
+                    tipo_movimiento: { type: 'string', enum: ['INGRESO', 'SALIDA', 'SALIDA_REVERSA', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUSTE_POR_RECEPCION'] },
                     cliente_nombre: { type: 'string', description: 'Filtrar por nombre de cliente o proveedor' },
                     fecha_desde: { type: 'string', format: 'date', description: 'Fecha inicio' },
                     fecha_hasta: { type: 'string', format: 'date', description: 'Fecha fin' },
@@ -442,7 +445,7 @@ async function kardexRoutes(fastify, options) {
             }
         }
     }, async (request, reply) => {
-        const { producto_id, producto_nombre, cliente_nombre, fecha_desde, fecha_hasta } = request.query;
+        const { producto_id, producto_nombre, cliente_nombre, fecha_desde, fecha_hasta, lote_numero, documento_numero, tipo_movimiento } = request.query;
         let paramIndex = 1;
 
         const connection = kardexRepo.manager.connection;
@@ -512,6 +515,22 @@ async function kardexRoutes(fastify, options) {
                 OR COALESCE(cliente_ingreso.cuit, cliente_ingreso_ruc.cuit, cliente_salida.cuit, cliente_origen_salida.cuit, '') ILIKE $${paramIndex}
             )`;
             params.push(`%${cliente_nombre}%`);
+            paramIndex++;
+        }
+
+        if (lote_numero) {
+            sql += ` AND k.lote_numero ILIKE $${paramIndex++}`;
+            params.push(`%${lote_numero}%`);
+        }
+        if (tipo_movimiento) {
+            sql += ` AND k.tipo_movimiento = $${paramIndex++}`;
+            params.push(tipo_movimiento);
+        }
+        if (documento_numero) {
+            sql += ` AND (k.documento_numero ILIKE $${paramIndex}
+                OR ni.numero_documento ILIKE $${paramIndex} OR ns.numero_documento ILIKE $${paramIndex}
+                OR ni.numero_guia ILIKE $${paramIndex})`;
+            params.push(`%${documento_numero}%`);
             paramIndex++;
         }
 
@@ -604,10 +623,13 @@ async function kardexRoutes(fastify, options) {
 
         const cleanText = (value) => String(value || '').trim();
 
+        let totalIngresos = 0, totalSalidas = 0;
         movimientos.forEach(mov => {
             const isIngreso = mov.tipo_movimiento === 'INGRESO' || mov.tipo_movimiento === 'AJUSTE_POSITIVO' || mov.tipo_movimiento === 'AJUSTE_POR_RECEPCION';
             const isSalida = mov.tipo_movimiento === 'SALIDA' || mov.tipo_movimiento === 'AJUSTE_NEGATIVO' || mov.tipo_movimiento === 'SALIDA_REVERSA';
             
+            if (isIngreso) totalIngresos += Number(mov.cantidad);
+            if (isSalida) totalSalidas += Number(mov.cantidad);
             const fechaDoc = isIngreso ? mov.fecha_nota_ingreso : (isSalida ? mov.fecha_nota_salida : null);
             const fechaFormateada = fechaDoc ? formatFecha(fechaDoc, true) : formatFecha(mov.created_at, false);
             const numeroDocumentoDigitado = mov.numero_documento_ingreso || mov.numero_documento_salida || null;
@@ -638,9 +660,9 @@ async function kardexRoutes(fastify, options) {
             descripcion: 'TOTAL FINAL',
             lote_numero: '',
             tipo_movimiento: '',
-            ingreso: '',
-            salida: '',
-            saldo: movimientos.length > 0 ? Number(movimientos[movimientos.length - 1].saldo) : 0,
+            ingreso: Math.round(totalIngresos * 100) / 100,
+            salida: Math.round(totalSalidas * 100) / 100,
+            saldo: Math.round((totalIngresos - totalSalidas) * 100) / 100,
             documento: '',
             observaciones: ''
         });

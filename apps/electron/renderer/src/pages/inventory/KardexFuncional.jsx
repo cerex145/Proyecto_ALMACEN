@@ -43,6 +43,8 @@ export const KardexFuncional = () => {
     const [loading, setLoading] = useState(false);
     const [clientes, setClientes] = useState([]);
     const printRef = useRef(null);
+    const requestSequence = useRef(0);
+    const [loadError, setLoadError] = useState('');
 
     // Filtros
     const [filtroProducto, setFiltroProducto] = useState('');
@@ -62,6 +64,7 @@ export const KardexFuncional = () => {
 
     useEffect(() => {
         cargarKardex();
+        return () => { requestSequence.current++; };
     }, [filtroProducto, filtroLote, filtroDocumento, filtroTipo, filtroFechaDesde, filtroFechaHasta, filtroCliente]);
 
     const cargarClientes = async () => {
@@ -73,7 +76,9 @@ export const KardexFuncional = () => {
     };
 
     const cargarKardex = async () => {
+        const sequence = ++requestSequence.current;
         try {
+            setLoadError('');
             setLoading(true);
             // Se sube el límite a 100,000 para traer todo el histórico y evitar discrepancias de suma.
             let url = `${API_ORIGIN}/api/kardex?limit=100000&order=ASC`;
@@ -87,7 +92,15 @@ export const KardexFuncional = () => {
 
             const res = await fetch(url);
             const result = await res.json();
-            const data = result.data || [];
+            if (sequence !== requestSequence.current) return;
+            if (!res.ok || result.success !== true || !Array.isArray(result.data)) {
+                throw new Error(res.status === 401 ? 'Su sesión venció. Vuelva a iniciar sesión.'
+                    : 'No se pudo consultar el Kardex. Reintente en unos momentos.');
+            }
+            if (Number(result.pagination?.total || 0) > result.data.length) {
+                throw new Error('El historial supera el límite de consulta. Use filtros de fecha o cliente para ver un resultado completo.');
+            }
+            const data = result.data;
             setMovimientos(data);
 
             const ing = data.filter(m => ['INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION'].includes(m.tipo_movimiento));
@@ -96,9 +109,11 @@ export const KardexFuncional = () => {
             const sumSal = sal.reduce((s, m) => s + Number(m.cantidad), 0);
             setStats({ ingresos: sumIng, salidas: sumSal, balance: sumIng - sumSal, total: data.length });
         } catch (e) {
-            console.error(e);
+            if (sequence !== requestSequence.current) return;
+            setLoadError(e.message || 'No se pudo consultar el Kardex.');
+            setMovimientos([]);
         } finally {
-            setLoading(false);
+            if (sequence === requestSequence.current) setLoading(false);
         }
     };
 
@@ -110,6 +125,9 @@ export const KardexFuncional = () => {
 
     const exportarExcel = async () => {
         let url = `${API_ORIGIN}/api/kardex/exportar?`;
+        if (filtroLote) url += `&lote_numero=${encodeURIComponent(filtroLote)}`;
+        if (filtroDocumento) url += `&documento_numero=${encodeURIComponent(filtroDocumento)}`;
+        if (filtroTipo) url += `&tipo_movimiento=${encodeURIComponent(filtroTipo)}`;
         if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
         if (filtroFechaDesde) url += `&fecha_desde=${filtroFechaDesde}`;
         if (filtroFechaHasta) url += `&fecha_hasta=${filtroFechaHasta}`;
@@ -299,7 +317,7 @@ export const KardexFuncional = () => {
                         {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                     </div>
                     <div style={{ marginTop: 4 }}>
-                        {movimientos.length} movimientos registrados
+                        {loadError ? 'Consulta no disponible' : `${movimientos.length} movimientos registrados`}
                     </div>
                 </div>
             </div>
@@ -315,7 +333,7 @@ export const KardexFuncional = () => {
                     </button>
                 )}
                 <span style={{ marginLeft: 'auto', fontSize: '0.82rem', color: '#64748b' }}>
-                    {hayFiltrosActivos
+                    {loadError ? 'No se pudo cargar el Kardex' : hayFiltrosActivos
                         ? `Mostrando ${movimientos.length} resultado(s) filtrados`
                         : `Total: ${movimientos.length} movimientos`}
                 </span>
@@ -429,22 +447,22 @@ export const KardexFuncional = () => {
             <div style={s.statsRow}>
                 <div style={s.statCard('#16a34a', '#15803d')}>
                     <div style={s.statLabel}>▲ Total Ingresos</div>
-                    <div style={s.statValue}>{stats.ingresos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+                    <div style={s.statValue}>{loading || loadError ? '—' : stats.ingresos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
                     <div style={s.statSub}>unidades ingresadas</div>
                 </div>
                 <div style={s.statCard('#dc2626', '#b91c1c')}>
                     <div style={s.statLabel}>▼ Total Salidas</div>
-                    <div style={s.statValue}>{stats.salidas.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+                    <div style={s.statValue}>{loading || loadError ? '—' : stats.salidas.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
                     <div style={s.statSub}>unidades despachadas</div>
                 </div>
                 <div style={s.statCard('#0b6aa2', '#075985')}>
                     <div style={s.statLabel}>◆ Balance Neto</div>
-                    <div style={s.statValue}>{stats.balance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
-                    <div style={s.statSub}>stock resultante</div>
+                    <div style={s.statValue}>{loading || loadError ? '—' : stats.balance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</div>
+                    <div style={s.statSub}>balance de los movimientos mostrados</div>
                 </div>
                 <div style={s.statCard('#7c3aed', '#6d28d9')}>
                     <div style={s.statLabel}>≡ Movimientos</div>
-                    <div style={s.statValue}>{stats.total}</div>
+                    <div style={s.statValue}>{loading || loadError ? '—' : stats.total}</div>
                     <div style={s.statSub}>registros totales</div>
                 </div>
             </div>
@@ -464,6 +482,12 @@ export const KardexFuncional = () => {
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>
                         <div style={{ fontSize: '2rem', marginBottom: 12 }}>⏳</div>
                         <div>Cargando movimientos...</div>
+                    </div>
+                ) : loadError ? (
+                    <div role="alert" style={{ textAlign: 'center', padding: '3rem', color: '#b91c1c' }}>
+                        <p style={{ fontWeight: 700 }}>No se pudo cargar el Kardex</p>
+                        <p>{loadError}</p>
+                        <button type="button" onClick={cargarKardex} style={{ ...s.btn('#0369a1'), marginTop: 12 }}>Reintentar</button>
                     </div>
                 ) : movimientos.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
@@ -625,13 +649,13 @@ export const KardexFuncional = () => {
                                         TOTALES ({movimientos.length} movimientos)
                                     </td>
                                     <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', fontWeight: 800, color: '#86efac', fontSize: '0.9rem' }}>
-                                        {stats.ingresos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        {loading || loadError ? '—' : stats.ingresos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', fontWeight: 800, color: '#fca5a5', fontSize: '0.9rem' }}>
-                                        {stats.salidas.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        {loading || loadError ? '—' : stats.salidas.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', fontWeight: 800, color: '#93c5fd', fontSize: '0.9rem' }}>
-                                        {stats.balance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                        {loading || loadError ? '—' : stats.balance.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td colSpan="3" />
                                 </tr>
