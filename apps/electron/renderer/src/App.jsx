@@ -1,27 +1,25 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 // Auth & Context
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginPage } from './pages/auth/LoginPage';
 
-// Pages
-import InventarioGeneral from './pages/inventory/InventarioGeneral';
-import { NotaIngresoForm } from './pages/operations/NotaIngresoForm';
-import { ActaRecepcionForm } from './pages/operations/ActaRecepcionForm';
-import { NotaSalidaForm } from './pages/operations/NotaSalidaForm';
-import { Dashboard } from './pages/Dashboard/Dashboard';
-import { ClienteListForm } from './pages/crm/ClienteListForm';
-import { HistorialIngresosFuncional } from './pages/operations/HistorialIngresosFuncional';
-import { HistorialSalidasFuncional } from './pages/operations/HistorialSalidasFuncional';
-import { ActasRecepcionFuncional } from './pages/operations/ActasRecepcionFuncional';
-import { KardexFuncional } from './pages/inventory/KardexFuncional';
-import { AlertasListCompleto } from './pages/Alertas/AlertasListCompleto';
-import { AjustesPage } from './pages/admin/AjustesPage';
-
-// Layouts & Components
-import NotaSalidaLayout from './components/NotaSalidaLayout';
 import { MainLayout } from './components/layout/MainLayout';
+
+const InventarioGeneral = lazy(() => import('./pages/inventory/InventarioGeneral'));
+const NotaIngresoForm = lazy(() => import('./pages/operations/NotaIngresoForm').then(m => ({ default: m.NotaIngresoForm })));
+const ActaRecepcionForm = lazy(() => import('./pages/operations/ActaRecepcionForm').then(m => ({ default: m.ActaRecepcionForm })));
+const NotaSalidaForm = lazy(() => import('./pages/operations/NotaSalidaForm').then(m => ({ default: m.NotaSalidaForm })));
+const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard').then(m => ({ default: m.Dashboard })));
+const ClienteListForm = lazy(() => import('./pages/crm/ClienteListForm').then(m => ({ default: m.ClienteListForm })));
+const HistorialIngresosFuncional = lazy(() => import('./pages/operations/HistorialIngresosFuncional').then(m => ({ default: m.HistorialIngresosFuncional })));
+const HistorialSalidasFuncional = lazy(() => import('./pages/operations/HistorialSalidasFuncional').then(m => ({ default: m.HistorialSalidasFuncional })));
+const ActasRecepcionFuncional = lazy(() => import('./pages/operations/ActasRecepcionFuncional').then(m => ({ default: m.ActasRecepcionFuncional })));
+const KardexFuncional = lazy(() => import('./pages/inventory/KardexFuncional').then(m => ({ default: m.KardexFuncional })));
+const AlertasListCompleto = lazy(() => import('./pages/Alertas/AlertasListCompleto').then(m => ({ default: m.AlertasListCompleto })));
+const AjustesPage = lazy(() => import('./pages/admin/AjustesPage').then(m => ({ default: m.AjustesPage })));
+const NotaSalidaLayout = lazy(() => import('./components/NotaSalidaLayout'));
 
 const ProtectedRoute = () => {
     const { isAuthenticated, loading } = useAuth();
@@ -29,7 +27,9 @@ const ProtectedRoute = () => {
     if (!isAuthenticated) return <Navigate to="/login" replace />;
     return (
         <MainLayout>
-            <Outlet />
+            <Suspense fallback={<p role="status" className="p-6 text-slate-500">Cargando módulo…</p>}>
+                <Outlet />
+            </Suspense>
         </MainLayout>
     );
 };

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen.onrender.com').replace(/\/+$/, '');
+export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || 'https://proyecto-almacen-api.onrender.com').replace(/\/+$/, '');
 export const SESSION_EXPIRED_EVENT = 'almacen:session-expired';
 
 export function expireSession() {

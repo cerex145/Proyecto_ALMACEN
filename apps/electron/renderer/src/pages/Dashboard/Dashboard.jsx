@@ -54,7 +54,6 @@ export const Dashboard = () => {
                     <QuickTile to="/salidas/controles" icon="📤" label="Salidas" color="sky" />
                     <QuickTile to="/alertas" icon="⚠️" label="Alertas" color="rose" />
                     <QuickTile to="/kardex" icon="📊" label="Kardex" color="violet" />
-                    <QuickTile to="/reportes" icon="📈" label="Reportes" color="slate" />
                     <QuickTile to="/ajustes" icon="⚙️" label="Ajustes" color="gray" />
                 </div>
             </div>

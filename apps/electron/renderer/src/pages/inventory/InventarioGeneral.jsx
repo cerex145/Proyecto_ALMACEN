@@ -1,12 +1,13 @@
 import { EditarLoteModal } from './EditarLoteModal';
 import React, { useEffect, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { productService } from '../../services/product.service';
 import { clientesService } from '../../services/clientes.service';
 import { Badge } from '../../components/common/Badge';
 import { Card, CardContent } from '../../components/common/Card';
+import { Paginacion } from '../../components/common/Paginacion';
 
 const MS_PER_DAY = 86400000;
+const FILAS_POR_PAGINA = 100;
 
 const getStartOfDay = (value = new Date()) => {
     const date = new Date(value);
@@ -102,6 +103,7 @@ export const InventarioGeneral = () => {
     const [clienteFiltro, setClienteFiltro] = useState('');
     const [stockFiltro, setStockFiltro] = useState('');
     const [vencimientoFiltro, setVencimientoFiltro] = useState('');
+    const [page, setPage] = useState(1);
     const [productoRenombrar, setProductoRenombrar] = useState(null);
     const [nuevoNombre, setNuevoNombre] = useState('');
     const [guardandoNombre, setGuardandoNombre] = useState(false);
@@ -293,14 +295,27 @@ export const InventarioGeneral = () => {
 
     // Stats sobre inventario aplanado total
     const totalFilas = inventarioBaseCliente.length;
+    const totalPages = Math.max(1, Math.ceil(inventarioFiltrado.length / FILAS_POR_PAGINA));
+    const paginaVisible = Math.min(page, totalPages);
+    const offset = (paginaVisible - 1) * FILAS_POR_PAGINA;
+    const filasVisibles = inventarioFiltrado.slice(offset, offset + FILAS_POR_PAGINA);
+    const cambiarFiltro = (setter) => (event) => {
+        setPage(1);
+        setter(event.target.value);
+    };
     const filasSinStock = inventarioBaseCliente.filter(p => p._lote_disponible <= 0).length;
     const filasStockBajo = inventarioBaseCliente.filter(p => p._lote_disponible > 0 && p._lote_disponible <= p.stock_minimo).length;
     const stockTotal = inventarioBaseCliente.reduce((sum, p) => sum + (p._lote_disponible || 0), 0);
     const filasConStock = inventarioBaseCliente.filter(p => p._lote_disponible > 0).length;
 
     // ─── Exportar Excel ──────────────────────────────────────────────────────
-    const exportarExcel = () => {
+    const exportarExcel = async () => {
         if (inventarioFiltrado.length === 0) return;
+        const XLSX = await import('xlsx').catch(() => null);
+        if (!XLSX) {
+            window.alert('No se pudo cargar el exportador de Excel. Inténtalo de nuevo.');
+            return;
+        }
 
         const toExcelRows = (filas) => filas.map(p => ({
             'Código': p.codigo || '-',
@@ -456,7 +471,7 @@ export const InventarioGeneral = () => {
                                 placeholder="Código, nombre, proveedor, cliente o lote..."
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={busqueda}
-                                onChange={(e) => setBusqueda(e.target.value)}
+                                onChange={cambiarFiltro(setBusqueda)}
                             />
                         </div>
 
@@ -468,7 +483,7 @@ export const InventarioGeneral = () => {
                             <select
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={stockFiltro}
-                                onChange={(e) => setStockFiltro(e.target.value)}
+                                onChange={cambiarFiltro(setStockFiltro)}
                             >
                                 <option value="">Todos los registros</option>
                                 <option value="con_stock">✅ Con Stock ({filasConStock})</option>
@@ -486,7 +501,7 @@ export const InventarioGeneral = () => {
                             <select
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={vencimientoFiltro}
-                                onChange={(e) => setVencimientoFiltro(e.target.value)}
+                                onChange={cambiarFiltro(setVencimientoFiltro)}
                             >
                                 <option value="">Todos</option>
                                 <option value="vencido">🔴 Vencidos</option>
@@ -504,7 +519,7 @@ export const InventarioGeneral = () => {
                             <select
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 value={clienteFiltro}
-                                onChange={(e) => setClienteFiltro(e.target.value)}
+                                onChange={cambiarFiltro(setClienteFiltro)}
                             >
                                 <option value="">Todos los clientes</option>
                                 {clientes.map((c) => (
@@ -521,10 +536,10 @@ export const InventarioGeneral = () => {
                     {(busqueda || stockFiltro || vencimientoFiltro || clienteFiltro) && (
                         <div className="mt-3 flex items-center justify-between">
                             <span className="text-xs text-slate-500">
-                                Mostrando <strong className="text-slate-700">{inventarioFiltrado.length}</strong> de {totalFilas} registros
+                                Coincidencias <strong className="text-slate-700">{inventarioFiltrado.length}</strong> de {totalFilas} registros
                             </span>
                             <button
-                                onClick={() => { setBusqueda(''); setStockFiltro(''); setVencimientoFiltro(''); setClienteFiltro(''); }}
+                                onClick={() => { setPage(1); setBusqueda(''); setStockFiltro(''); setVencimientoFiltro(''); setClienteFiltro(''); }}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
                             >
                                 Limpiar filtros
@@ -537,6 +552,15 @@ export const InventarioGeneral = () => {
             {/* Tabla de Inventario */}
             <Card>
                 <CardContent className="p-0">
+                    {!loading && filasVisibles.length > 0 && (
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-4 pt-3">
+                            <span className="mb-3 text-sm text-slate-500">
+                                Filas {offset + 1}–{offset + filasVisibles.length} de {inventarioFiltrado.length}
+                            </span>
+                            <Paginacion page={paginaVisible} hasMore={paginaVisible < totalPages}
+                                loading={loading} setPage={setPage} label="Páginas del inventario" />
+                        </div>
+                    )}
                     {loading ? (
                         <div className="text-center py-12">
                             <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -590,7 +614,7 @@ export const InventarioGeneral = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-slate-200">
-                                    {inventarioFiltrado.map((fila) => {
+                                    {filasVisibles.map((fila) => {
                                         const disp = fila._lote_disponible;
                                         const status = getStockStatus(disp, fila.stock_minimo);
                                         const vencFecha = parseSafeDate(fila._lote_vencimiento);

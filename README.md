@@ -4,8 +4,8 @@ Guia corta de operacion para cambios seguros en el proyecto.
 
 ## Estado de servicios
 
-- Backend productivo: `https://proyecto-almacen.onrender.com`
-- Frontend productivo: Vercel, proyecto `renderer`
+- Backend productivo: [Render](https://proyecto-almacen-api.onrender.com/health)
+- Frontend productivo: [Proyecto Almacén](https://proyecto-almacen-web.vercel.app/#/login)
 - Base de datos: Supabase PostgreSQL
 
 ## Validaciones seguras

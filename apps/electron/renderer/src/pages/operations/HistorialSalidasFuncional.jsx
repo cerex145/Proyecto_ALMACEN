@@ -4,14 +4,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { ExportarExcelButton } from '../../components/common/ExportarExcelButton';
+import { Paginacion } from '../../components/common/Paginacion';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 import { API_ORIGIN } from '../../services/api';
 
 export const HistorialSalidasFuncional = () => {
-    const [salidas, setSalidas] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState('');
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [revision, setRevision] = useState(0);
     const [detalleRows, setDetalleRows] = useState([]);
     const requestSeqRef = useRef(0);
     const activeControllerRef = useRef(null);
@@ -31,16 +35,19 @@ export const HistorialSalidasFuncional = () => {
     };
 
     useEffect(() => {
-        cargarSalidas();
-    }, [filtro]);
-
-    useEffect(() => {
+        setLoading(true);
+        const timer = setTimeout(cargarSalidas, filtro ? 250 : 0);
         return () => {
-            if (activeControllerRef.current) {
-                activeControllerRef.current.abort();
-            }
+            clearTimeout(timer);
+            requestSeqRef.current++;
+            activeControllerRef.current?.abort();
         };
-    }, []);
+    }, [filtro, page, revision]);
+
+    const cambiarFiltro = (value) => {
+        setFiltro(value);
+        setPage(1);
+    };
 
     const cargarSalidas = async () => {
         const requestId = ++requestSeqRef.current;
@@ -52,17 +59,23 @@ export const HistorialSalidasFuncional = () => {
 
         try {
             setLoading(true);
-            const query = new URLSearchParams({ limit: '8000' });
+            setLoadError(false);
+            const query = new URLSearchParams({ limit: '100', page: String(page) });
             if (filtro) query.set('q', filtro);
             const params = `?${query.toString()}`;
             const response = await fetch(`${API_ORIGIN}/api/salidas/historial${params}`, {
                 cache: 'no-store',
                 signal: controller.signal
             });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
             const result = await response.json();
             if (requestId !== requestSeqRef.current) return;
             const filas = result.data || [];
-            setSalidas([]);
+            if (page > 1 && filas.length === 0) {
+                setPage(page - 1);
+                return;
+            }
+            setHasMore(result.pagination?.hasMore === true);
 
             const rows = [];
             filas.forEach((fila, index) => {
@@ -97,6 +110,7 @@ export const HistorialSalidasFuncional = () => {
             if (error?.name === 'AbortError') return;
             if (requestId !== requestSeqRef.current) return;
             console.error('Error al cargar salidas:', error);
+            setLoadError(true);
             setDetalleRows([]);
         } finally {
             if (requestId !== requestSeqRef.current) return;
@@ -141,7 +155,7 @@ export const HistorialSalidasFuncional = () => {
             if (response.ok) {
                 const data = await response.json();
                 alert('✅ ' + (data.message || 'Nota de salida cancelada exitosamente'));
-                cargarSalidas();
+                setRevision(value => value + 1);
             } else {
                 const error = await response.json();
                 alert('❌ Error: ' + (error.error || 'Error al cancelar la nota'));
@@ -176,15 +190,21 @@ export const HistorialSalidasFuncional = () => {
                         <Input
                             placeholder="Ej: 53610002, F001-000123, OB0810T, LOTE-01, 00000059"
                             value={filtro}
-                            onChange={(e) => setFiltro(e.target.value)}
+                            onChange={(e) => cambiarFiltro(e.target.value)}
                             className="input-premium"
                         />
                     </div>
-                    <Button onClick={() => setFiltro('')} variant="secondary">Limpiar</Button>
+                    <Button onClick={() => cambiarFiltro('')} variant="secondary">Limpiar</Button>
                 </div>
 
+                <Paginacion page={page} hasMore={hasMore} loading={loading || loadError} setPage={setPage} />
                 {loading ? (
                     <div className="text-center py-12 text-slate-500">Cargando salidas...</div>
+                ) : loadError ? (
+                    <div role="alert" className="text-center py-12 text-rose-700">
+                        No se pudo cargar el historial de salidas.
+                        <Button className="ml-3" variant="secondary" onClick={() => setRevision(value => value + 1)}>Reintentar</Button>
+                    </div>
                 ) : detalleRows.length === 0 ? (
                     <div className="text-center py-12 text-slate-400">No hay registros de salida</div>
                 ) : (

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
 import { ExportarExcelButton } from '../../components/common/ExportarExcelButton';
+import { Paginacion } from '../../components/common/Paginacion';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 import { API_ORIGIN } from '../../services/api';
@@ -67,9 +68,12 @@ const toNumberSafe = (value, fallback = 0) => {
 };
 
 export const HistorialIngresosFuncional = () => {
-    const [, setIngresos] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState('');
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadError, setLoadError] = useState(false);
+    const [revision, setRevision] = useState(0);
     const [showForm, setShowForm] = useState(false);
     const [detalleRows, setDetalleRows] = useState([]);
     const [clientesMap, setClientesMap] = useState({});
@@ -82,16 +86,19 @@ export const HistorialIngresosFuncional = () => {
     }, []);
 
     useEffect(() => {
-        cargarIngresos();
-    }, [filtro, clientesMap]);
-
-    useEffect(() => {
+        setLoading(true);
+        const timer = setTimeout(cargarIngresos, filtro ? 250 : 0);
         return () => {
-            if (activeControllerRef.current) {
-                activeControllerRef.current.abort();
-            }
+            clearTimeout(timer);
+            requestSeqRef.current++;
+            activeControllerRef.current?.abort();
         };
-    }, []);
+    }, [filtro, page, revision]);
+
+    const cambiarFiltro = (value) => {
+        setFiltro(value);
+        setPage(1);
+    };
 
     const cargarClientes = async () => {
         try {
@@ -120,10 +127,9 @@ export const HistorialIngresosFuncional = () => {
 
         try {
             setLoading(true);
-            const params = new URLSearchParams();
+            setLoadError(false);
+            const params = new URLSearchParams({ include_detalles: 'true', limit: '25', page: String(page) });
             if (filtro) params.set('numero_ingreso', filtro);
-            params.set('include_detalles', 'true');
-            params.set('limit', '8000');
             const response = await fetch(`${API_ORIGIN}/api/ingresos?${params.toString()}`, {
                 cache: 'no-store',
                 signal: controller.signal
@@ -134,7 +140,12 @@ export const HistorialIngresosFuncional = () => {
             const result = await response.json();
             if (requestId !== requestSeqRef.current) return;
             const notas = result.data || [];
-            setIngresos(notas);
+            const lastPage = Math.max(1, result.pagination?.totalPages || 1);
+            if (page > lastPage) {
+                setPage(lastPage);
+                return;
+            }
+            setHasMore(page < lastPage);
 
             const rows = [];
             notas.forEach((nota) => {
@@ -142,7 +153,7 @@ export const HistorialIngresosFuncional = () => {
                 const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
                 const dia = String(fechaObj.getDate()).padStart(2, '0');
                 const anio = String(fechaObj.getFullYear());
-                const ruc = nota.cliente_ruc || clientesMap[String(nota.cliente_id)] || '-';
+                const ruc = nota.cliente_ruc;
                 const detalles = Array.isArray(nota?.detalles) ? nota.detalles : [];
 
                 if (detalles.length === 0) {
@@ -165,6 +176,7 @@ export const HistorialIngresosFuncional = () => {
                         mes,
                         dia,
                         ruc,
+                        clienteId: nota.cliente_id,
                         anio
                     });
                     return;
@@ -193,6 +205,7 @@ export const HistorialIngresosFuncional = () => {
                         mes,
                         dia,
                         ruc,
+                        clienteId: nota.cliente_id,
                         anio
                     });
                 });
@@ -203,6 +216,7 @@ export const HistorialIngresosFuncional = () => {
             if (error?.name === 'AbortError') return;
             if (requestId !== requestSeqRef.current) return;
             console.error('Error al cargar ingresos:', error);
+            setLoadError(true);
             setDetalleRows([]);
         } finally {
             if (requestId !== requestSeqRef.current) return;
@@ -243,7 +257,7 @@ export const HistorialIngresosFuncional = () => {
             if (response.ok) {
                 const data = await response.json();
                 alert('✅ ' + (data.message || 'Nota de ingreso cancelada exitosamente'));
-                cargarIngresos();
+                setRevision(value => value + 1);
             } else {
                 const error = await response.json();
                 alert('❌ Error: ' + (error.error || 'Error al cancelar la nota'));
@@ -289,15 +303,21 @@ export const HistorialIngresosFuncional = () => {
                         <Input
                             placeholder="Ej: ING-2026-001"
                             value={filtro}
-                            onChange={(e) => setFiltro(e.target.value)}
+                            onChange={(e) => cambiarFiltro(e.target.value)}
                             className="input-premium"
                         />
                     </div>
-                    <Button onClick={() => setFiltro('')} variant="secondary">Limpiar</Button>
+                    <Button onClick={() => cambiarFiltro('')} variant="secondary">Limpiar</Button>
                 </div>
 
+                <Paginacion page={page} hasMore={hasMore} loading={loading || loadError} setPage={setPage} />
                 {loading ? (
                     <div className="text-center py-12 text-slate-500">Cargando ingresos...</div>
+                ) : loadError ? (
+                    <div role="alert" className="text-center py-12 text-rose-700">
+                        No se pudo cargar el historial de ingresos.
+                        <Button className="ml-3" variant="secondary" onClick={() => setRevision(value => value + 1)}>Reintentar</Button>
+                    </div>
                 ) : detalleRows.length === 0 ? (
                     <div className="text-center py-12 text-slate-400">No hay registros de ingreso</div>
                 ) : (
@@ -344,7 +364,7 @@ export const HistorialIngresosFuncional = () => {
                                             <td className="px-4 py-2">{row.fechaIngreso}</td>
                                             <td className="px-4 py-2">{row.mes}</td>
                                             <td className="px-4 py-2">{row.dia}</td>
-                                            <td className="px-4 py-2">{row.ruc}</td>
+                                            <td className="px-4 py-2">{row.ruc || clientesMap[String(row.clienteId)] || '-'}</td>
                                             <td className="px-4 py-2">{row.anio}</td>
                                             <td className="px-4 py-2 text-center flex gap-2 justify-center">
                                                 <Button
