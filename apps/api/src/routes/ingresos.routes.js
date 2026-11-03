@@ -271,11 +271,12 @@ async function ingresosRoutes(fastify, options) {
         return `guia-${String(siguienteNumero).padStart(7, '0')}`;
     };
 
-    const enriquecerDetallesConLotes = async (notaId, detalles = []) => {
-        if (!Array.isArray(detalles) || detalles.length === 0) {
-            return [];
-        }
+    const enriquecerDetallesConLotes = async (notas) => {
+        const notasConDetalles = notas.filter(nota => nota.detalles?.length);
+        if (!notasConDetalles.length) return;
 
+        const detalles = notasConDetalles.flatMap(nota => nota.detalles);
+        const notaIds = notasConDetalles.map(nota => Number(nota.id));
         const norm = (value) => String(value || '').trim();
         const productoCodes = [...new Set(
             detalles
@@ -337,13 +338,15 @@ async function ingresosRoutes(fastify, options) {
 
         const lotesPorNotaRaw = await loteRepo
             .createQueryBuilder('lote')
-            .select('lote.producto_id', 'producto_id')
+            .select('lote.nota_ingreso_id', 'nota_ingreso_id')
+            .addSelect('lote.producto_id', 'producto_id')
             .addSelect('lote.numero_lote', 'numero_lote')
             .addSelect('MAX(lote.id)', 'lote_id')
             .addSelect('MAX(lote.fecha_vencimiento)', 'fecha_vencimiento')
             .addSelect('COALESCE(SUM(lote.cantidad_disponible), 0)', 'cantidad_disponible')
-            .where('lote.nota_ingreso_id = :notaId', { notaId: Number(notaId) })
-            .groupBy('lote.producto_id')
+            .where('lote.nota_ingreso_id IN (:...notaIds)', { notaIds })
+            .groupBy('lote.nota_ingreso_id')
+            .addGroupBy('lote.producto_id')
             .addGroupBy('lote.numero_lote')
             .getRawMany();
 
@@ -365,29 +368,15 @@ async function ingresosRoutes(fastify, options) {
                 .getRawMany()
             : [];
 
-        const mapNota = new Map();
-        for (const row of lotesPorNotaRaw) {
-            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
-            mapNota.set(key, {
-                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
-                fecha_vencimiento: row.fecha_vencimiento || null,
-                cantidad_disponible: Number(row.cantidad_disponible || 0)
-            });
-        }
+        const loteKey = (productoId, lote) => `${Number(productoId)}__${String(lote || '')}`;
+        const mapNota = new Map(lotesPorNotaRaw.map(row => [
+            `${Number(row.nota_ingreso_id)}__${loteKey(row.producto_id, row.numero_lote)}`, row
+        ]));
+        const mapFallback = new Map(lotesFallbackRaw.map(row => [loteKey(row.producto_id, row.numero_lote), row]));
 
-        const mapFallback = new Map();
-        for (const row of lotesFallbackRaw) {
-            const key = `${Number(row.producto_id)}__${String(row.numero_lote || '')}`;
-            mapFallback.set(key, {
-                lote_id: row.lote_id != null ? Number(row.lote_id) : null,
-                fecha_vencimiento: row.fecha_vencimiento || null,
-                cantidad_disponible: Number(row.cantidad_disponible || 0)
-            });
-        }
-
-        return detalles.map((det) => {
-            const key = `${Number(det.producto_id)}__${String(det.lote_numero || '')}`;
-            const referencia = mapNota.get(key) || mapFallback.get(key);
+        const enriquecer = (notaId, det) => {
+            const key = loteKey(det.producto_id, det.lote_numero);
+            const referencia = mapNota.get(`${notaId}__${key}`) || mapFallback.get(key);
             const cantidadInicial = Number(det.cantidad_total || det.cantidad || 0);
             const producto = det.producto || {};
             const codigo = norm(det.producto_codigo || producto.codigo);
@@ -409,11 +398,14 @@ async function ingresosRoutes(fastify, options) {
                 um: det.um || producto.um || producto.unidad_medida || producto.unidad || umCanonico || null,
                 fecha_vencimiento: det.fecha_vencimiento || referencia?.fecha_vencimiento || null,
                 nota_ingreso_id: Number(notaId),
-                lote_id: referencia?.lote_id || null,
+                lote_id: Number(referencia?.lote_id) || null,
                 cantidad_inicial: cantidadInicial,
                 cantidad_disponible: Math.max(0, Number(referencia?.cantidad_disponible || 0))
             };
-        });
+        };
+        for (const nota of notasConDetalles) {
+            nota.detalles = nota.detalles.map(det => enriquecer(Number(nota.id), det));
+        }
     };
 
 
@@ -556,18 +548,13 @@ async function ingresosRoutes(fastify, options) {
 
         queryBuilder
             .orderBy(`nota.${orderBy}`, order.toUpperCase())
+            .addOrderBy('nota.id', order.toUpperCase())
             .skip(skip)
             .take(limit);
 
         const [notas, total] = await queryBuilder.getManyAndCount();
 
-        if (include_detalles) {
-            for (const nota of notas) {
-                if (Array.isArray(nota.detalles) && nota.detalles.length > 0) {
-                    nota.detalles = await enriquecerDetallesConLotes(nota.id, nota.detalles);
-                }
-            }
-        }
+        if (include_detalles) await enriquecerDetallesConLotes(notas);
 
         return {
             success: true,
@@ -619,14 +606,12 @@ async function ingresosRoutes(fastify, options) {
             };
         }
 
-        const detallesEnriquecidos = await enriquecerDetallesConLotes(id, detalles);
+        const notaConDetalles = { ...nota, detalles };
+        await enriquecerDetallesConLotes([notaConDetalles]);
 
         return {
             success: true,
-            data: {
-                ...nota,
-                detalles: detallesEnriquecidos
-            }
+            data: notaConDetalles
         };
     });
 

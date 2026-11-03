@@ -395,12 +395,13 @@ async function salidasRoutes(fastify, options) {
                 type: 'object',
                 properties: {
                     q: { type: 'string' },
+                    page: { type: 'integer', minimum: 1, default: 1 },
                     limit: { type: 'integer', minimum: 1, default: 2000 }
                 }
             }
         }
     }, async (request, reply) => {
-        const { q = '', limit = 2000 } = request.query;
+        const { q = '', page = 1, limit = 2000 } = request.query;
         const termino = String(q || '').trim();
         const like = `%${termino}%`;
 
@@ -499,7 +500,7 @@ async function salidasRoutes(fastify, options) {
                 OR COALESCE(nota.motivo_salida, '') ILIKE $11
             )
             ORDER BY nota.fecha DESC, nota.id DESC, detalle.id ASC
-            LIMIT $12
+            LIMIT $12 OFFSET $13
         `;
 
         const rows = await fastify.db.query(sql, [
@@ -514,12 +515,14 @@ async function salidasRoutes(fastify, options) {
             like,
             like,
             like,
-            Number(limit)
+            limit + 1,
+            (page - 1) * limit
         ]);
 
         return {
             success: true,
-            data: rows
+            data: rows.slice(0, limit),
+            pagination: { page, limit, hasMore: rows.length > limit }
         };
     });
 
