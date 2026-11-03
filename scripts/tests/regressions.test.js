@@ -191,6 +191,7 @@ test('un nuevo ingreso y su eliminación mantienen stock, lotes y saldo global',
             cliente_id: 1, fecha: '2026-11-02', detalles: [{ producto_id: 1, lote_numero: 'INGRESO-NUEVO', cantidad: 10 }]
         } });
         assert.equal(created.statusCode, 201, created.body); assert.equal(total(db), 160); assert.equal(kardexTotal(db), 160);
+        assert.equal(db.rows.NotaIngreso.at(-1).proveedor, 'Cliente 1');
         assert.equal(db.rows.Kardex.at(-1).saldo, 160);
         const id = created.json().data.id;
         assert.equal((await app.inject({ method: 'DELETE', url: `/api/ingresos/${id}`, headers: headers(1) })).statusCode, 200);

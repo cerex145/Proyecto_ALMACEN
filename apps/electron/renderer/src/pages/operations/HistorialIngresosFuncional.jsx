@@ -3,6 +3,7 @@ import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/common/Button';
+import { ExportarExcelButton } from '../../components/common/ExportarExcelButton';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 import { API_ORIGIN } from '../../services/api';
@@ -273,9 +274,12 @@ export const HistorialIngresosFuncional = () => {
                     <h1 className="text-2xl font-bold text-slate-800">📋 Historial de Ingresos</h1>
                     <p className="text-slate-500">Consulta y descarga de notas de ingreso</p>
                 </div>
-                <Button onClick={() => navigate('/ingresos/nuevo')} className="bg-purple-600 hover:bg-purple-700 text-white">
-                    + Nuevo Ingreso
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                    <ExportarExcelButton recurso="ingresos" />
+                    <Button onClick={() => navigate('/ingresos/nuevo')} className="bg-purple-600 hover:bg-purple-700 text-white">
+                        + Nuevo Ingreso
+                    </Button>
+                </div>
             </div>
 
             <Card className="p-6">

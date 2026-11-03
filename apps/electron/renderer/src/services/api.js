@@ -27,28 +27,28 @@ export async function openApiDocument(url) {
     const target = new URL(url, API_ORIGIN);
     if (target.origin !== new URL(API_ORIGIN).origin || !target.pathname.startsWith('/api/')) throw new Error('URL de documento no permitida');
     const pdf = target.pathname.endsWith('/pdf');
-    const popup = pdf ? null : window.open('about:blank', '_blank');
-    if (popup) popup.opener = null;
+    const excel = target.pathname.endsWith('/exportar');
     try {
         const response = await api.get(target.href, { responseType: 'blob', timeout: 120000 });
         const blob = response.data;
         if (pdf && await blob.slice(0, 5).text() !== '%PDF-') {
             throw new Error('El servidor no devolvió un PDF válido.');
         }
-        const objectUrl = URL.createObjectURL(blob);
-        if (popup) popup.location.href = objectUrl;
-        else {
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            const filename = response.headers['content-disposition']?.match(/filename="?([^";]+)/)?.[1];
-            const [, , resource, id] = target.pathname.split('/');
-            link.download = filename || (pdf ? resource + '-' + id + '.pdf' : 'documento');
-            document.body.appendChild(link); link.click(); link.remove();
+        if (excel && await blob.slice(0, 4).text() !== 'PK\x03\x04') {
+            throw new Error('El servidor no devolvió un archivo Excel válido.');
         }
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        const filename = response.headers['content-disposition']?.match(/filename="?([^";]+)/)?.[1];
+        const [, , resource, id] = target.pathname.split('/');
+        link.download = filename || (pdf ? resource + '-' + id + '.pdf' : excel ? resource + '.xlsx' : 'documento');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
         window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
         return true;
     } catch (error) {
-        if (popup) popup.close();
         const status = error.response?.status;
         if (status === 401) throw new Error('Su sesión venció. Vuelva a iniciar sesión.');
         if (status === 403) throw new Error('Su usuario no tiene permiso para descargar este documento.');

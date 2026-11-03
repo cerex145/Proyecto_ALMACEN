@@ -3,6 +3,7 @@ import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect } from 'react';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Button } from '../../components/common/Button';
+import { ExportarExcelButton } from '../../components/common/ExportarExcelButton';
 import { Card } from '../../components/common/Card';
 import { API_ORIGIN } from '../../services/api';
 
@@ -145,6 +146,7 @@ export const ActasRecepcionFuncional = () => {
                     <h1 className="text-2xl font-bold text-slate-800">📄 Actas de Recepción</h1>
                     <p className="text-slate-500">Histórico de recepciones y conformidades</p>
                 </div>
+                <ExportarExcelButton recurso="actas" />
             </div>
 
             <Card className="p-6">

@@ -1,3 +1,4 @@
+const ExcelJS = require('exceljs');
 const { formatCalendarDate } = require('../utils/calendar');
 const { audit, quantity } = require('../utils/inventory');
 const { ActaRecepcion, ActaRecepcionDetalle } = require('../entities/ActaRecepcion');
@@ -5,36 +6,26 @@ const { Cliente } = require('../entities/Cliente');
 const { Producto } = require('../entities/Producto');
 
 module.exports = async function (fastify, opts) {
+    const listarActas = ({ cliente_id, fecha_desde, fecha_hasta, tipo_documento }) => {
+        const query = fastify.db.getRepository(ActaRecepcion)
+            .createQueryBuilder('acta')
+            .leftJoinAndSelect('acta.cliente', 'cliente')
+            .leftJoinAndSelect('acta.detalles', 'detalles')
+            .leftJoinAndSelect('detalles.producto', 'producto')
+            .orderBy('acta.fecha', 'DESC')
+            .addOrderBy('acta.id', 'DESC');
+
+        if (cliente_id) query.andWhere('acta.cliente_id = :cliente_id', { cliente_id });
+        if (fecha_desde) query.andWhere('acta.fecha >= :fecha_desde', { fecha_desde });
+        if (fecha_hasta) query.andWhere('acta.fecha <= :fecha_hasta', { fecha_hasta });
+        if (tipo_documento) query.andWhere('acta.tipo_documento = :tipo_documento', { tipo_documento });
+        return query.getMany();
+    };
+
     // GET /api/actas - Listar todas las actas
     fastify.get('/api/actas', async (request, reply) => {
         try {
-            const { cliente_id, fecha_desde, fecha_hasta, tipo_documento } = request.query;
-
-            const actasRepo = fastify.db.getRepository(ActaRecepcion);
-            let query = actasRepo.createQueryBuilder('acta')
-                .leftJoinAndSelect('acta.cliente', 'cliente')
-                .leftJoinAndSelect('acta.detalles', 'detalles')
-                .leftJoinAndSelect('detalles.producto', 'producto')
-                .orderBy('acta.fecha', 'DESC')
-                .addOrderBy('acta.id', 'DESC');
-
-            if (cliente_id) {
-                query = query.andWhere('acta.cliente_id = :cliente_id', { cliente_id });
-            }
-
-            if (fecha_desde) {
-                query = query.andWhere('acta.fecha >= :fecha_desde', { fecha_desde });
-            }
-
-            if (fecha_hasta) {
-                query = query.andWhere('acta.fecha <= :fecha_hasta', { fecha_hasta });
-            }
-
-            if (tipo_documento) {
-                query = query.andWhere('acta.tipo_documento = :tipo_documento', { tipo_documento });
-            }
-
-            const actas = await query.getMany();
+            const actas = await listarActas(request.query);
 
             return {
                 success: true,
@@ -49,6 +40,41 @@ module.exports = async function (fastify, opts) {
                 error: error.message
             });
         }
+    });
+
+    fastify.get('/api/actas/exportar', async (request, reply) => {
+        const actas = await listarActas(request.query);
+        const workbook = new ExcelJS.Workbook();
+        const resumen = workbook.addWorksheet('Actas de recepción');
+        const detalle = workbook.addWorksheet('Detalle de productos');
+        resumen.columns = [
+            { header: 'Acta', width: 10 }, { header: 'Fecha', width: 14 }, { header: 'Cliente', width: 34 },
+            { header: 'Proveedor', width: 34 }, { header: 'Tipo documento', width: 23 },
+            { header: 'N° documento', width: 20 }, { header: 'Operación', width: 20 },
+            { header: 'Estado', width: 14 }, { header: 'Observaciones', width: 40 }
+        ];
+        detalle.columns = [
+            { header: 'Acta', width: 10 }, { header: 'Código', width: 18 }, { header: 'Producto', width: 38 },
+            { header: 'Lote', width: 20 }, { header: 'Vencimiento', width: 16 },
+            { header: 'Solicitada', width: 14 }, { header: 'Recibida', width: 14 }, { header: 'Diferencia', width: 14 }
+        ];
+
+        for (const acta of actas) {
+            resumen.addRow([acta.id, formatCalendarDate(acta.fecha), acta.cliente?.razon_social, acta.proveedor,
+                acta.tipo_documento, acta.numero_documento, acta.tipo_operacion, acta.estado, acta.observaciones]);
+            for (const item of acta.detalles ?? []) {
+                const solicitada = Number(item.cantidad_solicitada ?? 0);
+                const recibida = Number(item.cantidad_recibida ?? 0);
+                detalle.addRow([acta.id, item.producto?.codigo || item.producto_codigo,
+                    item.producto?.descripcion || item.producto_nombre, item.lote_numero,
+                    formatCalendarDate(item.fecha_vencimiento), solicitada, recibida, recibida - solicitada]);
+            }
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        reply.header('Content-Disposition', 'attachment; filename=actas-recepcion.xlsx');
+        return reply.send(buffer);
     });
 
     // GET /api/actas/:id - Obtener una acta específica

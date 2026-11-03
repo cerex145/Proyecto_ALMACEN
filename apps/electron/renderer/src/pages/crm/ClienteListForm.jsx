@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { clientesService } from '../../services/clientes.service';
 import { API_ORIGIN } from '../../services/api';
 import { Button } from '../../components/common/Button';
+import { ExportarExcelButton } from '../../components/common/ExportarExcelButton';
 import { Input } from '../../components/common/Input';
 import { Table, TableHead, TableBody, TableRow, TableHeader, TableCell } from '../../components/common/Table';
 import { Badge } from '../../components/common/Badge';
@@ -288,7 +289,10 @@ export const ClienteListForm = () => {
 
             {/* Tabla de Clientes */}
             <div style={{ background: 'var(--surface-color)', padding: '1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <h3 style={{ marginTop: 0 }}>Clientes Registrados</h3>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <h3 style={{ marginTop: 0 }}>Clientes Registrados</h3>
+                    <ExportarExcelButton recurso="clientes" />
+                </div>
                 {loading ? (
                     <p>Cargando...</p>
                 ) : clientes.length === 0 ? (

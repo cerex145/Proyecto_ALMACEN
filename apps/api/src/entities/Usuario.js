@@ -35,8 +35,9 @@ module.exports = new EntitySchema({
             nullable: false
         },
         activo: {
-            type: 'boolean',
-            default: true
+            type: 'smallint',
+            default: 1,
+            transformer: { to: value => Number(value), from: value => Boolean(value) }
         },
         ultimo_acceso: {
             type: 'timestamp',

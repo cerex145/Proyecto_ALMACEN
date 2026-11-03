@@ -771,6 +771,8 @@ async function ingresosRoutes(fastify, options) {
                 }
             }
 
+            // Si el proveedor se omite, usar la razón social del cliente seleccionado.
+            const proveedorNota = proveedor?.trim() || cliente.razon_social;
             // Crear nota
             const nota = notaIngresoRepo.create({
                 numero_ingreso: numeroIngreso,
@@ -778,7 +780,7 @@ async function ingresosRoutes(fastify, options) {
                 fecha,
                 cliente_id: Number(cliente.id),
                 cliente_ruc: cliente.cuit || null,
-                proveedor: proveedor || null,
+                proveedor: proveedorNota,
                 tipo_documento: tipo_documento || null,
                 numero_documento: numero_documento || null,
                 responsable_id: request.user.id,
@@ -837,7 +839,7 @@ async function ingresosRoutes(fastify, options) {
                                 descripcion: producto.descripcion,
                                 cliente_id: cliente.id,
                                 cliente_ruc: cliente.cuit || null,
-                                proveedor: proveedor || null,
+                                proveedor: proveedorNota,
                                 proveedor_ruc: null,
                                 fabricante: detalle.fabricante || producto.fabricante || null,
                                 procedencia: producto.procedencia || null,
