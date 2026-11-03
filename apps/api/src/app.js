@@ -14,7 +14,8 @@ async function buildApp(fastify, options) {
 
     await fastify.register(cors, {
         origin: true, // Allow all origins for development/Electron
-        credentials: true
+        credentials: true,
+        exposedHeaders: ['Content-Disposition']
     });
 
     await fastify.register(jwt, {

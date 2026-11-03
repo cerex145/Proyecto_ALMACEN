@@ -159,6 +159,14 @@ async function kardexRoutes(fastify, options) {
                     properties: {
                         success: { type: 'boolean' },
                         data: { type: 'array', items: KardexMovimientoSchema },
+                        resumen: {
+                            type: 'object',
+                            properties: {
+                                ingresos: { type: 'number' },
+                                salidas: { type: 'number' },
+                                balance: { type: 'number' }
+                            }
+                        },
                         pagination: PaginationSchema
                     }
                 }
@@ -302,10 +310,14 @@ async function kardexRoutes(fastify, options) {
             params.push(fecha_hasta);
         }
 
-        // Total count
-        const countSql = sql.replace(/SELECT[\s\S]*?FROM/, 'SELECT COUNT(*) as total FROM');
-        const countResult = await connection.query(countSql, params);
-        const total = countResult[0]?.total || 0;
+        const summarySql = sql.replace(/SELECT[\s\S]*?FROM/, `SELECT COUNT(*) AS total,
+            COALESCE(SUM(k.cantidad) FILTER (WHERE k.tipo_movimiento IN ('INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION')), 0) AS ingresos,
+            COALESCE(SUM(k.cantidad) FILTER (WHERE k.tipo_movimiento IN ('SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA')), 0) AS salidas
+            FROM`);
+        const [summary] = await connection.query(summarySql, params);
+        const total = Number(summary.total);
+        const ingresos = Number(summary.ingresos);
+        const salidas = Number(summary.salidas);
 
         // Order and pagination
         const allowedOrderFields = ['created_at', 'tipo_movimiento', 'cantidad', 'documento_numero', 'saldo'];
@@ -357,6 +369,7 @@ async function kardexRoutes(fastify, options) {
         return {
             success: true,
             data: data,
+            resumen: { ingresos, salidas, balance: ingresos - salidas },
             pagination: {
                 page: Number(page),
                 limit: Number(limit),
