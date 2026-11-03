@@ -11,17 +11,18 @@ test('Kardex enlaza correctamente los parámetros de paginación con y sin filtr
         const placeholders = [...sql.matchAll(/\$(\d+)/g)].map(match => Number(match[1]));
         assert.equal(Math.max(0, ...placeholders), params.length, 'Cada parámetro debe existir en el SQL enviado a PostgreSQL');
         queries.push({ sql, params: [...params] });
-        if (/SELECT COUNT/.test(sql)) return [{ total: '1' }];
+        if (/SELECT COUNT/.test(sql)) return [{ total: '120', ingresos: '500.5', salidas: '20.25' }];
         return [{ id: 1, producto_id: 1, tipo_movimiento: 'INGRESO', cantidad: '100', saldo: '100', created_at: new Date(), cliente_nombre_ingreso: 'TRAUMA SPINE E.I.R.L.' }];
     };
     const ctx = await createApp(db);
     try {
         for (const query of ['', '&cliente_nombre=TRAUMA%20SPINE%20E.I.R.L.', '&producto_nombre=prueba&lote_numero=L1&fecha_desde=2026-01-01']) {
-            const res = await ctx.app.inject({ url: '/api/kardex?limit=100000&page=2&order=ASC' + query, headers: ctx.headers(1) });
+            const res = await ctx.app.inject({ url: '/api/kardex?limit=100&page=2&order=ASC' + query, headers: ctx.headers(1) });
             assert.equal(res.statusCode, 200, res.body);
-            assert.equal(res.json().pagination.total, 1);
+            assert.equal(res.json().pagination.total, 120);
+            assert.deepEqual(res.json().resumen, { ingresos: 500.5, salidas: 20.25, balance: 480.25 });
             assert.equal(res.json().data[0].cantidad, 100);
-            assert.deepEqual(queries.at(-1).params.slice(-2), [100000, 100000]);
+            assert.deepEqual(queries.at(-1).params.slice(-2), [100, 100]);
         }
     } finally { await ctx.app.close(); }
 });
@@ -38,7 +39,7 @@ test('Kardex acepta reversas y exporta todos los filtros con un total neto coher
         const placeholders = [...sql.matchAll(/\$(\d+)/g)].map(match => Number(match[1]));
         assert.equal(Math.max(0, ...placeholders), params.length);
         queries.push({ sql, params: [...params] });
-        return /SELECT COUNT/.test(sql) ? [{ total: '3' }] : rows;
+        return /SELECT COUNT/.test(sql) ? [{ total: '3', ingresos: '100', salidas: '20' }] : rows;
     };
     const ctx = await createApp(db);
     try {
@@ -80,7 +81,7 @@ function loadKardexAction(context) {
 function actionContext(fetch) {
     const state = {};
     return { state, API_ORIGIN: 'https://api.example.com', fetch, requestSequence: { current: 0 },
-        filtroProducto: '', filtroLote: '', filtroDocumento: '', filtroTipo: '', filtroFechaDesde: '', filtroFechaHasta: '', filtroCliente: '',
+        PAGE_SIZE: 100, page: 2, getFilterParams: () => new URLSearchParams({ cliente_nombre: 'TRAUMA SPINE' }),
         setLoading: value => { state.loading = value; }, setLoadError: value => { state.error = value; },
         setMovimientos: value => { state.rows = value; }, setStats: value => { state.stats = value; } };
 }
@@ -92,14 +93,30 @@ test('la pantalla distingue errores de consulta de un historial vacío y no pres
         assert.equal(context.state.loading, false); assert.equal(context.state.stats, undefined);
     }
 });
-test('la pantalla descarta respuestas antiguas cuando cambian los filtros', async () => {
+test('la pantalla pide una página, conserva los totales del filtro y descarta respuestas antiguas', async () => {
     const releases = [];
-    const context = actionContext(() => new Promise(resolve => releases.push(resolve)));
+    const context = actionContext(url => {
+        const params = new URL(url).searchParams;
+        assert.equal(params.get('limit'), '100');
+        assert.equal(params.get('page'), '2');
+        assert.equal(params.get('cliente_nombre'), 'TRAUMA SPINE');
+        return new Promise(resolve => releases.push(resolve));
+    });
     const action = loadKardexAction(context);
     const first = action(); const second = action();
-    releases[1]({ ok: true, json: async () => ({ success: true, pagination: { total: 1 }, data: [{ id: 2, tipo_movimiento: 'INGRESO', cantidad: 15 }] }) });
+    const respuesta = (id, cantidad, balance) => ({
+        ok: true,
+        json: async () => ({
+            success: true, pagination: { total: 150, totalPages: 2 },
+            resumen: { ingresos: balance + 10, salidas: 10, balance },
+            data: [{ id, tipo_movimiento: 'INGRESO', cantidad }]
+        })
+    });
+    releases[1](respuesta(2, 15, 135));
     await second;
-    releases[0]({ ok: true, json: async () => ({ success: true, pagination: { total: 1 }, data: [{ id: 1, tipo_movimiento: 'INGRESO', cantidad: 99 }] }) });
+    releases[0](respuesta(1, 99, 999));
     await first;
-    assert.equal(context.state.rows[0].id, 2); assert.equal(context.state.stats.balance, 15);
+    assert.equal(context.state.rows[0].id, 2);
+    assert.equal(context.state.stats.balance, 135);
+    assert.equal(context.state.stats.total, 150);
 });

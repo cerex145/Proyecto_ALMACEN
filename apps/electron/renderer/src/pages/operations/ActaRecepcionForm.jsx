@@ -568,7 +568,7 @@ export const ActaRecepcionForm = () => {
             await openApiDocument(pdfUrl);
         } catch (error) {
             console.error(error);
-            alert('Error al exportar PDF');
+            alert(error.message || 'No se pudo descargar el PDF del acta.');
         }
     };
 

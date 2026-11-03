@@ -1181,13 +1181,10 @@ export const NotaIngresoForm = () => {
         }
         try {
             const pdfUrl = `${API_ORIGIN}/api/ingresos/${lastIngresoId}/pdf`;
-            const opened = await openApiDocument(pdfUrl);
-            if (!opened) {
-                showError('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.');
-            }
+            await openApiDocument(pdfUrl);
         } catch (error) {
             console.error(error);
-            showError('Error al exportar PDF.');
+            showError(error.message || 'No se pudo descargar el PDF de ingreso.');
         }
     };
 

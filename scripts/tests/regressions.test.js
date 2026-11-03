@@ -267,25 +267,29 @@ test('sesión de interfaz rechaza tokens vencidos y almacenamiento corrupto', as
 });
 
 test('descargas de documentos usan autenticación y una URL temporal sin incluir el token en la dirección', async () => {
-    const previous = { window: global.window, storage: global.localStorage, axios: global.__documentAxios };
+    const previous = { window: global.window, document: global.document, storage: global.localStorage, axios: global.__documentAxios };
     const calls = []; let requestInterceptor, release;
-    const popup = { opener: {}, location: {}, close() {} };
-    global.window = { open: url => { calls.push({ popup: url }); return popup; }, setTimeout: fn => { release = fn; } };
+    const link = { click() { calls.push({ download: this.download, href: this.href }); }, remove() {} };
+    global.window = { open: () => assert.fail('Un PDF no debe depender de una ventana emergente'), setTimeout: fn => { release = fn; } };
+    global.document = { createElement: () => link, body: { appendChild() {} } };
     global.localStorage = { getItem: key => key === 'token' ? 'token-solo-cabecera' : null };
     global.__documentAxios = { create: () => ({ interceptors: {
         request: { use: fn => { requestInterceptor = fn; } }, response: { use() {} }
     }, get: async (url, opts) => { const config = requestInterceptor({ ...opts, headers: {} }); calls.push({ url, config });
-        return { data: new Blob(['%PDF-test'], { type: 'application/pdf' }), headers: {} }; } }) };
+        const data = url.endsWith('/2/pdf') ? '<html>Error</html>' : '%PDF-test';
+        return { data: new Blob([data]), headers: {} }; } }) };
     try {
         const module = await importSource('apps/electron/renderer/src/services/api.js', s => s
             .replace("import axios from 'axios';", 'const axios = globalThis.__documentAxios;').replaceAll('import.meta.env', '({})'));
         await module.openApiDocument(module.API_ORIGIN + '/api/ingresos/1/pdf');
-        assert.equal(calls[0].popup, 'about:blank');
-        assert.equal(calls[1].config.headers.Authorization, 'Bearer token-solo-cabecera');
-        assert.ok(!calls[1].url.includes('token-solo-cabecera'));
-        assert.ok(popup.location.href.startsWith('blob:')); assert.equal(popup.opener, null);
+        assert.equal(calls[0].config.headers.Authorization, 'Bearer token-solo-cabecera');
+        assert.ok(!calls[0].url.includes('token-solo-cabecera'));
+        assert.ok(calls[1].href.startsWith('blob:'));
+        assert.equal(calls[1].download, 'ingresos-1.pdf');
+        await assert.rejects(module.openApiDocument(module.API_ORIGIN + '/api/ingresos/2/pdf'), /PDF válido/);
         await assert.rejects(module.openApiDocument('https://otro.example/api/documento'), /no permitida/);
-    } finally { release?.(); global.window = previous.window; global.localStorage = previous.storage; global.__documentAxios = previous.axios; }
+    } finally { release?.(); global.window = previous.window; global.document = previous.document;
+        global.localStorage = previous.storage; global.__documentAxios = previous.axios; }
 });
 
 test('un ajuste positivo también bloquea la eliminación del ingreso original', async () => {

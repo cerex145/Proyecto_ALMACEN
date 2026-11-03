@@ -210,13 +210,10 @@ const RegistrarIngreso = ({ onCancel, onSuccess }) => {
         if (!lastSavedId) return;
         try {
             const url = `${API_ORIGIN}/api/ingresos/${lastSavedId}/pdf`;
-            if (window.electron?.ipcRenderer) {
-                await window.electron.ipcRenderer.invoke('open-external', url);
-            } else {
-                await openApiDocument(url);
-            }
+            await openApiDocument(url);
         } catch (error) {
             console.error('Error al descargar PDF:', error);
+            alert(error.message || 'No se pudo descargar el PDF de ingreso.');
         }
     };
 

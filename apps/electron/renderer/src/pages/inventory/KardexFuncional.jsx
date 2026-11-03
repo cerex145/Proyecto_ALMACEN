@@ -1,6 +1,7 @@
-import { openApiDocument } from '../../services/api';
 import React, { useState, useEffect, useRef } from 'react';
-import { API_ORIGIN } from '../../services/api';
+import { API_ORIGIN, openApiDocument } from '../../services/api';
+
+const PAGE_SIZE = 100;
 
 // ─── Constantes de empresa ──────────────────────────────────────────────────
 const EMPRESA = {
@@ -20,14 +21,6 @@ const fmt = (fecha) => {
     return new Date(fecha).toLocaleDateString('es-PE');
 };
 
-const fmtHora = (fecha) => {
-    if (!fecha) return '—';
-    return new Date(fecha).toLocaleString('es-PE', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-    });
-};
-
 const tipoInfo = (tipo) => ({
     INGRESO: { label: 'INGRESO', color: '#16a34a', bg: '#dcfce7', icon: '▲' },
     SALIDA: { label: 'SALIDA', color: '#dc2626', bg: '#fee2e2', icon: '▼' },
@@ -40,11 +33,12 @@ const tipoInfo = (tipo) => ({
 // ─── Componente principal ───────────────────────────────────────────────────
 export const KardexFuncional = () => {
     const [movimientos, setMovimientos] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [clientes, setClientes] = useState([]);
-    const printRef = useRef(null);
     const requestSequence = useRef(0);
     const [loadError, setLoadError] = useState('');
+    const [page, setPage] = useState(1);
+    const [retry, setRetry] = useState(0);
 
     // Filtros
     const [filtroProducto, setFiltroProducto] = useState('');
@@ -63,9 +57,16 @@ export const KardexFuncional = () => {
     }, []);
 
     useEffect(() => {
-        cargarKardex();
-        return () => { requestSequence.current++; };
-    }, [filtroProducto, filtroLote, filtroDocumento, filtroTipo, filtroFechaDesde, filtroFechaHasta, filtroCliente]);
+        const controller = new AbortController();
+        setLoadError('');
+        setLoading(true);
+        const timer = setTimeout(() => cargarKardex(controller.signal), 250);
+        return () => {
+            clearTimeout(timer);
+            requestSequence.current++;
+            controller.abort();
+        };
+    }, [page, retry, filtroProducto, filtroLote, filtroDocumento, filtroTipo, filtroFechaDesde, filtroFechaHasta, filtroCliente]);
 
     const cargarClientes = async () => {
         try {
@@ -75,39 +76,40 @@ export const KardexFuncional = () => {
         } catch (e) { console.error(e); }
     };
 
-    const cargarKardex = async () => {
+    const getFilterParams = () => {
+        const filters = {
+            producto_nombre: filtroProducto, lote_numero: filtroLote, documento_numero: filtroDocumento,
+            tipo_movimiento: filtroTipo, fecha_desde: filtroFechaDesde, fecha_hasta: filtroFechaHasta,
+            cliente_nombre: filtroCliente
+        };
+        return new URLSearchParams(Object.entries(filters).filter(([, value]) => value));
+    };
+
+    const cargarKardex = async (signal) => {
         const sequence = ++requestSequence.current;
         try {
-            setLoadError('');
-            setLoading(true);
-            // Se sube el límite a 100,000 para traer todo el histórico y evitar discrepancias de suma.
-            let url = `${API_ORIGIN}/api/kardex?limit=100000&order=ASC`;
-            if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
-            if (filtroLote) url += `&lote_numero=${encodeURIComponent(filtroLote)}`;
-            if (filtroDocumento) url += `&documento_numero=${encodeURIComponent(filtroDocumento)}`;
-            if (filtroTipo) url += `&tipo_movimiento=${filtroTipo}`;
-            if (filtroFechaDesde) url += `&fecha_desde=${filtroFechaDesde}`;
-            if (filtroFechaHasta) url += `&fecha_hasta=${filtroFechaHasta}`;
-            if (filtroCliente) url += `&cliente_nombre=${encodeURIComponent(filtroCliente)}`;
-
-            const res = await fetch(url);
+            const params = getFilterParams();
+            params.set('page', page);
+            params.set('limit', PAGE_SIZE);
+            const res = await fetch(API_ORIGIN + '/api/kardex?' + params, { signal });
+            if (sequence !== requestSequence.current) return;
+            if (!res.ok) {
+                if (res.status === 401) throw new Error('Su sesión venció. Vuelva a iniciar sesión.');
+                if (res.status === 403) throw new Error('Su usuario no tiene permiso para consultar el Kardex.');
+                throw new Error('No se pudo consultar el Kardex. Reintente en unos momentos.');
+            }
             const result = await res.json();
             if (sequence !== requestSequence.current) return;
-            if (!res.ok || result.success !== true || !Array.isArray(result.data)) {
-                throw new Error(res.status === 401 ? 'Su sesión venció. Vuelva a iniciar sesión.'
-                    : 'No se pudo consultar el Kardex. Reintente en unos momentos.');
+            if (result.success !== true || !Array.isArray(result.data) || !result.resumen || !result.pagination) {
+                throw new Error('El servidor devolvió un historial incompleto. Reintente en unos momentos.');
             }
-            if (Number(result.pagination?.total || 0) > result.data.length) {
-                throw new Error('El historial supera el límite de consulta. Use filtros de fecha o cliente para ver un resultado completo.');
+            const lastPage = Math.max(1, result.pagination.totalPages);
+            if (page > lastPage) {
+                setPage(lastPage);
+                return;
             }
-            const data = result.data;
-            setMovimientos(data);
-
-            const ing = data.filter(m => ['INGRESO', 'AJUSTE_POSITIVO', 'AJUSTE_POR_RECEPCION'].includes(m.tipo_movimiento));
-            const sal = data.filter(m => ['SALIDA', 'AJUSTE_NEGATIVO', 'SALIDA_REVERSA'].includes(m.tipo_movimiento));
-            const sumIng = ing.reduce((s, m) => s + Number(m.cantidad), 0);
-            const sumSal = sal.reduce((s, m) => s + Number(m.cantidad), 0);
-            setStats({ ingresos: sumIng, salidas: sumSal, balance: sumIng - sumSal, total: data.length });
+            setMovimientos(result.data);
+            setStats({ ...result.resumen, total: result.pagination.total });
         } catch (e) {
             if (sequence !== requestSequence.current) return;
             setLoadError(e.message || 'No se pudo consultar el Kardex.');
@@ -118,24 +120,24 @@ export const KardexFuncional = () => {
     };
 
     const limpiar = () => {
+        setPage(1);
         setFiltroProducto(''); setFiltroLote(''); setFiltroDocumento('');
         setFiltroTipo(''); setFiltroFechaDesde(''); setFiltroFechaHasta('');
         setFiltroCliente('');
     };
 
     const exportarExcel = async () => {
-        let url = `${API_ORIGIN}/api/kardex/exportar?`;
-        if (filtroLote) url += `&lote_numero=${encodeURIComponent(filtroLote)}`;
-        if (filtroDocumento) url += `&documento_numero=${encodeURIComponent(filtroDocumento)}`;
-        if (filtroTipo) url += `&tipo_movimiento=${encodeURIComponent(filtroTipo)}`;
-        if (filtroProducto) url += `&producto_nombre=${encodeURIComponent(filtroProducto)}`;
-        if (filtroFechaDesde) url += `&fecha_desde=${filtroFechaDesde}`;
-        if (filtroFechaHasta) url += `&fecha_hasta=${filtroFechaHasta}`;
-        if (filtroCliente) url += `&cliente_nombre=${encodeURIComponent(filtroCliente)}`;
+        const url = API_ORIGIN + '/api/kardex/exportar?' + getFilterParams();
         try { await openApiDocument(url); } catch (error) { window.alert(error.message || 'No se pudo exportar el Kardex'); }
     };
 
+    const cambiarFiltro = setter => event => {
+        setPage(1);
+        setter(event.target.value);
+    };
     const hayFiltrosActivos = filtroProducto || filtroLote || filtroDocumento || filtroTipo || filtroFechaDesde || filtroFechaHasta || filtroCliente;
+    const totalPages = Math.ceil(stats.total / PAGE_SIZE);
+    const offset = (page - 1) * PAGE_SIZE;
 
     /* ── Estilos inline ─────────────────────────────────────────────────── */
     const s = {
@@ -333,9 +335,7 @@ export const KardexFuncional = () => {
                     </button>
                 )}
                 <span style={{ marginLeft: 'auto', fontSize: '0.82rem', color: '#64748b' }}>
-                    {loadError ? 'No se pudo cargar el Kardex' : hayFiltrosActivos
-                        ? `Mostrando ${movimientos.length} resultado(s) filtrados`
-                        : `Total: ${movimientos.length} movimientos`}
+                    {loadError ? 'No se pudo cargar el Kardex' : loading ? 'Cargando…' : `Total: ${stats.total} movimientos`}
                 </span>
             </div>
 
@@ -358,7 +358,7 @@ export const KardexFuncional = () => {
                             type="text"
                             placeholder="Nombre o código..."
                             value={filtroProducto}
-                            onChange={e => setFiltroProducto(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroProducto)}
                         />
                     </div>
 
@@ -368,7 +368,7 @@ export const KardexFuncional = () => {
                         <select
                             style={s.filterInput}
                             value={filtroTipo}
-                            onChange={e => setFiltroTipo(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroTipo)}
                         >
                             <option value="">Todos</option>
                             <option value="INGRESO">Ingreso</option>
@@ -387,7 +387,7 @@ export const KardexFuncional = () => {
                             style={s.filterInput}
                             type="date"
                             value={filtroFechaDesde}
-                            onChange={e => setFiltroFechaDesde(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroFechaDesde)}
                         />
                     </div>
 
@@ -398,7 +398,7 @@ export const KardexFuncional = () => {
                             style={s.filterInput}
                             type="date"
                             value={filtroFechaHasta}
-                            onChange={e => setFiltroFechaHasta(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroFechaHasta)}
                         />
                     </div>
 
@@ -408,7 +408,7 @@ export const KardexFuncional = () => {
                         <select
                             style={s.filterInput}
                             value={filtroCliente}
-                            onChange={e => setFiltroCliente(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroCliente)}
                         >
                             <option value="">Todos</option>
                             {clientes.map(c => (
@@ -425,7 +425,7 @@ export const KardexFuncional = () => {
                             type="text"
                             placeholder="Número de lote..."
                             value={filtroLote}
-                            onChange={e => setFiltroLote(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroLote)}
                         />
                     </div>
 
@@ -437,7 +437,7 @@ export const KardexFuncional = () => {
                             type="text"
                             placeholder="Número de documento..."
                             value={filtroDocumento}
-                            onChange={e => setFiltroDocumento(e.target.value)}
+                            onChange={cambiarFiltro(setFiltroDocumento)}
                         />
                     </div>
                 </div>
@@ -487,7 +487,7 @@ export const KardexFuncional = () => {
                     <div role="alert" style={{ textAlign: 'center', padding: '3rem', color: '#b91c1c' }}>
                         <p style={{ fontWeight: 700 }}>No se pudo cargar el Kardex</p>
                         <p>{loadError}</p>
-                        <button type="button" onClick={cargarKardex} style={{ ...s.btn('#0369a1'), marginTop: 12 }}>Reintentar</button>
+                        <button type="button" onClick={() => setRetry(value => value + 1)} style={{ ...s.btn('#0369a1'), marginTop: 12 }}>Reintentar</button>
                     </div>
                 ) : movimientos.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#94a3b8' }}>
@@ -528,7 +528,7 @@ export const KardexFuncional = () => {
                                         <tr key={mov.id || idx} style={{ background: rowBg }}>
                                             {/* # */}
                                             <td style={{ ...s.tdBase, color: '#94a3b8', fontWeight: 600, fontSize: '0.75rem', textAlign: 'center' }}>
-                                                {idx + 1}
+                                                {offset + idx + 1}
                                             </td>
 
                                             {/* Fecha */}
@@ -646,7 +646,7 @@ export const KardexFuncional = () => {
                             <tfoot>
                                 <tr style={{ background: '#1e3a5f', color: 'white' }}>
                                     <td colSpan="9" style={{ padding: '0.7rem 0.75rem', fontWeight: 700, fontSize: '0.85rem' }}>
-                                        TOTALES ({movimientos.length} movimientos)
+                                        TOTALES ({stats.total} movimientos)
                                     </td>
                                     <td style={{ padding: '0.7rem 0.75rem', textAlign: 'right', fontWeight: 800, color: '#86efac', fontSize: '0.9rem' }}>
                                         {loading || loadError ? '—' : stats.ingresos.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
@@ -663,6 +663,13 @@ export const KardexFuncional = () => {
                         </table>
                         </div>
                     </div>
+                )}
+                {!loading && !loadError && totalPages > 1 && (
+                    <nav style={s.toolbar} aria-label="Páginas del Kardex">
+                        <button type="button" style={s.btn('#0369a1')} disabled={page === 1} onClick={() => setPage(page - 1)}>Anterior</button>
+                        <span>Página {page} de {totalPages} · {offset + 1}–{offset + movimientos.length} de {stats.total}</span>
+                        <button type="button" style={s.btn('#0369a1')} disabled={page === totalPages} onClick={() => setPage(page + 1)}>Siguiente</button>
+                    </nav>
                 )}
             </div>
         </div>

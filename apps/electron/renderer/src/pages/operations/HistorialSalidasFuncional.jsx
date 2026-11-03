@@ -107,17 +107,10 @@ export const HistorialSalidasFuncional = () => {
         if (!notaId) return;
         const pdfUrl = `${API_ORIGIN}/api/salidas/${notaId}/pdf`;
         try {
-            if (window.electron?.ipcRenderer) {
-                await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
-            } else {
-                const opened = await openApiDocument(pdfUrl);
-                if (!opened) {
-                    alert('No se pudo abrir el PDF. Verifica bloqueadores de ventanas emergentes.');
-                }
-            }
+            await openApiDocument(pdfUrl);
         } catch (error) {
             console.error('Error al abrir PDF de salida:', error);
-            alert('Error al abrir PDF de salida.');
+            alert(error.message || 'No se pudo descargar el PDF de salida.');
         }
     };
 

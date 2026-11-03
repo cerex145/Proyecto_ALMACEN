@@ -1814,17 +1814,10 @@ export const NotaSalidaForm = () => {
         }
         try {
             const pdfUrl = `${API_ORIGIN}/api/salidas/${lastSalidaId}/pdf`;
-            if (window.electron?.ipcRenderer) {
-                await window.electron.ipcRenderer.invoke('open-external', pdfUrl);
-            } else {
-                const opened = await openApiDocument(pdfUrl);
-                if (!opened) {
-                    showToast('No se pudo abrir el PDF. Verifica los bloqueos de ventanas emergentes.', 'warning');
-                }
-            }
+            await openApiDocument(pdfUrl);
         } catch (error) {
             console.error(error);
-            showToast('Error al exportar PDF.', 'error');
+            showToast(error.message || 'No se pudo descargar el PDF de salida.', 'error');
         }
     };
 
