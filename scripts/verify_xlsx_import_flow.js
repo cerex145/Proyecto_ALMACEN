@@ -1,9 +1,12 @@
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('Defina DATABASE_URL antes de ejecutar este script.');
+
 const { Client } = require('pg');
 const ExcelJS = require('exceljs');
 const path = require('path');
 const http = require('http');
 
-const DB_CONN = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+const DB_CONN = databaseUrl;
 
 function postJson(urlPath, data) {
   return new Promise((resolve, reject) => {

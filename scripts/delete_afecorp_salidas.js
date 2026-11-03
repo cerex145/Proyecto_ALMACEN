@@ -1,6 +1,9 @@
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('Defina DATABASE_URL antes de ejecutar este script.');
+
 const { Client } = require('pg');
 
-const DB = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+const DB = databaseUrl;
 
 async function main() {
   const client = new Client({ connectionString: DB, ssl: { rejectUnauthorized: false } });

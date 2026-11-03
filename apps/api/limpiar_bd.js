@@ -1,3 +1,6 @@
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('Defina DATABASE_URL antes de ejecutar este script.');
+
 /**
  * SCRIPT DE LIMPIEZA TOTAL - Supabase/PostgreSQL
  * Elimina: kardex, lotes, notas_ingreso, notas_salida, detalles, actas, ajustes, alertas
@@ -6,7 +9,7 @@
 
 const { Client } = require('pg');
 
-const DB_URL = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+const DB_URL = databaseUrl;
 
 async function borrarTabla(client, tabla) {
   try {

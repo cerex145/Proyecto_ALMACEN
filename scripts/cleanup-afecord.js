@@ -1,10 +1,13 @@
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('Defina DATABASE_URL antes de ejecutar este script.');
+
 /**
  * cleanup-afecord.js — Script para borrar transacciones EXCLUSIVAMENTE de afecord
  */
 
 const { Client } = require('pg');
 
-const DATABASE_URL = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+const DATABASE_URL = databaseUrl;
 
 async function cleanupAfecord() {
     const client = new Client({

@@ -1,3 +1,6 @@
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error('Defina DATABASE_URL antes de ejecutar este script.');
+
 /**
  * cleanup-db.js — Script para borrar transacciones y productos 
  * dejando únicamente a los vinculados a SUmedin y sunix.
@@ -6,7 +9,7 @@
 
 const { Client } = require('pg');
 
-const DATABASE_URL = 'postgresql://postgres.jdcqstaoqximbmqbwjwy:Sardev190712@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+const DATABASE_URL = databaseUrl;
 
 async function cleanup() {
     const client = new Client({
