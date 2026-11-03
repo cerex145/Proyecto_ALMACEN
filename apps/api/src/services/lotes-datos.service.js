@@ -82,6 +82,8 @@ async function correctLotData(db, request, id, body) {
         }
         if (rename) {
             const movements = await tx.find('Kardex', { where: { producto_id: productId, lote_numero: before.numero_lote } });
+            const peerIds = new Set(peers.map(peer => Number(peer.id)));
+            const cancelledDetails = new Map();
             for (const row of movements) {
                 let selected;
                 if (row.documento_tipo === 'NOTA_INGRESO') {
@@ -89,12 +91,30 @@ async function correctLotData(db, request, id, body) {
                     if (!owners.some(peer => Number(peer.id) === Number(lot.id))) continue;
                     if (owners.length !== 1) throw ambiguous();
                     selected = true;
-                } else if (row.documento_tipo === 'NOTA_SALIDA') {
+                } else if (['NOTA_SALIDA', 'NOTA_SALIDA_CANCELADA'].includes(row.documento_tipo)) {
+                    const salidaId = Number(row.referencia_id);
                     const details = outgoing.filter(detail => Number(detail.nota_salida_id) === Number(row.referencia_id)
                         && detail.lote_numero === before.numero_lote);
-                    if (!details.length) throw ambiguous();
-                    selected = details.some(detail => selectedOutgoing.has(detail.id));
-                    if (selected && !details.every(detail => selectedOutgoing.has(detail.id))) throw ambiguous();
+                    let matches = details.map(detail => selectedOutgoing.has(detail.id));
+                    if (!matches.length) {
+                        // La cancelación retira los detalles activos y guarda su último estado en auditoría.
+                        if (!cancelledDetails.has(salidaId)) {
+                            const entry = await tx.findOne('Auditoria', {
+                                where: { accion: 'CANCELAR', tabla_afectada: 'notas_salida', registro_id: salidaId },
+                                order: { id: 'DESC' }
+                            });
+                            const snapshots = entry?.valores_anteriores?.detalles;
+                            cancelledDetails.set(salidaId, Array.isArray(snapshots) ? snapshots : []);
+                        }
+                        const snapshots = cancelledDetails.get(salidaId).filter(detail => Number(detail.producto_id) === productId
+                            && (detail.lote_numero === before.numero_lote || peerIds.has(Number(detail.lote_id))));
+                        if (snapshots.some(detail => !peerIds.has(Number(detail.lote_id)))) throw ambiguous();
+                        matches = snapshots.map(detail => Number(detail.lote_id) === Number(lot.id));
+                    }
+                    if (!matches.length && row.documento_tipo === 'NOTA_SALIDA_CANCELADA' && peers.length === 1) matches = [true];
+                    if (!matches.length) throw ambiguous();
+                    selected = matches.includes(true);
+                    if (selected && matches.includes(false)) throw ambiguous();
                 } else if (row.documento_tipo === 'LOTE_MANUAL') {
                     selected = Number(row.referencia_id) === Number(lot.id);
                 } else {

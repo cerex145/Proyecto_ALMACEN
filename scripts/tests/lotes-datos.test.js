@@ -61,6 +61,27 @@ test('lotes repetidos: corregir fecha afecta solo el ingreso exacto y conserva l
     } finally { await ctx.app.close(); }
 });
 
+test('renombrar un lote tras cancelar una salida conserva los movimientos y el stock', async () => {
+    const ctx = await createApp();
+    try {
+        const created = await ctx.app.inject({ method: 'POST', url: '/api/salidas', headers: ctx.headers(1),
+            payload: { cliente_id: 1, fecha: '2026-11-02', detalles: [{ producto_id: 1, lote_id: 11, cantidad: 10 }] } });
+        assert.equal(created.statusCode, 201, created.body);
+        const id = created.json().data.id;
+        const cancelled = await ctx.app.inject({ method: 'DELETE', url: '/api/salidas/' + id, headers: ctx.headers(1) });
+        assert.equal(cancelled.statusCode, 200, cancelled.body);
+        assert.equal(ctx.db.rows.NotaSalidaDetalle.length, 0);
+        const before = quantities(ctx.db);
+        for (const numero_lote of ['CORREGIDO', 'CORREGIDO-2']) {
+            const res = await call(ctx, payload(ctx.db.rows.Lote[0], { numero_lote }));
+            assert.equal(res.statusCode, 200, res.body);
+            assert.deepEqual(ctx.db.rows.Kardex.filter(row => ['SALIDA', 'SALIDA_REVERSA'].includes(row.tipo_movimiento))
+                .map(row => row.lote_numero), [numero_lote, numero_lote]);
+        }
+        assert.deepEqual(quantities(ctx.db), before);
+    } finally { await ctx.app.close(); }
+});
+
 test('se permite renombrar un lote repetido si los documentos identifican el ingreso exacto', async () => {
     const ctx = await createApp(); const { db } = ctx;
     try {
