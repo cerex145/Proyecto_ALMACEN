@@ -1,3 +1,6 @@
+const adminPassword = process.env.ADMIN_PASSWORD;
+if (!adminPassword || adminPassword.length < 16) throw new Error('Defina ADMIN_PASSWORD con al menos 16 caracteres.');
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('Defina DATABASE_URL antes de ejecutar este script.');
 
@@ -24,11 +27,11 @@ async function createAdmin() {
     }
 
     // Insert user
-    const passwordHash = await bcrypt.hash('123456', 10);
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
     const insertQuery = `
       INSERT INTO usuarios (nombre, usuario, email, password, rol_id, activo)
       VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *;
+      RETURNING usuario, email, rol_id;
     `;
     const res = await client.query(insertQuery, ['Administrador General', 'admin', 'admin@sistema.com', passwordHash, roleId, 1]);
     console.log("Admin creado exitosamente:");
